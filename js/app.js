@@ -17212,52 +17212,6 @@
       `</section>`;
   }
 
-  // The card that starts one (Zoe: "add a card on Discover to create a
-  // circle"), the same card with its fill taken out and a dashed edge, the way
-  // an empty slot is drawn. Signed out its pill is the way into an account.
-  // Signed in it can be waved off (Zoe), per device like the week-of cards,
-  // and the New sheet's Circle row is the other door, always there. A wave
-  // only lasts until the app is next opened; the FIFTH one is for good (Zoe:
-  // "dismissed three times total ... to totally disappear", made five on
-  // 2026-10-24). The count lives on the device, the "for now" in memory, so a
-  // cold launch brings it back.
-  const START_WAVES = 5;
-  const startKey = () => `tria:circle-start-dismissed:${Store.session()}`;
-  let startWavedNow = false;
-  function communityStartWaves() {
-    try { return parseInt(localStorage.getItem(startKey()), 10) || 0; } catch { return 0; }
-  }
-  function communityStartDismissed() {
-    if (!Store.isAuthed()) return false;
-    return startWavedNow || communityStartWaves() >= START_WAVES;
-  }
-  function communityStartHtml() {
-    if (communityStartDismissed()) return '';
-    const authed = Store.isAuthed();
-    const href = authed ? '#/c/new' : '#/join';
-    return `<section class="daily-card community-card community-card--start">` +
-        (authed ? `<button class="community-start-x" type="button" aria-label="Dismiss">${svgIcon('close')}</button>` : '') +
-        `<a class="daily-open" href="${href}"><span class="daily-prompt">Start a circle</span></a>` +
-        `<p class="daily-hint">For hobbies, interests, events and more. Your circle will show up here for others to join.</p>` +
-        `<div class="daily-foot">` +
-          `<span class="daily-count"></span>` +
-          `<a class="daily-answer publish-fill" href="${href}">` +
-            `Start your own</a>` +
-        `</div>` +
-      `</section>`;
-  }
-  function wireCommunityStart(root) {
-    root.querySelector('.community-start-x')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      const waves = communityStartWaves() + 1;
-      try { localStorage.setItem(startKey(), String(waves)); } catch { /* private window */ }
-      startWavedNow = true;
-      hapticTap('LIGHT');
-      e.currentTarget.closest('.community-card--start')?.remove();
-      toast(waves >= START_WAVES ? 'Gone for good. Start one anytime from New.' : 'Hidden for now. Start one anytime from New.');
-    });
-  }
-
   // Joining from a card: in, and straight through the door, since the reason
   // to join from here is to read what is inside. Signed out, Join is the way
   // to an account (it said "You need to be signed in." and stopped there).
@@ -17429,25 +17383,13 @@
       `</section>`;
   }
 
-  /* CIRCLES ARE A RAIL (Zoe, 2026-11-05), the people rail's sideways strip in
-     the daily card's wider shape, set into the square (see paintSquare), so
-     every circle stays on Discover (Zoe: they are "inevitably a large part of
-     tria like subreddits") without a stack of them on top. The dashed Start a
-     circle card (`start`) ENDS the last rail, where you land once you have
-     looked through every room. */
-  function communityRailHtml(list, { start = true } = {}) {
-    const cards = list.map(c => communityCardHtml(c)).join('') + (start ? communityStartHtml() : '');
-    return cards
-      ? `<section class="community-rail" aria-label="Circles"><div class="community-strip">${cards}</div></section>`
-      : '';
-  }
-
   /* ── EXPLORE CIRCLES (#/circles) ───────────────────────────────────────────
      Zoe, 2026-11-07: "a new card akin to daily that goes to a new dedicated
      'explore circles' page ... a big beautiful animated screen of interactive
      floating circles ... Circle sizes should be dependent on the amount of
-     people in the circle". The card leads Discover (circlesCardHtml); the
-     circle rails stay in the square.
+     people in the circle". The card leads Discover (circlesCardHtml), and
+     it is Discover's only door to circles: the circle rails left the square
+     on 2026-11-08.
 
      A CIRCLE IS A DISC, crisp at its edge and soft inside (blurred bokeh came
      first and went the same day: "not modern or clean enough"): its theme's
@@ -20605,26 +20547,26 @@
        the heart and Read more with it. Today's daily answers are left to the
        daily's card above, which is their door today.
 
-       CIRCLES AND PEOPLE ARE SET BETWEEN THE POSTS (Zoe: "shuffle in the
-       circles and people cards in the feed, instead of it just sitting on
-       top"), on a fixed rhythm rather than at random, so nothing moves under
-       the thumb between pulls and nothing reads as a slot to keep pulling:
-       - TWO RAILS OF EACH (Zoe: "lets just have two carousel groups for
-         each"), the circles and the people each split in half, taking turns
-         down the column, circles first: after the RAIL_FIRST post and then
-         every RAIL_GAP posts. A sideways rail is rarely scrolled past its
-         first few cards, so the second half further down is a second look.
-         Whatever doesn't find a place closes the column, so every circle is
-         always here. A circle's post needs nothing more: its "Posted in
-         c/slug" line is the way in (a card under it was tried and taken out
-         the same day, Zoe: "the post itself is enough"). The circles' field
-         has its own card at the very top of the page (circlesCardHtml).
+       PEOPLE ARE SET BETWEEN THE POSTS (Zoe: "shuffle in the circles and
+       people cards in the feed, instead of it just sitting on top"), on a
+       fixed rhythm rather than at random, so nothing moves under the thumb
+       between pulls and nothing reads as a slot to keep pulling:
+       - TWO RAILS (Zoe: "lets just have two carousel groups for each"), the
+         people split in half, one after the RAIL_FIRST post and the other
+         RAIL_GAP posts on. A sideways rail is rarely scrolled past its first
+         few cards, so the second half further down is a second look. Whatever
+         doesn't find a place closes the column.
+       THE CIRCLE RAILS ARE GONE (Zoe, 2026-11-08: "On discover, Remove circle
+       carousels. People stay."), and the dashed Start a circle card that
+       ended the last one with them. Circles are the Explore circles card at
+       the very top of the page (circlesCardHtml), whose New circle is the
+       door, and a circle's post needs nothing more: its "Posted in c/slug"
+       line is the way in (a card under it was tried and taken out the same
+       day, Zoe: "the post itself is enough").
        THE LITTLE ALGORITHM (Zoe: "without a heavy algorithm but like a little
-       one is fine if it gets people connected") is only in the rails: circles
-       your friends are in lead, then the liveliest, and yours go last (the
-       sidebar already lists them); people are most friends in common first
-       (peopleForRail). The posts are never ranked: newest first, as the About
-       page promises.
+       one is fine if it gets people connected") is only in the rails: people
+       are most friends in common first (peopleForRail). The posts are never
+       ranked: newest first, as the About page promises.
        The foot says the square ends, then Share Tria, the page's last word. */
     const RAIL_FIRST = 3;
     const RAIL_GAP = 4;

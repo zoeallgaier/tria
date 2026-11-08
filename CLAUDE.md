@@ -37,7 +37,11 @@ right a small floating Venn: three discs in the circle mark's own geometry
 (Zoe: "use pink instead of orange"), blended so the overlaps mix
 (`.cxm-node`, multiply on paper, screen on ink). Its foot is two even doors,
 **Explore** and **New circle** (`.circles-card-acts`). **The
-circle rails stay in the square** (Zoe: "Keep circle carousels in the feed").
+circle rails are gone from the square** (2026-11-08, Zoe: "On discover, Remove
+circle carousels. People stay."; they stayed for a day after "Keep circle
+carousels in the feed"), and the dashed Start a circle card that ended the last
+one went with them: this card, the New sheet's Circle row and a circle's own
+posts are the ways to circles from Discover.
 `#/circles` (`renderExploreCircles`, signed out too) is the whole window,
 fixed: **every circle a disc, its AREA by its members** (radius by the square
 root, `circleField`), crisp at the edge with its theme's spectrum as a soft
@@ -416,25 +420,22 @@ invite-only), friends' included, yours not, no reposts, nothing `offFeed`,
 today's daily answers left to the daily's card, at most TWO a person
 (`SQUARE_EACH`), newest first and never ranked, as My Circle's own cards in the
 reading column (not the old masonry wall). **It ends** on Share Tria, no
-closing line (Zoe: "town square" is ours; users only ever see Discover). **Circles and people are set between the posts on
+closing line (Zoe: "town square" is ours; users only ever see Discover). **People are set between the posts on
 a fixed rhythm, never at random** (Zoe asked for random; Claude pushed back:
-random reshuffles under the thumb and reads as a slot): FOUR CAROUSELS, TWO
-OF EACH (Zoe: "just have two carousel groups for each"; rails of about 8 came
-first), circles and people each split in half (`halves`, one rail under
-four), circles first, after the 3rd post and every 4th after (`RAIL_FIRST`,
-`RAIL_GAP`), the rest at the foot so every circle is always on the page.
+random reshuffles under the thumb and reads as a slot): TWO CAROUSELS of
+people (Zoe: "just have two carousel groups for each"; it was four, two of
+circles and two of people, until 2026-11-08), the people split in half
+(`halves`, one rail under four), after the 3rd post and every 4th after
+(`RAIL_FIRST`, `RAIL_GAP`), the rest at the foot.
 **No card under a circle's post** (Zoe: "the post itself is enough with the
 reposts style citation"; tried and removed the same day). A rail has a little
 less air over it than under (0.55rem, 1rem): the post above already ends on
 its action row's space.
 **The little algorithm** (Zoe: "a little one is fine if it gets people
-connected") is only in the rails: circles your friends are in lead,
-then by life, yours last; people by friends in common. A rail is a
+connected") is only in the rails: people by friends in common. A rail is a
 `.feed-extra` that `syncCards` diffs like a card (`nodeFor`), so a repaint
-never re-rises the column. Circles are a sideways rail of the wider daily
-card (`communityRailHtml`, 80px faces, Start a circle ending the last rail);
-a search's circles stay a stack. No hairline over the first post; the daily
-has My Circle's 2rem under it, like the Moments rail.
+never re-rises the column. A search's circles stay a stack. No hairline over
+the first post; the daily has My Circle's 2rem under it, like the Moments rail.
 **Anyone may like, comment and vote on anything public** (Zoe: "I should be
 able to like and comment on anything posted publicly on town square"):
 `Store.canReact` is THE rule (app.js's `canSocial` and all five store writes

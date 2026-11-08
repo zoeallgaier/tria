@@ -12181,15 +12181,13 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
    on discover cards"): the words and the full-width pill run nearer the edge. */
 .view--discover .daily-card { padding-inline: 0.8rem; }
 
-/* DISCOVER'S RAILS, people and circles, both set between the square's posts
+/* DISCOVER'S RAILS, the people, set between the square's posts
    (paintSquare): a sideways strip of cards, each rail one card and a peek of
    the next on a phone. They sit in the square's column, which already bleeds
    to the screen's edges there, so a card scrolls off the glass rather than
    into the gutter and the gutter is only the strip's padding. */
-.person-rail,
-.community-rail { max-width: var(--feed-width); margin: 0 auto; }
-.person-strip,
-.community-strip {
+.person-rail { max-width: var(--feed-width); margin: 0 auto; }
+.person-strip {
   display: flex;
   gap: 0.9rem;
   overflow-x: auto;
@@ -12199,9 +12197,9 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
-:is(.person-strip, .community-strip)::-webkit-scrollbar { display: none; }
+.person-strip::-webkit-scrollbar { display: none; }
 @media (max-width: 680px) {
-  .person-strip, .community-strip { padding-inline: var(--gutter); scroll-padding-inline: var(--gutter); }
+  .person-strip { padding-inline: var(--gutter); scroll-padding-inline: var(--gutter); }
 }
 
 /* PEOPLE (Zoe, 2026-10-23). 4:5 cards in the daily card's flat material,
@@ -12298,33 +12296,6 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 .person-card-slot { z-index: 1; margin-top: 0.6rem; }
 .person-card-slot .friend-tie { width: 100%; }
 .person-card-slot .friend-go { display: none; }
-
-/* A CIRCLE ON A RAIL (Zoe, 2026-11-05) is the daily's card in its wider
-   shape. The cards stand one height, so the foot is pushed to the bottom and
-   the name and about are clamped; the face is 80px, the people card's, so
-   the two rails read as one system. */
-.view--discover .community-strip .daily-card {
-  flex: 0 0 auto;
-  width: min(330px, calc(100vw - 2 * var(--gutter) - 2.75rem));
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  scroll-snap-align: start;
-}
-.community-strip .community-card-pic { width: 80px; height: 80px; }
-.community-strip .daily-prompt {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-}
-.community-strip .daily-hint {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
-}
-.community-strip .daily-foot { margin-top: auto; padding-top: 0.95rem; }
 
 /* ── A CIRCLE AS A DISC (Zoe, 2026-11-07) ────────────────────────────────────
    Crisp at the edge, soft inside, never a blur ("this bokeh thing is not
@@ -12715,26 +12686,6 @@ a.daily-answer { text-decoration: none; }
   .circle-sparkles { display: none; }
   .face-born { animation: none; }
 }
-/* Its wave-off, in the corner a circle's photo takes on the other cards, and
-   above the stretched link so the tap is the X's own. */
-.community-start-x {
-  position: absolute;
-  top: 0.45rem;
-  right: 0.45rem;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  color: var(--muted);
-  background: none;
-  border: 0;
-  border-radius: 50%;
-}
-.community-start-x svg { width: 16px; height: 16px; }
-.community-start-x ~ .daily-open { padding-right: 2.5rem; }
-
 /* Which circle a post was said in, over its byline (communityTagHtml), in the
    repost line's measure (.card-passed): "Posted in c/<slug>", a link in, and
    absent on the circle's own page, where every card would be saying the page's
