@@ -7188,6 +7188,9 @@
       // The row is every type the composer infers, so its mark AND its word
       // cycle through them (POST_CYCLE, Zoe, 2026-11-06: no "Post").
       { key: 'note',     label: 'Note' },
+      // A Take is its own row (Zoe, 2026-11-08): it presses the composer's
+      // star on mount (ATTACH_BTN.take), as Activity once pressed the calendar.
+      ...(Store.takesReady() ? [{ key: 'take', label: 'Take', icon: 'star' }] : []),
       // No Activity row since 2026-11-04 (Zoe): a plan is the composer's
       // calendar button, as a link, a photo and a poll are.
       // Moment took Music's row (Zoe, 2026-11-04); a song is shared from its
