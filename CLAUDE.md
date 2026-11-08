@@ -71,8 +71,8 @@ see-through, **its head the circle page's own** (`communityHeadHtml(c, true)`,
 Zoe: "copy whats on the circle's page"), photo left and name, members, host
 and about beside it, its sides paying back the sheet's 6px inset and 1px edge
 so its column IS the page's (14px from the screen, the lines break alike),
-**Join as THE BUTTON's commit** and NO pills on a circle you're in or host
-(Zoe). **Going in carries the head up into its place on the page**
+**Join as THE BUTTON's commit**, and on a circle you're in the page's own pills, Post,
+Invite and the host's Edit (Zoe, 2026-11-08; there were none that morning). **Going in carries the head up into its place on the page**
 (`handHeadOver` in the let-go, `landHeadOver` once renderCommunity paints: a
 fixed copy glides on `--ease`, the posts and a member's pills rise in behind;
 a desktop's wider column only fades the copy). Drawn smaller in the sheet was

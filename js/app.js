@@ -20629,32 +20629,15 @@
     const RAIL_FIRST = 3;
     const RAIL_GAP = 4;
     let squareFootSig = null;
-    const friendsIn = (c) => Store.communityMembers(c.id)
-      .filter(u => Store.isFriend(u) && !Blocks.has(u)).length;
     // Two even halves, the first the larger; a short list stays one rail.
     const halves = (list) => {
       if (list.length < 4) return list.length ? [list] : [];
       const mid = Math.ceil(list.length / 2);
       return [list.slice(0, mid), list.slice(mid)];
     };
-    // The circles' two rails, Start a circle ending the last (alone, with no
-    // circle to show).
-    const circleRails = () => {
-      if (!Store.communitiesReady()) return [];
-      const all = communitiesInOrder();
-      const theirs = all.filter(c => !Store.inCommunity(c.id))
-        .map(c => ({ c, f: friendsIn(c) }))
-        .sort((a, b) => b.f - a.f)              // stable: life breaks the tie
-        .map(x => x.c);
-      const groups = halves(theirs.concat(all.filter(c => Store.inCommunity(c.id))));
-      if (!groups.length) groups.push([]);
-      return groups.map((g, i) => ({ extra: true, id: 'x:circles:' + i,
-        html: communityRailHtml(g, { start: i === groups.length - 1 }) }));
-    };
     const squareItems = (posts, rail) => {
-      const circles = circleRails();
-      const people = halves(rail).map((h, i) => ({ extra: true, id: 'x:people:' + i, html: peopleRailHtml(h) }));
-      const rails = [circles[0], people[0], circles[1], people[1]].filter(x => x && x.html);
+      const rails = halves(rail).map((h, i) => ({ extra: true, id: 'x:people:' + i, html: peopleRailHtml(h) }))
+        .filter(x => x.html);
       const items = [];
       posts.forEach((p, i) => {
         items.push(p);
@@ -20666,8 +20649,6 @@
     // A piece set between the posts is wired as the page wires it above.
     const wireSquareNode = (node) => {
       if (!node.classList.contains('feed-extra')) { wireFoundCard(node); return; }
-      wireCommunityJoins(node);
-      wireCommunityStart(node);
       node.querySelectorAll('.person-card[data-user]').forEach(washPersonCard);
     };
     function paintSquare(searching, occ, rail) {
