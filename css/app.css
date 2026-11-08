@@ -504,9 +504,7 @@ body[data-ambient="tria"] .ambient {
    specificity would have quietly taken all three. */
 body[data-ambient="profile"] { --toolbar-ink: var(--wash-ink); }
 body[data-ambient="profile"] .account-handle,
-body[data-ambient="profile"] .account-stat,
-body[data-ambient="profile"] .account-stat-label,
-body[data-ambient="profile"] .account-stat-dot { color: var(--wash-ink-soft); }
+body[data-ambient="profile"] .account-stat { color: var(--wash-ink-soft); }
 
 /* The house wash gets the identical split, and it is not optional at 68%: the
    handle and the stats are the line the note above says fails at 3.88:1 left
@@ -520,9 +518,7 @@ body[data-ambient="tria"] {
   --toolbar-ink: var(--wash-ink);
 }
 body[data-ambient="tria"] .account-handle,
-body[data-ambient="tria"] .account-stat,
-body[data-ambient="tria"] .account-stat-label,
-body[data-ambient="tria"] .account-stat-dot { color: var(--wash-ink-soft); }
+body[data-ambient="tria"] .account-stat { color: var(--wash-ink-soft); }
 
 @media (prefers-reduced-motion: reduce) {
   /* Colour still updates, just without the tween. */
@@ -5634,20 +5630,22 @@ button.poll-option:disabled { cursor: default; }
   .account-handle--bare { display: none; }
 }
 
-/* One inline stat line: "N posts · N friends". The count is inked, its label
-   muted, the two stats parted by a faint dot. A locked profile shows the friend
-   count alone (its dot is dropped in the template). */
+/* One stat line, a profile's and a circle's (Zoe, 2026-11-08): icons and
+   counts in small type, each glyph the height of its number, no words or
+   separating dots, just air. A count is inked, its icon muted. */
 .account-stats {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.4rem;
-  font-size: 0.85rem;
+  align-items: center;
+  gap: 0.9rem;
+  font-size: 0.78rem;
   color: var(--muted);
 }
 .account-stat {
-  /* The friends stat is a <button>, so strip the UA chrome — reads as text. */
-  display: inline;
+  /* The friends stat is a <button>, so strip the UA chrome: it reads as text. */
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
   padding: 0;
   background: none;
   border: 0;
@@ -5655,30 +5653,25 @@ button.poll-option:disabled { cursor: default; }
   color: var(--muted);
 }
 .account-stat-num { font-weight: 700; color: var(--text); }
-.account-stat-label { color: var(--muted); }
-.account-stat-dot { color: var(--muted); opacity: 0.5; }
-/* The friends stat is a live button — opens their circle. The tap hint is a
-   quiet underline on hover. */
+/* A stat that opens a list (friends, circles, members). */
 .account-stat--friends { cursor: pointer; }
-/* A profile's line is icons and counts (Zoe, 2026-11-08): smaller type, each
-   glyph the height of its number, no separating dots, just air. */
-.account-stats--icons { gap: 0.9rem; font-size: 0.78rem; align-items: center; }
-.account-stats--icons .account-stat { display: inline-flex; align-items: center; gap: 0.28rem; }
+@media (hover: hover) { .account-stat--friends:hover .account-stat-num { color: var(--muted); } }
 .account-stat-ico {
   width: 1.15em; height: 1.15em; flex: none;
   fill: none; stroke: currentColor; stroke-width: 1.9;
   stroke-linecap: round; stroke-linejoin: round;
 }
-/* A circle's host, a link to them, worn as an @mention is (.mention): bold, in
-   the reader's own colour, so a name you can tap reads the same everywhere. */
-.account-stat-host { font-weight: 700; color: var(--mention-ink); text-decoration: none; }
-@media (hover: hover) { .account-stat-host:hover { color: var(--muted); } }
-@media (hover: hover) {
-  .account-stat--friends:hover .account-stat-label {
-    color: var(--text);
-    text-decoration: underline;
-  }
+/* A circle's host on its line (Zoe, 2026-11-08): their own face in the
+   icon's place, a touch bigger than a glyph so a photo reads, and the name
+   inked like a count. The face is the sign it's a person you can tap. */
+.account-stat-host { text-decoration: none; min-width: 0; }
+.account-stat-host .account-stat-num {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14em;
 }
+.account-stat-face.avatar {
+  width: 1.45em; height: 1.45em; font-size: 0.95em;
+}
+@media (hover: hover) { .account-stat-host:hover .account-stat-num { color: var(--muted); } }
 
 /* Bio sits in the identity grid, below the stats (row spacing comes from the
    grid gap, so no top margin of its own). */

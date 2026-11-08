@@ -547,6 +547,10 @@
     }
     return `<svg${cls ? ` class="${cls}"` : ''} ${ICON_ATTRS}>${inner}</svg>`;
   };
+  // A stat line's icon (a profile's head, a circle's): the glyph the height of
+  // its number, naming itself to a screen reader since there is no word.
+  const statIco = (key, label) =>
+    svgIcon(key, 'account-stat-ico') + `<span class="visually-hidden"> ${label}</span>`;
 
   /* ── Likes ─────────────────────────────────────────────────────────────────
      A like is a heart and nothing else (Zoe, 2026-10-22: "remove the other
@@ -10345,7 +10349,7 @@
     // you're standing in the wall), so re-check rather than trust it.
     if (!canFilter || !filters.some(f => f.key === profileFilter)) profileFilter = 'all';
 
-    // One inline metadata line on the identity's left axis: "N posts · N friends".
+    // One inline metadata line on the identity's left axis: posts, friends, circles.
     // Friend COUNT is public (same on your card and anyone else's, and the same
     // signed out — see Store.friendCount, which is what makes that true on the
     // public site), but WHO those friends are is circle business — so the friend
@@ -10355,8 +10359,6 @@
     // Icons, not words (Zoe, 2026-11-08): a pencil for posts, the two people for
     // friends, the triad (the circle mark) for the circles they're in. Each names itself to a
     // screen reader. The circles stat needs rosters, so signed in only.
-    const statIco = (key, label) =>
-      svgIcon(key, 'account-stat-ico') + `<span class="visually-hidden"> ${label}</span>`;
     const postNum = list.length;
     const postStat = locked ? ''
       : `<span class="account-stat">` +
@@ -10378,7 +10380,7 @@
       : cc > 0
         ? `<button type="button" class="account-stat account-stat--friends" id="show-circles">${circleInner}</button>`
         : `<span class="account-stat">${circleInner}</span>`;
-    const statsRow = `<div class="account-stats account-stats--icons">${postStat}${friendStat}${circleStat}</div>`;
+    const statsRow = `<div class="account-stats">${postStat}${friendStat}${circleStat}</div>`;
 
     // The in-flow action row, at the foot of the identity block. Your own
     // carries Edit profile and Share profile (Zoe, 2026-10-23: out of the •••
@@ -18850,28 +18852,37 @@
     const member = Store.inCommunity(c.id);
     const n = Store.communitySize(c.id);
     const host = c.owner ? Store.user(c.owner) : null;
+    // The profile's stat line (Zoe, 2026-11-08: "use icons ... like how we
+    // updated profiles friend count"): icons and counts, no words or dots,
+    // each icon naming itself to a screen reader. A pencil for its posts
+    // (only where they can be read, so a fenced room never says "0"), the
+    // people mark for who is in it, the host as their own small face and
+    // name, and a lock for an invite-only room, said to its members (anyone
+    // else reads it on the pill below).
+    const readable = !c.inviteOnly || member;
+    const pc = readable ? Store.communityPosts(c.id).filter(p => !Blocks.has(p.author)).length : -1;
+    const posts = pc < 0 ? ''
+      : `<span class="account-stat">` +
+          statIco('pencil', pc === 1 ? 'post' : 'posts') +
+          `<span class="account-stat-num">${pc}</span></span>`;
     // Signed in it opens who they are; signed out it is only the size, since
     // the names are for people with an account.
+    const peopleInner = statIco('friends', memberWord(n)) + `<span class="account-stat-num">${n}</span>`;
     const people = !n ? ''
       : me
-        ? `<button type="button" class="account-stat account-stat--friends" id="community-members">` +
-            `<span class="account-stat-num">${n}</span> ` +
-            `<span class="account-stat-label">${memberWord(n)}</span>` +
-          `</button>`
-        : `<span class="account-stat">` +
-            `<span class="account-stat-num">${n}</span> ` +
-            `<span class="account-stat-label">${memberWord(n)}</span>` +
-          `</span>`;
+        ? `<button type="button" class="account-stat account-stat--friends" id="community-members">${peopleInner}</button>`
+        : `<span class="account-stat">${peopleInner}</span>`;
+    // The host's face and name are the way to them (Zoe, 2026-10-23), yours
+    // to your own.
     const hostedBy = host
-      // The host's name is the way to them (Zoe, 2026-10-23), yours to your own.
-      ? `<span class="account-stat">Hosted by ` +
-          `<a class="account-stat-host" href="${host.username === me ? '#/profile' : `#/u/${esc(encodeURIComponent(host.username))}`}">` +
-          `${host.username === me ? 'you' : esc(host.name || host.username)}</a></span>`
+      ? `<a class="account-stat account-stat-host" href="${host.username === me ? '#/profile' : `#/u/${esc(encodeURIComponent(host.username))}`}">` +
+          `<span class="visually-hidden">Hosted by </span>` +
+          avatarEl(host, { cls: 'account-stat-face', px: 40 }) +
+          `<span class="account-stat-num">${host.username === me ? 'You' : esc(host.name || host.username)}</span></a>`
       : '';
-    const sep = people && hostedBy ? `<span class="account-stat-dot" aria-hidden="true">·</span>` : '';
-    // Said to its members; anyone else reads it on the pill below.
     const fenced = c.inviteOnly && member
-      ?`<span class="account-stat-dot" aria-hidden="true">·</span><span class="account-stat">Invite only</span>` : '';
+      ? `<span class="account-stat">${statIco('lock', 'Invite only')}</span>` : '';
+    const stats = posts + people + hostedBy + fenced;
     // An invite-only circle you hold no invite to has no Join to offer, so
     // its place says why, quietly and untappable, the way Requested does.
     const acts = !me
@@ -18900,7 +18911,7 @@
             // the bar's title already says it, and stays on a desktop.
             `<p class="account-handle account-handle--bare">${esc(communityHandle(c))}</p>` +
           `</div>` +
-          (people || hostedBy ? `<div class="account-stats">${people}${sep}${hostedBy}${fenced}</div>` : '') +
+          (stats ? `<div class="account-stats">${stats}</div>` : '') +
           (c.about ? `<div class="account-bio">${parasHtml(c.about)}</div>` : '') +
         `</div>` +
       `</div>` +
@@ -19093,18 +19104,34 @@
       if (wash !== washNow) { washNow = wash; paintWash(c, 'profile'); }
       const html = headHtml(c);
       if (html !== headNow) {
-        headEl.innerHTML = headNow = html;
-        wireHead(c);
+        // Only the stat line moved (a post landed, someone joined): swap the
+        // line alone, so the face stays put. Its one live control is wired
+        // again by wireStats.
+        const stats = /<div class="account-stats">[\s\S]*?<\/div>/;
+        const was = headNow.match(stats), now = html.match(stats);
+        const line = headEl.querySelector('.account-stats');
+        if (was && now && line && headNow.replace(stats, '') === html.replace(stats, '')) {
+          line.outerHTML = now[0];
+          headNow = html;
+          wireStats(c);
+        } else {
+          headEl.innerHTML = headNow = html;
+          wireHead(c);
+        }
       }
       paintFeed(c);
       return true;
     };
 
+    function wireStats(c) {
+      headEl.querySelector('#community-members')?.addEventListener('click', () => openCommunityMembers(Store.community(id) || c));
+    }
+
     function wireHead(wired) {
       // The newest row at the tap: a head kept across repaints outlives the
       // row it was wired with.
       const c = Store.community(id) || wired;
-      headEl.querySelector('#community-members')?.addEventListener('click', () => openCommunityMembers(Store.community(id) || c));
+      wireStats(c);
       headEl.querySelector('#community-post')?.addEventListener('click', () => {
         pendingCommunity = c.id;
         go('#/publish');

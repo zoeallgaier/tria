@@ -186,7 +186,13 @@ circle's page wears its wash as a profile's does** (`applyAmbient` on `#/c/`,
 `paintWash` with the circle), so every circle washes from its photo or Tria's
 ramp even before the SQL runs. **A host's circle page has three pills, Post,
 Invite and Edit** (Zoe), three even columns (`.community-head .friend-btn`
-drops the 122px floor).
+drops the 122px floor). **Its stat line is the profile's** (2026-11-08, Zoe:
+"use icons ... like how we updated profiles friend count"): icons and counts,
+no words or dots (`statIco`, one `.account-stats` rule for both heads), a
+pencil for its posts (only where they can be read), the people mark for its
+members (a button signed in), the host's own small face and name, and a lock
+for an invite-only room, shown to its members. A change to the line alone
+swaps the line, never the head, so the face doesn't blink (`wireStats`).
 
 ## Pictures are their own files, no renderer (2026-11-06)
 
