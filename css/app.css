@@ -12455,7 +12455,11 @@ body.circles-live .topbar--bare::before { opacity: 1; }
   max-width: 100%;
   font-family: 'Instrument Serif', 'Times New Roman', serif;
   font-weight: 400;
-  line-height: 1.02;
+  /* The serif's descenders reach past a tight line, and the clamp's clip
+     took the tails off every g and y (Zoe, 2026-11-08), so the lines get
+     room and the box a little more under its last one. */
+  line-height: 1.1;
+  padding-bottom: 0.14em;
   letter-spacing: -0.01em;
 }
 .cx-face ~ .cx-name { -webkit-line-clamp: 2; }
@@ -12493,7 +12497,8 @@ body.circles-live .topbar--bare::before { opacity: 1; }
   flex-direction: column;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.2rem 1.5rem 1rem;
+  /* The face stands a clear breath under the grab, as the sides give it. */
+  padding: 0.9rem 1.5rem 1rem;
   text-align: center;
   /* The panel is pulled from anywhere, so nothing in it selects or drags. */
   -webkit-user-select: none;
@@ -12537,29 +12542,49 @@ body.circles-live .topbar--bare::before { opacity: 1; }
   font-weight: 700;
   font-size: 0.95rem;
 }
-/* "Open c/slug" under a soft chevron, centred, Reply's 0.95rem words; a tap or
-   a pull up goes in. Past OPEN_AT it inks and its chevron rises, as Reply's. */
+/* "Open c/slug" under a soft chevron: the Reply foot itself (.mv-foot,
+   .mv-swipe, .mv-reply), its 56px, its parts and its 10px drop, set where
+   Reply sits (Zoe, 2026-11-08: "the position ... should match that of the
+   reply to moment, with that same amount of spacing, just slightly
+   compensated with the card"). Reply stands on the screen's safe area; this
+   stands on the same inset measured from the panel's own floor, 6px up, so
+   the floor padding a sheet keeps (on the panel, or on its list when it has
+   no dock) is taken off here and the cue's margin is the inset itself. A tap
+   or a pull up goes in; past OPEN_AT it inks and its chevron rises, as
+   Reply's. */
+.sheet-scrim--circle .sheet { padding-bottom: 0; }
+.sheet-scrim--circle:not(.sheet-scrim--thread) .sheet:not(:has(> .sheet-cancel)) > .sheet-items { padding-bottom: 0; }
 .cx-pull {
+  flex: none;
+  box-sizing: border-box;
+  height: 56px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.1rem;
-  align-self: center;
-  margin: 0.1rem 0 0;
-  padding: 0.35rem 1.5rem 0.3rem;
+  margin: 0 0 env(safe-area-inset-bottom);
+  padding: 0;
   border: 0;
   background: none;
   font: inherit;
-  font-size: 0.95rem;
-  font-weight: 700;
-  line-height: 1.2;
   color: var(--muted);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  transform: translateY(10px);
   transition: color 0.2s var(--ease-soft);
 }
 .cx-pull:focus-visible { outline: none; color: var(--text); }
 .cx-pull-chev { display: grid; transition: transform 0.3s var(--spring); }
+.cx-pull-word {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px 14px;
+  margin-top: -6px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
 .cx-pull-chev svg { width: 26px; height: 18px; stroke-width: 2; overflow: visible; }
 .sheet-scrim--circle.is-armed .cx-pull { color: var(--text); }
 .sheet-scrim--circle.is-armed .cx-pull-chev { transform: translateY(-4px); }

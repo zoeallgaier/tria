@@ -42,7 +42,9 @@ circle rails stay in the square** (Zoe: "Keep circle carousels in the feed").
 fixed: **every circle a disc, its AREA by its members** (radius by the square
 root, `circleField`), crisp at the edge with its theme's spectrum as a soft
 mesh inside (`circleInks` through `personTone`, lit with THE LIGHT's numbers
-and laid solid on the paper, `setInks`), a hairline, its face, name and size.
+and laid solid on the paper, `setInks`), a hairline, its face, name and size:
+the face leads (Zoe: "make the titles smaller and image bigger"), and the
+serif name's lines have room under the clamp, which had clipped every g.
 Blurred bokeh blobs came first and went the same day (Zoe: "not modern or
 clean enough"), and so did a Venn of real shared members ("drop the overlap
 idea, space at all properly"). Packing them touching like bubbles was tried and
@@ -78,7 +80,15 @@ on another lifts that one, on the paper puts it away, as does a pull down;
 **a pull up opens it, the Moments Reply pull** (Zoe: "take a note from
 moments replies"): the panel rises at half pace and stiffens past `OPEN_AT`
 (70px), where "Open c/slug" inks and its chevron rises with a LIGHT haptic,
-and an armed let-go carries it on up and away. The field and the sheet refuse
+and an armed let-go carries it on up and away. **The let-go navigates IN the
+pointerup, never from a timer** (Zoe: "the swipe back gesture goes to
+discover"): WebKit's back swipe skips a history entry script made outside a
+gesture and the one before it, so a circle opened 200ms after the let-go
+swiped back past Circles. Playwright's goBack doesn't apply that rule, so
+only the phone shows it. The foot is Reply's own (56px, its parts and its
+10px drop) standing on the safe-area inset measured from the panel's floor
+(Zoe: "match that of the reply to moment ... just slightly compensated with
+the card"), the same with or without Join. The field and the sheet refuse
 native drags (`dragstart`, `-webkit-user-drag`): one that began on a link or
 the face's image was the browser's and took the pointer. A click on the scrim
 within 450ms of a lift is the lifting tap's own (WebKit hit-tests a touch's

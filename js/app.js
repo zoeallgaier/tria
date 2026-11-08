@@ -17757,8 +17757,10 @@
       const c = nd.c;
       const inner = nd.r * 2 * 0.66;
       const longest = Math.max(4, ...c.name.split(/\s+/).map(w => w.length));
-      const fs = Math.max(13, Math.min(nd.r * 0.27, 30, inner / (longest * 0.5)));
-      const face = nd.r >= 74 ? Math.round(nd.r * 0.44) : 0;
+      // The face leads and the name follows it, smaller (Zoe, 2026-11-08:
+      // "make the titles smaller and image bigger").
+      const fs = Math.max(13, Math.min(nd.r * 0.21, 24, inner / (longest * 0.5)));
+      const face = nd.r >= 64 ? Math.round(nd.r * 0.52) : 0;
       const room = (nd.r >= 90 ? 3 : nd.r >= 68 ? 2 : nd.r >= 56 ? 1 : 0) - (c.inviteOnly ? 1 : 0);
       const pals = nd.friends.slice(0, Math.max(0, room));
       return `<span class="cx-bubble">` +
@@ -18012,13 +18014,18 @@
         dropPull();
         if (!p.moved) return;
         swallow = performance.now() + 400;
+        // Gone IN the let-go, never after it: WebKit's back swipe skips a
+        // history entry script made outside a gesture and the one before it,
+        // so a circle opened from a timer swiped back to Discover (Zoe,
+        // 2026-11-08). The panel carries on up and away on its own inline
+        // transition, over the circle drawing under it.
         if (p.armed && e.type !== 'pointercancel') {
-          leaving = true;
-          if (reduce) { goIn(); return; }
-          panel.style.transition = 'transform 0.22s var(--ease-soft), opacity 0.2s var(--ease-soft)';
-          panel.style.transform = 'translateY(-48px)';
-          panel.style.opacity = '0';
-          setTimeout(() => { if (world.isConnected) goIn(); }, 200);
+          if (!reduce) {
+            panel.style.transition = 'transform 0.22s var(--ease-soft), opacity 0.2s var(--ease-soft)';
+            panel.style.transform = 'translateY(-48px)';
+            panel.style.opacity = '0';
+          }
+          goIn();
           return;
         }
         scrimEl.classList.remove('is-armed');
@@ -18048,7 +18055,7 @@
           cue.type = 'button';
           cue.className = 'cx-pull';
           cue.innerHTML = `<span class="cx-pull-chev" aria-hidden="true">${svgIcon('chevUp')}</span>` +
-            `<span>Open ${esc(communityHandle(c))}</span>`;
+            `<span class="cx-pull-word">Open ${esc(communityHandle(c))}</span>`;
           cue.addEventListener('click', goIn);
           panel.append(cue);
           sheetH = panel.offsetHeight + 22;    // the panel, its 6px floor and a breath
