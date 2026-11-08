@@ -5617,18 +5617,15 @@ button.poll-option:disabled { cursor: default; }
   letter-spacing: 0;
   color: var(--text);
 }
-/* An invite-only circle's lock, after its name (Zoe, 2026-11-08): small,
-   muted, sat on the serif's x-height, carried with the last word. */
-.account-name-tail { white-space: nowrap; }
-.account-name-lock {
-  width: 0.5em; height: 0.5em;
-  margin-left: 0.2em;
-  vertical-align: 0.06em;
-  stroke-width: 2.2;
-  color: var(--muted);
+/* An invite-only circle's lock, after its c/slug on the bar and on the
+   head's handle (Zoe, 2026-11-08: "in the c/ like in the header"): the
+   words' own ink and weight, a little under their cap height. */
+.title-lock {
+  width: 0.82em; height: 0.82em;
+  margin-left: 0.25em;
+  vertical-align: -0.08em;
+  stroke-width: 2.1;
 }
-body[data-ambient="profile"] .account-name-lock,
-body[data-ambient="tria"] .account-name-lock { color: var(--wash-ink-soft); }
 .account-handle {
   margin-top: 0.12rem;
   font-size: 0.92rem;
@@ -12473,8 +12470,46 @@ body.circles-live .topbar--bare::before { opacity: 1; }
   border-radius: 50%;
   text-align: center;
 }
-.cx-face { margin-bottom: 0.4rem; }
-.cx-face .community-pic { width: var(--face); height: var(--face); }
+/* THE FOLD (--fold, the frame's, 0 to 1): a circle drawn small, zoomed out
+   or far out in the lens, gives up its words and its face comes to the
+   middle and grows (Zoe, 2026-11-08: "zoom out ... like watchos"). The face
+   is drawn at its folded size (--icon) and shown at --rest of it until then,
+   so it is only ever scaled down. A leading face keeps its place in the
+   column (--face) and travels --face-dy to the middle; a ring too small to
+   lead with one keeps it in the middle, there only as it folds. In two
+   beats, never crossing: the words are gone by 0.4 of the fold, and only
+   then does the face move (--face-at). */
+.cx-node {
+  --fold: 0;
+  --face-at: clamp(0, calc((var(--fold) - 0.3) / 0.7), 1);
+}
+.cx-face {
+  position: relative;
+  flex: none;
+  width: var(--face);
+  height: var(--face);
+  margin-bottom: 0.4rem;
+}
+.cx-face--folded {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+.cx-face .community-pic {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--icon);
+  height: var(--icon);
+  margin: calc(var(--icon) / -2) 0 0 calc(var(--icon) / -2);
+  transform: translateY(calc(var(--face-dy, 0px) * var(--face-at)))
+    scale(calc(var(--rest) + (1 - var(--rest)) * var(--face-at)));
+}
+.cx-face--folded .community-pic { opacity: var(--face-at); }
+.cx-name, .cx-sub { opacity: calc(1 - var(--fold) * 2.5); }
 .cx-name {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -12490,7 +12525,7 @@ body.circles-live .topbar--bare::before { opacity: 1; }
   padding-bottom: 0.14em;
   letter-spacing: -0.01em;
 }
-.cx-face ~ .cx-name { -webkit-line-clamp: 2; }
+.cx-face:not(.cx-face--folded) ~ .cx-name { -webkit-line-clamp: 2; }
 .cx-sub {
   display: inline-flex;
   align-items: center;

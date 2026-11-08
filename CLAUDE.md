@@ -43,8 +43,11 @@ carousels in the feed"), and the dashed Start a circle card that ended the last
 one went with them: this card, the New sheet's Circle row and a circle's own
 posts are the ways to circles from Discover.
 `#/circles` (`renderExploreCircles`, signed out too) is the whole window,
-fixed: **every circle a disc, its AREA by its members** (radius by the square
-root, `circleField`), crisp at the edge with its theme's spectrum as a soft
+fixed: **every circle a disc, its AREA its members, truly** (Zoe,
+2026-11-08: "a bit more proportional to the member count"): the biggest at
+`rMax`, every other at the square root of its share of it, floored where its
+words still fit (`circleField`, 46px on a phone; it was `rMin` plus a share,
+which drew 24 people at under 3x the area of 3), crisp at the edge with its theme's spectrum as a soft
 mesh inside (`circleInks` through `personTone`, lit with THE LIGHT's numbers
 and laid solid on the paper, `setInks`), a hairline, its face, name and size:
 the face leads (Zoe: "make the titles smaller and image bigger"), and the
@@ -55,7 +58,22 @@ idea, space at all properly"). Packing them touching like bubbles was tried and
 taken back within minutes (Zoe: "bad call"). **They float, spaced**
 (`FIELD_GAP` 16px): a small physics (`stepField`), seeded by id so the field
 is the same each visit. **The circles can't be moved** (Zoe): a drag anywhere
-moves the view, which runs off the screen. **Where two meet mid drift, their
+moves the view, which runs off the screen. **A pinch zooms, like a watch's
+grid** (Zoe, 2026-11-08: "zoom out on the circles page like watchos"): in to
+the circles' own size, out until the whole field fits the band (never past
+`ZOOM_FLOOR` 0.3), a pinch past either end giving and springing back
+(`cam.z`, screen = world times z plus the offset). A trackpad pinch
+(ctrl+wheel, Safari's gesture events) and a double tap on the paper (all the
+way out, or back in about the tap) do the same. **A circle drawn under
+`FOLD_AT` of its size folds to its face** (lens and zoom together, opening
+again over `UNFOLD_AT`, on its own `FOLD_MS` clock so none rests half way):
+the words go first, then the face travels to the middle and grows to
+`ICON_OF_R` of its radius (`--fold`, `--face-at`; drawn at that size and
+shown smaller, so never scaled up). Zoomed out the field is a field of
+faces, the lens folding the edges first. A lift glides up to z 1, and the
+put-away back out to the zoom it came from (`zBack`); `circlesCam` keeps
+both. The hint tells the pinch until a first zoom (`tria:circles-pinched`),
+and not at all where the field already fits. **Where two meet mid drift, their
 hairlines merge into one outline** (Zoe: "combine/disappear on overlap"): the
 rings are a canvas over the discs, stroked then every disc cut out
 (destination-out). **The lens** (2026-11-08, Zoe: "go crazy"): the middle of

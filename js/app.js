@@ -1359,6 +1359,14 @@
         // 1.05rem, from the rule rather than from a number restated in Swift.
         size: parseFloat(styles.fontSize) || 16.8,
         ink: toRgb(styles.color) || '',
+        // An invite-only circle's lock, as markup and its drawn size, laid
+        // after the words natively (an older binary just shows the words).
+        ...(() => {
+          const lock = el.querySelector('.title-lock');
+          if (!lock) return {};
+          const box = lock.getBoundingClientRect();
+          return { lock: lock.outerHTML, lockSize: box.width, lockGap: parseFloat(getComputedStyle(lock).marginLeft) || 0 };
+        })(),
       };
     }
 
@@ -6686,7 +6694,7 @@
   // `field` is a page's own field IN the bar, filling the row between the two
   // sides, where a title would sit. Discover's search is the one caller, a web
   // field in every shell: nothing native is behind the bar any more.
-  function mountToolbar({ leading = '', title = '', actions = '', field = '', mark = false } = {}) {
+  function mountToolbar({ leading = '', title = '', lock = false, actions = '', field = '', mark = false } = {}) {
     document.body.classList.add('toolbar-live');
     const markEl = document.getElementById('toolbar-mark');
     if (markEl) markEl.hidden = !mark;
@@ -6698,7 +6706,7 @@
     const actionsEl = document.getElementById('toolbar-actions');
     page.hidden = !leading;
     page.innerHTML = leading;
-    setToolbarTitle(title);
+    setToolbarTitle(title, lock);
     actionsEl.innerHTML = actions;
     // How far the centered title has to stop short on EACH side, expressed as a
     // count of controls rather than a width, so the arithmetic stays in CSS
@@ -6728,9 +6736,14 @@
   // copy is a stand-in for that nameplate, so it has to say the same word —
   // otherwise scrolling a long form far enough to collapse the title reveals a
   // bar still announcing whatever you opened the composer as.
-  function setToolbarTitle(text) {
+  // `lock`: a small lock after the words, an invite-only circle's c/slug
+  // (Zoe, 2026-11-08: "in the c/ like in the header"). Drawn here and, in the
+  // app, by the native title from the same markup (titleSpec's `lock`).
+  function setToolbarTitle(text, lock = false) {
     const el = document.getElementById('toolbar-title');
-    if (el) el.textContent = text;
+    if (!el) return;
+    el.textContent = text;
+    if (lock && text) el.insertAdjacentHTML('beforeend', svgIcon('lock', 'title-lock'));
   }
   // The HIG "collapsing large title": .toolbar-title stays invisible until the
   // page's own big one has scrolled bodily out from under the bar, then
@@ -17482,8 +17495,9 @@
      LIGHT's numbers and laid solid on the paper; a hairline; its face, name
      and size, and the faces of friends of yours who are in it.
 
-     SIZE IS WHO IS IN IT: a ring's AREA goes with its members (the radius by
-     the square root), between a floor the words fit in and a ceiling.
+     SIZE IS WHO IS IN IT: a ring's AREA is its members (the radius by the
+     square root of its share of the biggest), down to a floor the words fit
+     in.
 
      SPACED, NEVER OVERLAPPING AT REST (Zoe: "drop the overlap idea, space at
      all properly"): every pair keeps FIELD_GAP apart, each floating on a slow
@@ -17496,7 +17510,9 @@
      circles"): a drag anywhere moves the view, which runs off the screen.
      THE LENS (2026-11-08, Zoe: "go crazy") keeps the middle whole and shrinks
      what is out toward the edges, so a circle comes up to size as you bring
-     it in. They rise in as a wave from the middle on arrival, sink a little
+     it in. A PINCH ZOOMS, as a watch's grid does (2026-11-08), out until the
+     whole field fits, each circle folding to its face as it gets small, and
+     a tap brings one back up to size. They rise in as a wave from the middle on arrival, sink a little
      under the finger, and one with a sign of life in the last day sends a
      slow ripple out from its ring.
 
@@ -17597,11 +17613,16 @@
   };
 
   /* THE FIELD'S BONES: each circle's radius by its members, and how near
-     every pair may come. */
+     every pair may come. A ring's AREA IS ITS MEMBERS, truly (Zoe,
+     2026-11-08: "a bit more proportional to the member count"): the
+     biggest at rMax and every other at the square root of its share of it,
+     so twice the people is twice the paper, down to a floor its words still
+     fit in. It was rMin plus a share of the rest, which drew 24 people at
+     under three times the area of 3. */
   function circleField(list, { rMin, rMax, gap = FIELD_GAP }) {
     const sizes = list.map(c => Math.max(1, Store.communitySize(c.id)));
     const top = Math.max(1, ...sizes);
-    const nodes = list.map((c, i) => fieldNode(c, c.id, rMin + (rMax - rMin) * Math.sqrt(sizes[i] / top), sizes[i]));
+    const nodes = list.map((c, i) => fieldNode(c, c.id, Math.max(rMin, rMax * Math.sqrt(sizes[i] / top)), sizes[i]));
     const pairs = [];
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) pairs.push({ a: i, b: j, min: nodes[i].r + nodes[j].r + gap });
@@ -17615,7 +17636,7 @@
       // Each one's own slow wander: two periods and two phases off the seed.
       w1: 0.00042 + seedOf(key + 'a') * 0.0004, w2: 0.00038 + seedOf(key + 'b') * 0.0004,
       p1: seed * 6.283, p2: seedOf(key + 'c') * 6.283,
-      glow: 1, aim: 1, scale: 1, sv: 0, press: false, inks: null,
+      glow: 1, aim: 1, scale: 1, sv: 0, press: false, inks: null, fold: 0, folded: false,
       // As drawn: where (sx, sy), how big (sr), the lens's share, the rise.
       sx: 0, sy: 0, sr: r, lens: 1, alpha: 0, at: 0,
     };
@@ -17783,8 +17804,18 @@
   const GROW_MS = 620;       // one circle's rise on arrival
   const RIPPLE_MS = 4200;    // a lively circle's ripple, once every this often
   const ALIVE_MS = 864e5;    // lively: a sign of life in the last day
-  const OPEN_AT = 70;
-  const GLIDE_W = 11;        // the camera's and the lens's spring, per second (~0.55s to settle)        // px of pull up on the sheet that opens the circle
+  const OPEN_AT = 70;        // px of pull up on the sheet that opens the circle
+  const GLIDE_W = 11;        // the camera's and the lens's spring, per second (~0.55s to settle)
+  // A pinch here is the field's, never the page's.
+  const CIRCLES_PINCHED = 'tria:circles-pinched';
+  const ZOOM_FLOOR = 0.3;    // the farthest out, however many circles there are
+  // A circle folds to its face once it is drawn under FOLD_AT of its size
+  // (the lens and the zoom together), and opens again over UNFOLD_AT: its
+  // words go and the face comes to the middle and grows, so a field seen
+  // whole is a field of faces. Either one or the other, never resting
+  // between, over FOLD_MS.
+  const FOLD_AT = 0.6, UNFOLD_AT = 0.66, FOLD_MS = 340;
+  const ICON_OF_R = 1.2;     // a folded face's width, to its circle's radius
   function renderExploreCircles() {
     const list = exploreList();
     const authed = Store.isAuthed();
@@ -17846,9 +17877,11 @@
     };
 
     // The rings: a floor the words fit in, a ceiling that leaves room for more.
+    // Every other ring is the ceiling's share by area (circleField), so the
+    // floor is low enough that today's smallest still sit above it.
     const short = Math.min(W, H - top);
-    const rMin = W < 420 ? 52 : 60;
-    const rMax = Math.max(rMin + 34, Math.min(170, short * 0.34));
+    const rMin = W < 420 ? 46 : 54;
+    const rMax = Math.max(rMin + 40, Math.min(176, short * 0.36));
     const field = circleField(list, { rMin, rMax });
     const { nodes } = field;
     settleField(field, grav());
@@ -17875,11 +17908,16 @@
       // The face leads and the name follows it, smaller (Zoe, 2026-11-08:
       // "make the titles smaller and image bigger").
       const fs = Math.max(13, Math.min(nd.r * 0.21, 24, inner / (longest * 0.5)));
+      // The face is drawn at its FOLDED size and shown smaller until the
+      // circle folds (--fold, the frame's), so it is never scaled up. A ring
+      // too small to lead with it keeps it in the middle, there only folded.
       const face = nd.r >= 64 ? Math.round(nd.r * 0.52) : 0;
+      const icon = Math.round(nd.r * ICON_OF_R);
       const room = (nd.r >= 90 ? 3 : nd.r >= 68 ? 2 : nd.r >= 56 ? 1 : 0) - (c.inviteOnly ? 1 : 0);
       const pals = nd.friends.slice(0, Math.max(0, room));
       return `<span class="cx-bubble">` +
-          (face ? `<span class="cx-face" style="--face:${face}px">${communityPicHtml(c, 'cx-face-pic', face)}</span>` : '') +
+          `<span class="cx-face${face ? '' : ' cx-face--folded'}" style="--face:${face}px;--icon:${icon}px;` +
+            `--rest:${((face || icon * 0.6) / icon).toFixed(3)}">${communityPicHtml(c, 'cx-face-pic', icon)}</span>` +
           `<span class="cx-name" style="font-size:${fs.toFixed(1)}px">${esc(c.name)}</span>` +
           `<span class="cx-sub">` +
             (c.inviteOnly ? svgIcon('lock', 'cx-sub-ico') : nd.mine && !pals.length ? svgIcon('check', 'cx-sub-ico') : '') +
@@ -17899,6 +17937,14 @@
       `<a class="cx-node" href="${communityRoute(nd.c)}" role="listitem" aria-label="${esc(labelOf(nd))}" ` +
         `style="width:${nd.r * 2}px;height:${nd.r * 2}px">${bubbleHtml(nd)}</a>`).join('');
     const els = [...world.children];
+    // How far a leading face travels to the middle as its circle folds, off
+    // the layout (transforms aside), again once the serif has loaded.
+    const measureFace = (i) => {
+      const f = els[i].querySelector('.cx-face:not(.cx-face--folded)');
+      if (f) els[i].style.setProperty('--face-dy', `${(nodes[i].r - f.offsetTop - f.offsetHeight / 2).toFixed(1)}px`);
+    };
+    els.forEach((_, i) => measureFace(i));
+    document.fonts?.ready?.then(() => { if (world.isConnected) els.forEach((_, i) => measureFace(i)); });
 
     // The hairline's ink, the page's own text colour, read again on a scheme change.
     let ink = { r: 20, g: 23, b: 26 };
@@ -17920,29 +17966,68 @@
     // circle, centred in the band under the bar, with the rest around it; you
     // can look around as far as the field goes, and a let-go past that springs
     // back. Coming back from a circle it is where you left it.
-    // vx, vy: a drag's coast, px a frame. gx, gy: a glide's spring, px a second.
-    const cam = { x: 0, y: 0, vx: 0, vy: 0, gx: 0, gy: 0 };
-    let camAim = null;           // a glide in progress (a lift, a keyboard's Tab)
+    // A circle is drawn at its place times the zoom, plus the offset:
+    // screen = world * z + (x, y).
+    // vx, vy: a drag's coast, px a frame. gx, gy, gz: a glide's spring, a second.
+    const cam = { x: 0, y: 0, z: 1, vx: 0, vy: 0, gx: 0, gy: 0, gz: 0 };
+    let camAim = null;           // a glide in progress (a lift, a keyboard's Tab, a double tap)
     let sheetH = 0;              // how much of the foot the lifted circle's sheet takes
     const band = () => ({ x0: 0, x1: W, y0: top, y1: H - sheetH });
-    const homeRange = () => {
+    const homeRange = (z = cam.z) => {
       const b = fieldBounds(nodes), v = band(), pad = 18;
       const span = (lo, hi, v0, v1) => {
         const mid = (v0 + v1) / 2 - (lo + hi) / 2;
         const spare = (hi - lo) - (v1 - v0 - pad * 2);
         return spare <= 0 ? [mid, mid] : [mid - spare / 2, mid + spare / 2];
       };
-      return { x: span(b.x0, b.x1, v.x0, v.x1), y: span(b.y0, b.y1, v.y0, v.y1) };
+      return { x: span(b.x0 * z, b.x1 * z, v.x0, v.x1), y: span(b.y0 * z, b.y1 * z, v.y0, v.y1) };
     };
     const clampTo = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
-    const centreOn = (nd) => {
+    const centreOn = (nd, z = cam.z) => {
       const v = band();
-      return { x: (v.x0 + v.x1) / 2 - nd.x, y: (v.y0 + v.y1) / 2 - nd.y };
+      return { x: (v.x0 + v.x1) / 2 - nd.x * z, y: (v.y0 + v.y1) / 2 - nd.y * z };
     };
+
+    /* THE ZOOM (Zoe, 2026-11-08: "zoom out on the circles page like watchos
+       ... so the circles page can scale properly"): a pinch, a trackpad's
+       pinch or a double tap on the paper. In as far as the circles' own size,
+       out as far as the whole field fitting the band (never past ZOOM_FLOOR),
+       a pinch past either end giving and springing back. As a circle is drawn
+       smaller it folds to its face (--fold), so the field seen whole is a
+       field of faces, and a tap on one brings it up to size over its sheet. */
+    const fitZoom = () => {
+      const b = fieldBounds(nodes), pad = 18;
+      const f = Math.min((W - pad * 2) / (b.x1 - b.x0), (H - top - pad * 2) / (b.y1 - b.y0));
+      return Math.min(1, Math.max(ZOOM_FLOOR, f));
+    };
+    const canZoom = () => fitZoom() < 0.97;
+    const zoomRange = () => [fitZoom(), 1];
+    // Past either end a pinch gives, less the farther it goes.
+    const giveZoom = (z) => {
+      const [lo, hi] = zoomRange();
+      return z < lo ? lo * Math.pow(z / lo, 0.3) : z > hi ? hi * Math.pow(z / hi, 0.3) : z;
+    };
+    // To zoom z2 holding the point under (fx, fy) where it is.
+    const zoomAbout = (z2, fx, fy) => {
+      const k = z2 / cam.z;
+      cam.x = fx - (fx - cam.x) * k;
+      cam.y = fy - (fy - cam.y) * k;
+      cam.z = z2;
+    };
+    // The same as a glide's aim, kept inside the field.
+    const aimAbout = (z2, fx, fy) => {
+      const k = z2 / cam.z, r = homeRange(z2);
+      return { x: clampTo(fx - (fx - cam.x) * k, r.x), y: clampTo(fy - (fy - cam.y) * k, r.y), z: z2 };
+    };
+    let zBack = 1;               // the zoom a lift came from, to go back to
+    let zoomAt = null;           // where a pinch was, for its spring back
+
     const fresh = !circlesCam;
     if (circlesCam) {
       cam.x = circlesCam.x;
       cam.y = circlesCam.y;
+      cam.z = circlesCam.z || 1;
+      zBack = circlesCam.zBack || cam.z;
     } else {
       const aim = centreOn(nodes.reduce((a, b) => (b.r > a.r ? b : a)));
       const r = homeRange();
@@ -17965,34 +18050,40 @@
     Object.assign(lens, lensAim());
     // Where a circle is drawn (sx, sy) and how much of it the lens keeps.
     const place = (nd) => {
-      const cx = nd.x + cam.x, cy = nd.y + cam.y;
+      const cx = nd.x * cam.z + cam.x, cy = nd.y * cam.z + cam.y;
       const dx = cx - lens.x, dy = cy - lens.y;
       const t = Math.min(1, Math.max(0, (Math.hypot(dx / lens.ax, dy / lens.ay) - 0.45) / 0.9));
       nd.lens = 1 - LENS * t * t * (3 - 2 * t);
-      const d = Math.hypot(dx, dy) || 1, pull = nd.r * (1 - nd.lens);
+      const d = Math.hypot(dx, dy) || 1, pull = nd.r * cam.z * (1 - nd.lens);
       nd.sx = cx - (dx / d) * pull;
       nd.sy = cy - (dy / d) * pull;
     };
-    nodes.forEach((nd) => { place(nd); nd.sr = nd.r * nd.lens; });
+    nodes.forEach((nd) => { place(nd); nd.sr = nd.r * nd.lens * cam.z; });
 
     // THE HINT, the app's own toast, after the field has risen, on every
     // visit until a first drag here on this device (Zoe, 2026-11-07: "make it
     // dissapear after just a bit"). It goes the moment you drag or lift.
-    const HINT = 'Drag to look around.';
-    let told = false;
-    try { told = !!localStorage.getItem(CIRCLES_DRAGGED); } catch { /* private window */ }
-    const hintTimer = told ? 0 : setTimeout(() => {
-      if (world.isConnected && !told) toast(HINT);
+    // The pinch is told the same way, until a first zoom, and only where the
+    // field is bigger than the screen (with all of it in view there is
+    // nothing to zoom out to).
+    const learnt = (key) => { try { return !!localStorage.getItem(key); } catch { return false; } };
+    const told = { drag: learnt(CIRCLES_DRAGGED), pinch: learnt(CIRCLES_PINCHED) || !canZoom() };
+    const HINT = !told.drag
+      ? (told.pinch ? 'Drag to look around.' : 'Drag to look around, pinch to see them all.')
+      : told.pinch ? '' : 'Pinch to see them all.';
+    const hintTimer = !HINT ? 0 : setTimeout(() => {
+      if (world.isConnected) toast(HINT);
     }, fresh ? 900 : 300);
     const quietHint = () => {
       const t = document.querySelector('.toast.show');
-      if (t && t.textContent === HINT) t.classList.remove('show');
+      if (HINT && t && t.textContent === HINT) t.classList.remove('show');
     };
-    const spendHint = () => {
+    const spendHint = (what) => {
+      clearTimeout(hintTimer);
       quietHint();
-      if (told) return;
-      told = true;
-      try { localStorage.setItem(CIRCLES_DRAGGED, '1'); } catch { /* private window */ }
+      if (told[what]) return;
+      told[what] = true;
+      try { localStorage.setItem(what === 'pinch' ? CIRCLES_PINCHED : CIRCLES_DRAGGED, '1'); } catch { /* private window */ }
     };
 
     // WHAT IS LIFTED. A tap on a circle lifts it: the rest dim, the camera
@@ -18003,19 +18094,24 @@
     let peekPanel = null;
     const lift = (i) => {
       if (i >= 0 && sheetOpen) return;      // another sheet is up
+      const was = focus;
+      if (i >= 0 && was < 0) zBack = cam.z;
       focus = i;
       nodes.forEach((nd, j) => { nd.aim = i < 0 || j === i ? 1 : 0.35; });
       if (i < 0) {
         sheetH = 0;
-        // Home on the same glide, so the put-away eases out as the lift did.
-        const r = homeRange();
-        camAim = { x: clampTo(cam.x, r.x), y: clampTo(cam.y, r.y) };
+        // Home on the same glide, so the put-away eases out as the lift did,
+        // and back out to the zoom it came from, about the circle it lifted.
+        const nd = nodes[was];
+        camAim = nd ? aimAbout(zBack, nd.x * cam.z + cam.x, nd.y * cam.z + cam.y)
+          : aimAbout(cam.z, 0, 0);
         wake();
         return;
       }
       quietHint();
       openPeek(i);
-      camAim = centreOn(nodes[i]);
+      // Up to its own size, the way a watch's app comes up out of the grid.
+      camAim = { ...centreOn(nodes[i], 1), z: 1 };
       wake();
     };
 
@@ -18038,6 +18134,7 @@
       nd.mine = true;
       nd.n = Math.max(nd.n, Store.communitySize(c.id));
       els[i].innerHTML = bubbleHtml(nd);
+      measureFace(i);
       els[i].setAttribute('aria-label', labelOf(nd));
       wake();
       starsOf(c).then((inks) => {
@@ -18272,28 +18369,76 @@
       const box = fieldEl.getBoundingClientRect();
       return { x: e.clientX - box.left, y: e.clientY - box.top };
     };
+    // Every finger down on the field, and a pinch while two are: the world
+    // point that was under their middle stays under it, and the zoom goes
+    // with how far apart they are.
+    const fingers = new Map();
+    let pinch = null;
+    const pairOf = () => {
+      const [a, b] = [...fingers.values()];
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.max(24, Math.hypot(a.x - b.x, a.y - b.y)) };
+    };
+    const startPinch = () => {
+      const m = pairOf();
+      pinch = { d0: m.d, z0: cam.z, wx: (m.x - cam.x) / cam.z, wy: (m.y - cam.y) / cam.z };
+      zoomAt = m;
+      camAim = null;
+      cam.vx = cam.vy = cam.gx = cam.gy = cam.gz = 0;
+      spendHint('pinch');
+    };
+    const movePinch = () => {
+      const m = pairOf();
+      cam.z = giveZoom(pinch.z0 * m.d / pinch.d0);
+      cam.x = m.x - pinch.wx * cam.z;
+      cam.y = m.y - pinch.wy * cam.z;
+      zoomAt = m;
+    };
+    // A double tap on the paper: all the way out, or back in about the tap.
+    let paperTap = null;
+    const toggleZoom = (p) => {
+      if (!canZoom()) return;
+      const [lo] = zoomRange();
+      camAim = aimAbout(cam.z > lo + 0.03 ? lo : 1, p.x, p.y);
+      spendHint('pinch');
+      wake();
+    };
     const onDown = (e) => {
-      if (hand || e.button > 0) return;
+      if (e.button > 0 || fingers.size >= 2) return;
       const p = local(e);
-      if (p.x < 22 && e.pointerType === 'touch') return;   // the back swipe's edge
+      // The back swipe's edge, for a first finger.
+      if (!fingers.size && p.x < 22 && e.pointerType === 'touch') return;
+      fingers.set(e.pointerId, p);
+      try { fieldEl.setPointerCapture(e.pointerId); } catch { /* an older WebKit */ }
+      if (fingers.size === 2) {
+        // A second finger: the first is no longer a tap or a drag.
+        if (hand) {
+          if (hand.i >= 0) nodes[hand.i].press = false;
+          hand.moved = true;
+        }
+        startPinch();
+        wake();
+        return;
+      }
       const i = hitAt(p.x, p.y);
       hand = { id: e.pointerId, i, x0: p.x, y0: p.y, x: p.x, y: p.y,
         moved: false, vx: 0, vy: 0, lastT: performance.now() };
       if (i >= 0) nodes[i].press = true;
-      try { fieldEl.setPointerCapture(e.pointerId); } catch { /* an older WebKit */ }
       cam.vx = cam.vy = cam.gx = cam.gy = 0;
       wake();
     };
     const onMove = (e) => {
-      if (!hand || e.pointerId !== hand.id) return;
+      if (!fingers.has(e.pointerId)) return;
       const p = local(e);
+      fingers.set(e.pointerId, p);
+      if (pinch) { movePinch(); wake(); return; }
+      if (!hand || e.pointerId !== hand.id) return;
       const dx = p.x - hand.x, dy = p.y - hand.y;
       const now = performance.now();
       if (!hand.moved && Math.hypot(p.x - hand.x0, p.y - hand.y0) > 7) {
         hand.moved = true;
         if (hand.i >= 0) nodes[hand.i].press = false;
         camAim = null;
-        spendHint();
+        spendHint('drag');
       }
       if (hand.moved) {
         const dt = Math.max(1, now - hand.lastT);
@@ -18309,6 +18454,20 @@
       wake();
     };
     const onUp = (e) => {
+      if (!fingers.delete(e.pointerId)) return;
+      if (pinch) {
+        // One of the two lifted: the other carries on as a drag, from here.
+        pinch = null;
+        hand = null;
+        swallowUntil = performance.now() + 400;
+        const [rest] = [...fingers];
+        if (rest) {
+          hand = { id: rest[0], i: -1, x0: rest[1].x, y0: rest[1].y, x: rest[1].x, y: rest[1].y,
+            moved: true, vx: 0, vy: 0, lastT: performance.now() };
+        }
+        wake();
+        return;
+      }
       if (!hand || e.pointerId !== hand.id) return;
       const h = hand;
       hand = null;
@@ -18316,7 +18475,17 @@
       wake();
       if (!h.moved) {
         swallowUntil = performance.now() + 700;
-        if (e.type === 'pointercancel' || h.i < 0) return;
+        if (e.type === 'pointercancel') return;
+        if (h.i < 0) {
+          // The paper: a second tap soon after, near the first, zooms.
+          const now = performance.now();
+          if (paperTap && now - paperTap.t < 320 && Math.hypot(h.x - paperTap.x, h.y - paperTap.y) < 36) {
+            paperTap = null;
+            toggleZoom(h);
+          } else paperTap = { t: now, x: h.x, y: h.y };
+          return;
+        }
+        paperTap = null;
         hapticTap('LIGHT');
         lift(h.i);
         return;
@@ -18356,15 +18525,46 @@
       if (!hand) { camAim = centreOn(nodes[i]); wake(); }
     });
     world.addEventListener('focusout', () => { keyed = -1; wake(); });
-    // A trackpad or a wheel looks around, as a drag does.
+    // A trackpad or a wheel looks around, as a drag does, and a trackpad's
+    // pinch (a wheel with ctrl, as Chrome and Firefox send it) zooms about
+    // the pointer, held to the range.
+    let gesture = null;          // Safari's own pinch, which sends no wheel
     fieldEl.addEventListener('wheel', (e) => {
       e.preventDefault();
       camAim = null;
-      cam.gx = cam.gy = 0;
-      cam.x -= e.deltaX; cam.y -= e.deltaY;
-      spendHint();
+      cam.gx = cam.gy = cam.gz = 0;
+      if (e.ctrlKey) {
+        if (gesture) return;
+        const p = local(e), [lo, hi] = zoomRange();
+        zoomAbout(Math.min(hi, Math.max(lo, cam.z * Math.exp(-e.deltaY * 0.01))), p.x, p.y);
+        spendHint('pinch');
+      } else {
+        cam.x -= e.deltaX; cam.y -= e.deltaY;
+        spendHint('drag');
+      }
       wake();
     }, { passive: false });
+    // Safari's gesture events: a Mac's trackpad pinch, given and sprung back
+    // as a finger's is. On a phone the fingers are already the pinch, and
+    // these only need refusing, so the page never zooms.
+    const touching = () => fingers.size > 0;
+    fieldEl.addEventListener('gesturestart', (e) => {
+      e.preventDefault();
+      if (touching()) return;
+      gesture = { z0: cam.z };
+      camAim = null;
+      cam.gx = cam.gy = cam.gz = 0;
+    });
+    fieldEl.addEventListener('gesturechange', (e) => {
+      e.preventDefault();
+      if (!gesture || touching()) return;
+      const p = local(e);
+      zoomAbout(giveZoom(gesture.z0 * e.scale), p.x, p.y);
+      zoomAt = p;
+      spendHint('pinch');
+      wake();
+    });
+    fieldEl.addEventListener('gestureend', (e) => { e.preventDefault(); gesture = null; wake(); });
 
     /* THE HAIRLINES. Every ring stroked, then every disc cut out of what was
        stroked (destination-out, a hair inside its own line), so a ring inside
@@ -18393,7 +18593,7 @@
         ring(x, y, r, rgba(ink, base * shade), i === keyed ? 2 : 1);
         if (nd.alive && nd.inks && !reduce) {
           const k = ((now + nd.seed * RIPPLE_MS) % RIPPLE_MS) / (RIPPLE_MS * 0.5);
-          if (k < 1) ring(x, y, r + 2 + k * 30 * nd.lens, rgba(nd.inks.stops[1], 0.7 * (1 - k) * (1 - k) * shade), 1.5);
+          if (k < 1) ring(x, y, r + 2 + k * 30 * nd.lens * cam.z, rgba(nd.inks.stops[1], 0.7 * (1 - k) * (1 - k) * shade), 1.5);
         }
       });
       lctx.globalCompositeOperation = 'destination-out';
@@ -18433,31 +18633,46 @@
         // A critically damped spring (GLIDE_W): it sets off from rest and
         // settles with no overshoot in about the sheet's rise, where a step
         // toward the aim each frame lurched off at its fastest.
-        if (reduce) { cam.x = camAim.x; cam.y = camAim.y; cam.gx = cam.gy = 0; }
+        // The zoom rides the same spring from the same rest, so every point
+        // on the screen goes in a straight line to where it lands.
+        const az = camAim.z ?? cam.z;
+        if (reduce) { cam.x = camAim.x; cam.y = camAim.y; cam.z = az; cam.gx = cam.gy = cam.gz = 0; }
         else {
           cam.gx += (GLIDE_W * GLIDE_W * (camAim.x - cam.x) - 2 * GLIDE_W * cam.gx) * dt;
           cam.gy += (GLIDE_W * GLIDE_W * (camAim.y - cam.y) - 2 * GLIDE_W * cam.gy) * dt;
-          cam.x += cam.gx * dt; cam.y += cam.gy * dt;
+          cam.gz += (GLIDE_W * GLIDE_W * (az - cam.z) - 2 * GLIDE_W * cam.gz) * dt;
+          cam.x += cam.gx * dt; cam.y += cam.gy * dt; cam.z += cam.gz * dt;
         }
         if (Math.abs(camAim.x - cam.x) + Math.abs(camAim.y - cam.y) < 0.3
-            && Math.abs(cam.gx) + Math.abs(cam.gy) < 6) {
-          cam.x = camAim.x; cam.y = camAim.y; cam.gx = cam.gy = 0;
+            && Math.abs(cam.gx) + Math.abs(cam.gy) < 6
+            && Math.abs(az - cam.z) < 0.001 && Math.abs(cam.gz) < 0.02) {
+          cam.x = camAim.x; cam.y = camAim.y; cam.z = az; cam.gx = cam.gy = cam.gz = 0;
           camAim = null;
         }
+      } else if (pinch || gesture) {
+        // The fingers have it.
       } else if (!hand || !hand.moved) {
         cam.x += cam.vx; cam.y += cam.vy;
         cam.vx *= 0.92; cam.vy *= 0.92;
         // Home only with nothing lifted: a lifted circle keeps the place the
         // glide gave it, over the sheet.
         if (focus < 0) {
+          // A pinch let go past either end springs back about where it was.
+          const [lo, hi] = zoomRange();
+          const zc = Math.min(hi, Math.max(lo, cam.z));
+          if (Math.abs(zc - cam.z) > 0.0005) {
+            const f = zoomAt || { x: W / 2, y: (top + H) / 2 };
+            zoomAbout(cam.z + (zc - cam.z) * (reduce ? 1 : 0.16), f.x, f.y);
+            homing = true;
+          }
           const r = homeRange();
           const hx = clampTo(cam.x, r.x), hy = clampTo(cam.y, r.y);
           cam.x += (hx - cam.x) * (reduce ? 1 : 0.14);
           cam.y += (hy - cam.y) * (reduce ? 1 : 0.14);
-          homing = Math.abs(hx - cam.x) + Math.abs(hy - cam.y) > 0.3;
+          homing = homing || Math.abs(hx - cam.x) + Math.abs(hy - cam.y) > 0.3;
         }
       }
-      let moving = !!hand || !!camAim || homing || Math.abs(cam.vx) + Math.abs(cam.vy) > 0.05;
+      let moving = !!hand || !!pinch || !!gesture || !!camAim || homing || Math.abs(cam.vx) + Math.abs(cam.vy) > 0.05;
       const la = lensAim();
       // The lens follows the band on the same spring, so the circles give
       // and take size in step with the glide.
@@ -18472,7 +18687,7 @@
       if (waveEnd < 0) {
         let far = 0;
         nodes.forEach((nd) => {
-          nd.at = Math.hypot(nd.x + cam.x - lens.x, nd.y + cam.y - lens.y) * 0.55;
+          nd.at = Math.hypot(nd.x * cam.z + cam.x - lens.x, nd.y * cam.z + cam.y - lens.y) * 0.55;
           far = Math.max(far, nd.at);
         });
         waveEnd = born + far + GROW_MS;
@@ -18495,10 +18710,22 @@
         const aimS = (i === focus ? 1.05 : 1) * (nd.press ? 0.95 : 1);
         if (reduce) { nd.scale = aimS; nd.sv = 0; }
         else { nd.sv = (nd.sv + (aimS - nd.scale) * 0.11) * 0.8; nd.scale += nd.sv; }
-        const s = nd.lens * nd.scale * grow;
+        const s = nd.lens * nd.scale * grow * cam.z;
         nd.sr = nd.r * s;
         els[i].style.transform = `translate3d(${(nd.sx - nd.r).toFixed(2)}px, ${(nd.sy - nd.r).toFixed(2)}px, 0) scale(${s.toFixed(4)})`;
         els[i].style.opacity = (nd.alpha * nd.glow).toFixed(3);
+        // Folded by how small its words are drawn (the lift's pop and the
+        // rise aside, which pass), on its own clock.
+        const drawn = nd.lens * cam.z;
+        if (drawn < FOLD_AT) nd.folded = true;
+        else if (drawn > UNFOLD_AT) nd.folded = false;
+        const ft = reduce ? +nd.folded
+          : Math.min(1, Math.max(0, nd.fold + (nd.folded ? 1 : -1) * dt * 1000 / FOLD_MS));
+        if (ft !== nd.fold) {
+          nd.fold = ft;
+          els[i].style.setProperty('--fold', (ft * ft * (3 - 2 * ft)).toFixed(3));
+          moving = true;
+        }
         if (Math.abs(nd.vx) + Math.abs(nd.vy) > 0.02 || Math.abs(nd.aim - nd.glow) > 0.01
             || Math.abs(aimS - nd.scale) > 0.002 || Math.abs(nd.sv) > 0.001) moving = true;
       });
@@ -18540,7 +18767,7 @@
 
     // The sheet, if one is up, is route()'s (dismissSheet), after this.
     circlesOff = () => {
-      circlesCam = { x: cam.x, y: cam.y, lifted: focus >= 0 ? nodes[focus].c.id : null,
+      circlesCam = { x: cam.x, y: cam.y, z: cam.z, zBack, lifted: focus >= 0 ? nodes[focus].c.id : null,
         sheet: peekLeft || { rise: 0 } };
       clearTimeout(hintTimer);
       quietHint();
@@ -18847,13 +19074,6 @@
   // one from the sheet carries the head up into its place (handHeadOver).
   // `peek`: the sheet's, where a circle you're in has no pills (Zoe, 2026-11-08:
   // "no buttons on circles I host or am a part of"); the page has its own.
-  // A name's last word and a lock, held together so a wrap never strands it.
-  const nameWithLock = (name) => {
-    const t = String(name || '');
-    const cut = t.lastIndexOf(' ') + 1;
-    return esc(t.slice(0, cut)) + `<span class="account-name-tail">${esc(t.slice(cut))}` +
-      svgIcon('lock', 'account-name-lock') + `<span class="visually-hidden">, invite only</span></span>`;
-  };
   function communityHeadHtml(c, peek = false) {
     const me = Store.session();
     const member = Store.inCommunity(c.id);
@@ -18910,13 +19130,14 @@
               svgIcon('circle', 'community-photo-ico') + `</div>`) +
         `<div class="account-meta">` +
           `<div class="account-id">` +
-            // An invite-only room wears a small lock after its name (Zoe,
-            // 2026-11-08: "in the titles"), to everyone: it is what the room
-            // is, not a count. It rides with the last word, never alone.
-            `<h1 class="account-name">${c.inviteOnly ? nameWithLock(c.name) : esc(c.name)}</h1>` +
+            `<h1 class="account-name">${esc(c.name)}` +
+              (c.inviteOnly ? `<span class="visually-hidden">, invite only</span>` : '') + `</h1>` +
             // A profile's rule: the handle steps aside at phone width, where
             // the bar's title already says it, and stays on a desktop.
-            `<p class="account-handle account-handle--bare">${esc(communityHandle(c))}</p>` +
+            // An invite-only room's lock rides its c/slug, here and on the
+            // bar (Zoe, 2026-11-08: "in the c/ like in the header").
+            `<p class="account-handle account-handle--bare">${esc(communityHandle(c))}` +
+              (c.inviteOnly ? svgIcon('lock', 'title-lock') : '') + `</p>` +
           `</div>` +
           (stats ? `<div class="account-stats">${stats}</div>` : '') +
           (c.about ? `<div class="account-bio">${parasHtml(c.about)}</div>` : '') +
@@ -19024,6 +19245,7 @@
       // The HANDLE, the way a profile's bar says the @handle: the head under it
       // already says the name in big serif.
       title: communityHandle(first),
+      lock: !!first.inviteOnly,
       actions: `<button class="toolbar-btn" type="button" id="community-more" aria-label="Circle options">` +
         `${svgIcon('dots')}</button>`,
     });
