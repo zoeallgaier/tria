@@ -17997,6 +17997,7 @@
     // brings it into the band over the sheet, and the sheet rises.
     let focus = -1;
     let leaving = false;         // a circle is being opened: nothing to put back
+    let peekLeft = null;         // how its sheet stood as you went in
     let peekPanel = null;
     const lift = (i) => {
       if (i >= 0 && sheetOpen) return;      // another sheet is up
@@ -18058,7 +18059,7 @@
        a LIGHT haptic arms it; let go armed and it carries on up and away. */
     const peekHtml = (nd) =>
       `<div class="account community-head cx-peek">${communityHeadHtml(nd.c, true)}</div>`;
-    function openPeek(i, instant) {
+    function openPeek(i, kept) {
       const nd = nodes[i], c = nd.c;
       let scrimEl = null, panel = null;
       // In, with the head carried up out of the panel, which fades from under
@@ -18067,6 +18068,12 @@
         if (leaving && !panel?.isConnected) return;
         leaving = true;
         if (panel?.isConnected) {
+          // How the sheet stood as you went in, a pull having raised it: the
+          // back swipe's picture of this page shows it there, so the way
+          // back starts it there too and lets it settle (openPeek's `kept`).
+          let rise = 0;
+          try { rise = new DOMMatrix(getComputedStyle(panel).transform).m42 || 0; } catch { /* an older WebKit */ }
+          peekLeft = { rise, armed: scrimEl.classList.contains('is-armed') };
           handHeadOver(panel.querySelector('.cx-peek'), c.slug);
           if (!reduce) {
             const t = getComputedStyle(panel).transform;
@@ -18220,15 +18227,26 @@
           }, true);
         },
       });
-      // Back from the circle it opened: already up, with no rise, as the
-      // back swipe's picture of this page showed it.
-      if (instant && scrimEl && panel) {
+      // Back from the circle it opened: already up, with no rise, where the
+      // back swipe's picture of this page showed it, raised and inked if a
+      // pull took you in, and from there it settles to its place.
+      if (kept && scrimEl && panel) {
         scrimEl.style.transition = panel.style.transition = 'none';
         scrimEl.classList.add('open');
+        const raised = !reduce && kept.rise < -0.5;
+        if (raised) {
+          panel.style.transform = `translateY(${kept.rise.toFixed(1)}px)`;
+          scrimEl.classList.toggle('is-armed', !!kept.armed);
+        }
         void panel.offsetHeight;
         requestAnimationFrame(() => requestAnimationFrame(() => {
           scrimEl.style.transition = '';
-          if (!pull) panel.style.transition = '';
+          if (pull) return;
+          if (!raised) { panel.style.transition = ''; return; }
+          panel.style.transition = 'transform 0.5s var(--ease)';
+          panel.style.transform = '';
+          scrimEl.classList.remove('is-armed');
+          setTimeout(() => { if (!pull) panel.style.transition = ''; }, 520);
         }));
       }
     }
@@ -18496,7 +18514,7 @@
       nodes.forEach((nd, j) => { nd.aim = nd.glow = j === keptAt ? 1 : 0.35; });
       nodes[keptAt].scale = 1.05;
       focus = keptAt;
-      openPeek(keptAt, true);
+      openPeek(keptAt, circlesCam.sheet || { rise: 0 });
       camAim = null;
       Object.assign(lens, lensAim());
       lensV.x = lensV.y = lensV.ax = lensV.ay = 0;
@@ -18520,7 +18538,8 @@
 
     // The sheet, if one is up, is route()'s (dismissSheet), after this.
     circlesOff = () => {
-      circlesCam = { x: cam.x, y: cam.y, lifted: focus >= 0 ? nodes[focus].c.id : null };
+      circlesCam = { x: cam.x, y: cam.y, lifted: focus >= 0 ? nodes[focus].c.id : null,
+        sheet: peekLeft || { rise: 0 } };
       clearTimeout(hintTimer);
       quietHint();
       cancelAnimationFrame(raf);
