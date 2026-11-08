@@ -18058,7 +18058,7 @@
        a LIGHT haptic arms it; let go armed and it carries on up and away. */
     const peekHtml = (nd) =>
       `<div class="account community-head cx-peek">${communityHeadHtml(nd.c, true)}</div>`;
-    function openPeek(i) {
+    function openPeek(i, instant) {
       const nd = nodes[i], c = nd.c;
       let scrimEl = null, panel = null;
       // In, with the head carried up out of the panel, which fades from under
@@ -18068,19 +18068,13 @@
         leaving = true;
         if (panel?.isConnected) {
           handHeadOver(panel.querySelector('.cx-peek'), c.slug);
-          // Gone AT ONCE, scrim and all, and the field undimmed: WebKit's
-          // back swipe shows a picture of this page taken as we leave, and a
-          // sheet still fading in it flashed up and vanished on the way back
-          // (Zoe, 2026-11-08: "just bring in like with the back button").
-          scrimEl.style.transition = 'none';
-          scrimEl.style.visibility = 'hidden';
+          if (!reduce) {
+            const t = getComputedStyle(panel).transform;
+            panel.style.transition = 'opacity 0.22s var(--ease-soft)';
+            if (t && t !== 'none') panel.style.transform = t;
+            panel.style.opacity = '0';
+          }
         }
-        nodes.forEach((nd, j) => {
-          nd.aim = nd.glow = 1;
-          els[j].style.opacity = String(nd.alpha ?? 1);
-        });
-        focus = -1;
-        drawLines(performance.now());
         goKept(communityRoute(c));
       };
       const opened = performance.now();
@@ -18226,6 +18220,17 @@
           }, true);
         },
       });
+      // Back from the circle it opened: already up, with no rise, as the
+      // back swipe's picture of this page showed it.
+      if (instant && scrimEl && panel) {
+        scrimEl.style.transition = panel.style.transition = 'none';
+        scrimEl.classList.add('open');
+        void panel.offsetHeight;
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          scrimEl.style.transition = '';
+          if (!pull) panel.style.transition = '';
+        }));
+      }
     }
 
     // THE HAND. One pointer: a drag anywhere moves the view (the circles stay
@@ -18481,6 +18486,21 @@
       if (!reduce || moving) wake();
     };
     function wake() { if (!raf && world.isConnected) raf = requestAnimationFrame(frame); }
+    // BACK FROM A CIRCLE OPENED HERE, its sheet is still up (Zoe, 2026-11-08:
+    // "keep the sheet open on swipe back so no flashing happens"): the back
+    // swipe slides in a picture of this page as it was left, sheet and all,
+    // so the page under it is drawn the same, lifted, dimmed and settled.
+    const keptAt = !fresh && circlesCam.lifted ? nodes.findIndex((nd) => nd.c.id === circlesCam.lifted) : -1;
+    if (keptAt >= 0 && !sheetOpen) {
+      clearTimeout(hintTimer);
+      nodes.forEach((nd, j) => { nd.aim = nd.glow = j === keptAt ? 1 : 0.35; });
+      nodes[keptAt].scale = 1.05;
+      focus = keptAt;
+      openPeek(keptAt, true);
+      camAim = null;
+      Object.assign(lens, lensAim());
+      lensV.x = lensV.y = lensV.ax = lensV.ay = 0;
+    }
     wake();
 
     const onResize = () => {
@@ -18500,7 +18520,7 @@
 
     // The sheet, if one is up, is route()'s (dismissSheet), after this.
     circlesOff = () => {
-      circlesCam = { x: cam.x, y: cam.y };
+      circlesCam = { x: cam.x, y: cam.y, lifted: focus >= 0 ? nodes[focus].c.id : null };
       clearTimeout(hintTimer);
       quietHint();
       cancelAnimationFrame(raf);
