@@ -18278,7 +18278,16 @@
     fieldEl.addEventListener('pointerup', onUp);
     fieldEl.addEventListener('pointercancel', onUp);
     world.addEventListener('click', (e) => {
-      if (performance.now() < swallowUntil) e.preventDefault();
+      if (performance.now() < swallowUntil) { e.preventDefault(); return; }
+      // A pointer's click the hand never saw (a tap in the back swipe's edge,
+      // where onDown stands aside) would follow the disc's link straight in.
+      // It lifts the circle instead; only a keyboard's (detail 0) follows it.
+      if (e.detail > 0) {
+        e.preventDefault();
+        if (hand || focus >= 0 || sheetOpen) return;
+        const p = local(e), i = hitAt(p.x, p.y);
+        if (i >= 0) { hapticTap('LIGHT'); lift(i); }
+      }
     });
     // A keyboard's Tab brings the circle it lands on into view, ringed (a
     // pointer's focus is not a keyboard's, so it moves nothing).
