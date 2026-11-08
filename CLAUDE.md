@@ -640,7 +640,7 @@ link, poll or plan) fills the whole wide card (`pin--bare`, Zoe: "all the way
 wide"), and its clip plays muted and looping while on screen
 (`wirePinClips`, the feed's attach and let go rule; reduced motion keeps the
 poster). **Words cut short get a Read more in the foot** (`fitPinWords` adds
-`.pin-readmore` and fits again; the card is the link). **The ••• sits in your own card's top right**, no type glyph (Zoe). A
+`.pin-readmore` and fits again; the card is the link). **No song pins** (Zoe, 2026-11-08: Moments and Music cover it): a pinned listening status draws nothing and `setPins` drops it; a real Music post pins like any post, a Moment never. **The ••• sits in your own card's top right**, no type glyph (Zoe). A
 drag trades places with the card under the finger and the repaint glides every
 card there (`settlePins`, a FLIP); the menu's rows stay Move up and Move down.
 iOS 15 is the floor, so no container queries: the row reads `100vw`.
