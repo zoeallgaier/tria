@@ -117,6 +117,15 @@ like dailies top right"); the bar's band shows from the first frame here
 goes back to it** (Zoe: "make sure back goes back to circles"):
 `communityBackTarget` knows `#/circles`, and the view is kept (`circlesCam`)
 only for a way back from a circle; arriving fresh starts on the biggest.
+**Back from a circle opened from its sheet, the sheet is already up**
+(Zoe, 2026-11-08: "keep the sheet open on swipe back so no flashing
+happens"; `circlesCam.lifted`, `openPeek(i, kept)`): WebKit's back swipe
+shows a picture of the field as you left it, sheet and all, so the page
+under it is drawn the same, starting where a pull left the panel and
+settling. A circle's back chevron steps back onto the field's own entry
+(`backStepsTo`, the trail in `history.state.back`) rather than pushing a
+copy, so a back swipe from the field reaches Discover; every hash replace
+goes through `replaceHash` to keep that trail true.
 
 ## A profile's types are tabs you swipe (2026-11-07)
 
