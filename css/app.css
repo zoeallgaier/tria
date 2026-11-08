@@ -5934,12 +5934,12 @@ button.poll-option:disabled { cursor: default; }
   pointer-events: none;
 }
 .np-item.is-unseen.has-tone .np-ring { opacity: 1; }
-/* Your own face takes a + for another Moment, on its TOP RIGHT rim (Zoe,
-   2026-11-08: "so charms aren't covered"; charms sit at ten thirty and four
-   thirty, so one o'clock-ish is the rim's free corner and yours wears both). */
+/* Your own face takes a + for another Moment, on its corner. It covers the
+   four thirty charm, which is why yours wears only the first (Zoe, 2026-11-08:
+   moving it to the top right was tried and undone, "its just my profile"). */
 .np-add {
   position: absolute;
-  top: 6px;
+  top: 68px;
   left: 68px;
   z-index: 2;
   width: 30px;
