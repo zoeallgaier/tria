@@ -1365,7 +1365,10 @@
           const lock = el.querySelector('.title-lock');
           if (!lock) return {};
           const box = lock.getBoundingClientRect();
-          return { lock: lock.outerHTML, lockSize: box.width, lockGap: parseFloat(getComputedStyle(lock).marginLeft) || 0 };
+          const ls = getComputedStyle(lock);
+          // The stylesheet's weight, not the markup's, so native draws what CSS does.
+          const markup = lock.outerHTML.replace(/stroke-width="[\d.]+"/, `stroke-width="${parseFloat(ls.strokeWidth) || 2.3}"`);
+          return { lock: markup, lockSize: box.width, lockGap: parseFloat(ls.marginLeft) || 0 };
         })(),
       };
     }

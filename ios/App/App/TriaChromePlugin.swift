@@ -1797,6 +1797,28 @@ final class TriaToolbar: UIVisualEffectView, TriaToolbarControl {
             titleLabel.font = TriaToolbar.titleFont(TriaToolbar.number(title["size"]))
             if let ink = title["ink"] as? String,
                let colour = TriaChromeBar.color(fromHex: ink) { titleLabel.textColor = colour }
+            // An invite-only circle's lock after its c/slug: the web's own
+            // glyph at the size the web drew it, a gap of its margin before
+            // it, sat a little under the cap height as the CSS sits it.
+            if let lock = title["lock"] as? String, !text.isEmpty {
+                let side = max(1, TriaToolbar.number(title["lockSize"]))
+                let gap = TriaToolbar.number(title["lockGap"])
+                if let glyph = TriaSVG.image(markup: lock, size: side, ink: .black, template: true)?
+                    .withTintColor(titleLabel.textColor ?? .label, renderingMode: .alwaysOriginal) {
+                    let font = titleLabel.font ?? UIFont.systemFont(ofSize: 17)
+                    let line = NSMutableAttributedString(string: text)
+                    let spacer = NSTextAttachment()
+                    spacer.bounds = CGRect(x: 0, y: 0, width: gap, height: 0.01)
+                    line.append(NSAttributedString(attachment: spacer))
+                    let mark = NSTextAttachment()
+                    mark.image = glyph
+                    mark.bounds = CGRect(x: 0, y: -side * 0.1, width: side, height: side)
+                    line.append(NSAttributedString(attachment: mark))
+                    line.addAttributes([.font: font, .foregroundColor: titleLabel.textColor ?? .label],
+                                       range: NSRange(location: 0, length: line.length))
+                    titleLabel.attributedText = line
+                }
+            }
             titleLabel.frame = CGRect(x: TriaToolbar.number(title["x"]),
                                       y: TriaToolbar.number(title["y"]),
                                       width: TriaToolbar.number(title["w"]),
