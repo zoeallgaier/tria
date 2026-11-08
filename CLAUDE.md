@@ -25,9 +25,10 @@ The same files also serve a website; that is a byproduct, not a target. See
 
 **Discover leads with the Explore circles card** (Zoe: "a new card akin to
 daily", "at the very top of discover"), above the daily, `circlesCardHtml`:
-its picture is the field in little (the six biggest circles as discs,
-floating, `.cxm-node`), the headline names the biggest rooms, and its foot is
-two even doors, **Explore** and **New circle** (`.circles-card-acts`). **The
+the three biggest circles as the page's discs, a floating triad
+(`.cxm-node`), over the one line "Explore circles" (Zoe: "remove the names of
+the circles and the text under"), and two even doors, **Explore** and **New
+circle** (`.circles-card-acts`). **The
 circle rails stay in the square** (Zoe: "Keep circle carousels in the feed").
 `#/circles` (`renderExploreCircles`, signed out too) is the whole window,
 fixed: **every circle a disc, its AREA by its members** (radius by the square
@@ -43,7 +44,14 @@ into one outline** (Zoe: "combine/disappear on overlap"): the rings are a
 canvas over the discs, stroked then every disc cut out (destination-out),
 and the push against a dragged circle is soft so it really sinks in. A tap
 lifts a circle (the rest dim) and raises its Discover card from the foot; a
-second tap goes in. **New circle is the bar's, always** (Zoe: "a perma button
+second tap goes in, and so does **a pull up on the card, the Moments Reply
+pull** (Zoe: "take a note from moments replies"): a chevron over "Open
+c/slug", the card rising at half pace and stiffening past `OPEN_AT` (70px)
+with a LIGHT haptic, carrying on up and away on an armed let-go; a pull down
+puts it away. The drag is the window's while it runs, and the field refuses
+native link drags (`dragstart`, `-webkit-user-drag`), which had swallowed the
+pointer on desktop. The foot's "Drag to look around" goes after 3.2s or the
+first drag (`spendCaption`). **New circle is the bar's, always** (Zoe: "a perma button
 like dailies top right"); the bar's band shows from the first frame here
 (`body.circles-live`). `circlesOff` stops the frame loop in route().
 

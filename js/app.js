@@ -17562,44 +17562,36 @@
   const exploreList = () => (Store.communitiesReady() ? communitiesInOrder() : []);
 
   /* THE CARD, the daily's (Zoe: "a new card akin to daily"), at the very top
-     of Discover (Zoe: "lets put this at the very top"). Its picture is the
-     field in little: the biggest few circles as its discs, each bobbing on
-     its own slow float. The headline names the biggest
-     rooms, so the card says what is in there. The whole card goes in; its
-     foot is two doors, Explore and New circle. */
-  const PREVIEW_MAX = 6;
+     of Discover (Zoe: "lets put this at the very top"). Since the same
+     evening it says only Explore circles (Zoe: "remove the names of the
+     circles and the text under"), over its picture: the THREE biggest
+     circles as the page's own discs (Zoe: "use three circles instead"), sized
+     by their members but held near one another so they sit as a triad, the
+     way Tria's circle mark does, each on its own slow float. Its foot is two
+     even doors, Explore and New circle. The whole card goes in. */
+  const PREVIEW_MAX = 3;
   function circlesCardHtml() {
     if (!Store.communitiesReady()) return '';
     const all = exploreList();
     if (!all.length) return '';
     const big = all.slice().sort((a, b) => Store.communitySize(b.id) - Store.communitySize(a.id));
-    const names = big.slice(0, 3).map(c => c.name);
-    const headline = all.length > 3 ? `${names.join(', ')} and more`
-      : names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
-    // The little field: the biggest few, settled small, wide rather than tall.
-    // Positions are px off the art's middle, so it centres at any card width.
-    const field = circleField(big.slice(0, PREVIEW_MAX), { rMin: 18, rMax: 38, gap: 12 });
-    settleField(field, { gx: 0.0012, gy: 0.004, steps: 400 });
+    // The little field: settled small, the biggest at the top left, as the
+    // mark's. Positions are px off the art's middle, so it centres at any width.
+    const field = circleField(big.slice(0, PREVIEW_MAX), { rMin: 34, rMax: 48, gap: 8 });
+    settleField(field, { gx: 0.004, gy: 0.004, steps: 400 });
     const b = fieldBounds(field.nodes);
     const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
-    const fit = Math.min(1, 120 / Math.max(1, b.y1 - b.y0), 300 / Math.max(1, b.x1 - b.x0));
     const art = field.nodes.map((nd) => {
-      const d = Math.round(nd.r * 2 * fit);
-      const x = Math.round((nd.x - cx) * fit - d / 2), y = Math.round((nd.y - cy) * fit - d / 2);
+      const d = Math.round(nd.r * 2);
+      const x = Math.round(nd.x - cx - d / 2), y = Math.round(nd.y - cy - d / 2);
       return `<span class="cxm-node" data-community="${esc(nd.c.id)}" ` +
           `style="width:${d}px;height:${d}px;left:calc(50% + ${x}px);top:calc(50% + ${y}px);` +
-          `--float:${(6.5 + nd.seed * 4).toFixed(2)}s;--float-at:${(-nd.seed * 9).toFixed(2)}s">` +
-
-        `</span>`;
+          `--float:${(6.5 + nd.seed * 4).toFixed(2)}s;--float-at:${(-nd.seed * 9).toFixed(2)}s"></span>`;
     }).join('');
-    const n = all.length;
     return `<section class="daily-card circles-card">` +
         `<div class="circles-card-art" aria-hidden="true">${art}</div>` +
-        `<p class="daily-kicker">Explore circles</p>` +
-        `<a class="daily-open" href="#/circles"><span class="daily-prompt">${esc(headline)}</span></a>` +
-        `<p class="daily-hint">Rooms for what you’re into, sized by who’s in them.</p>` +
+        `<a class="daily-open" href="#/circles"><span class="daily-prompt">Explore circles</span></a>` +
         `<div class="daily-foot">` +
-          `<span class="daily-count">${n} circle${n === 1 ? '' : 's'}</span>` +
           // Two doors, side by side (Zoe, 2026-11-07: "add add circle button
           // and make buttons 2columns"): look around, or start your own.
           `<div class="circles-card-acts">` +
@@ -17650,7 +17642,7 @@
           `<canvas class="cx-lines" aria-hidden="true"></canvas>` +
           `<p class="cx-caption" id="cx-caption">` +
             (!Store.communitiesReady() ? 'Circles aren’t switched on yet.'
-              : list.length ? 'Sized by who’s in them. Drag to look around.'
+              : list.length ? 'Drag to look around'
               : 'No circles yet. Start the first one.') +
           `</p>` +
           `<div class="cx-sheet" id="cx-sheet" aria-live="polite"></div>` +
@@ -17766,19 +17758,38 @@
     // brings it into the band over the card, and the card rises, Discover's
     // own card for it.
     let focus = -1;
+    /* THE CAPTION says how once, then gets out of the way (Zoe, 2026-11-07:
+       "make it dissapear after just a bit"): gone after CAPTION_MS, or at the
+       first drag, and not back when a lifted card is put away. */
+    const CAPTION_MS = 3200;
+    let captionSpent = false;
+    const spendCaption = () => {
+      if (captionSpent) return;
+      captionSpent = true;
+      caption.classList.add('is-away');
+    };
+    const captionTimer = setTimeout(spendCaption, CAPTION_MS);
     const lift = (i) => {
       focus = i;
+      sheet.classList.remove('is-armed', 'is-opening', 'is-pulling');
       els.forEach((el, j) => el.classList.toggle('is-focus', j === i));
       nodes.forEach((nd, j) => { nd.aim = i < 0 || j === i ? 1 : 0.35; });
       if (i < 0) {
         sheet.classList.remove('is-up');
-        caption.classList.remove('is-away');
+        caption.classList.toggle('is-away', captionSpent);
         sheetH = 0;
         camAim = null;
         wake();
         return;
       }
-      sheet.innerHTML = communityCardHtml(nodes[i].c);
+      const c = nodes[i].c;
+      sheet.innerHTML = `<div class="cx-sheet-in">` +
+          `<div class="cx-pull" aria-hidden="true">` +
+            `<span class="cx-pull-chev">${svgIcon('chevUp')}</span>` +
+            `<span class="cx-pull-word">Open ${esc(communityHandle(c))}</span>` +
+          `</div>` +
+          communityCardHtml(c) +
+        `</div>`;
       wireCommunityJoins(sheet);
       sheet.classList.add('is-up');
       caption.classList.add('is-away');
@@ -17826,6 +17837,7 @@
       if (!hand.moved && Math.hypot(p.x - hand.x0, p.y - hand.y0) > 7) {
         hand.moved = true;
         camAim = null;
+        spendCaption();
         if (hand.i >= 0) held = nodes[hand.i];
       }
       if (hand.moved) {
@@ -17863,6 +17875,9 @@
       if (h.i < 0) { cam.vx = h.vx; cam.vy = h.vy; }
       swallowUntil = performance.now() + 400;
     };
+    // A link is draggable to the browser, and a drag that starts on one (a
+    // circle, the lifted card) would be taken for that and stop the pointer.
+    fieldEl.addEventListener('dragstart', (e) => e.preventDefault());
     fieldEl.addEventListener('pointerdown', onDown);
     fieldEl.addEventListener('pointermove', onMove);
     fieldEl.addEventListener('pointerup', onUp);
@@ -17891,6 +17906,75 @@
     }, { passive: false });
     const onKey = (e) => { if (e.key === 'Escape' && focus >= 0) lift(-1); };
     document.addEventListener('keydown', onKey);
+
+    /* A PULL UP ON THE LIFTED CARD OPENS THE CIRCLE (Zoe, 2026-11-07: "take a
+       note from moments replies"), the Moments viewer's Reply pull: the card
+       rises at half the finger's pace and stiffens past OPEN_AT, where the
+       chevron over "Open c/slug" rises and inks and a LIGHT haptic arms it.
+       Let go armed and the card carries on up and away as the circle opens;
+       short of it, it springs home. A pull DOWN puts the card away, as any
+       sheet does. A drag never also clicks the card's link; Join keeps its
+       tap and never starts a pull. */
+    const OPEN_AT = 70;
+    const PUT_AWAY_AT = 70;
+    let pull = null;
+    let pullSwallow = 0;
+    const inner = () => sheet.querySelector('.cx-sheet-in');
+    // The move and the let-go are the window's while a pull is on, so the card
+    // keeps the finger once it has left it (WebKit's pointer capture did not).
+    sheet.addEventListener('pointerdown', (e) => {
+      if (e.button > 0 || focus < 0 || pull || e.target.closest('button')) return;
+      pull = { id: e.pointerId, x0: e.clientX, y0: e.clientY, dy: 0, moved: false, armed: false };
+      window.addEventListener('pointermove', movePull);
+      window.addEventListener('pointerup', endPull);
+      window.addEventListener('pointercancel', endPull);
+    });
+    function movePull(e) {
+      if (!pull || e.pointerId !== pull.id) return;
+      const dx = e.clientX - pull.x0, dy = e.clientY - pull.y0;
+      if (!pull.moved) {
+        if (Math.abs(dy) < 6 || Math.abs(dy) < Math.abs(dx)) return;
+        pull.moved = true;
+        sheet.classList.add('is-pulling');
+      }
+      pull.dy = dy;
+      const up = -dy;
+      const rise = up > 0 ? (up <= OPEN_AT ? up * 0.5 : OPEN_AT * 0.5 + (up - OPEN_AT) * 0.12) : up * 0.9;
+      const el = inner();
+      if (el) el.style.transform = `translateY(${(-rise).toFixed(1)}px)`;
+      const armed = up >= OPEN_AT;
+      if (armed !== pull.armed) {
+        pull.armed = armed;
+        sheet.classList.toggle('is-armed', armed);
+        if (armed) hapticTap('LIGHT');
+      }
+    }
+    function endPull(e) {
+      if (!pull || e.pointerId !== pull.id) return;
+      const p = pull;
+      pull = null;
+      window.removeEventListener('pointermove', movePull);
+      window.removeEventListener('pointerup', endPull);
+      window.removeEventListener('pointercancel', endPull);
+      if (!p.moved) return;
+      pullSwallow = performance.now() + 400;
+      sheet.classList.remove('is-pulling');
+      const el = inner();
+      if (p.armed && e.type !== 'pointercancel' && focus >= 0) {
+        const c = nodes[focus].c;
+        if (reduce || !el) { go(communityRoute(c)); return; }
+        sheet.classList.add('is-opening');
+        el.style.transform = 'translateY(-48px)';
+        setTimeout(() => { if (world.isConnected) go(communityRoute(c)); }, 200);
+        return;
+      }
+      sheet.classList.remove('is-armed');
+      if (el) el.style.transform = '';
+      if (p.dy >= PUT_AWAY_AT) lift(-1);
+    }
+    sheet.addEventListener('click', (e) => {
+      if (performance.now() < pullSwallow) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
 
     /* THE HAIRLINES. Every ring stroked, then every disc cut out of what was
        stroked (destination-out, a hair inside its own line), so a ring inside
@@ -17999,9 +18083,13 @@
     } catch { mq = null; }
 
     circlesOff = () => {
+      clearTimeout(captionTimer);
       cancelAnimationFrame(raf);
       raf = 0;
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('pointermove', movePull);
+      window.removeEventListener('pointerup', endPull);
+      window.removeEventListener('pointercancel', endPull);
       document.removeEventListener('keydown', onKey);
       mq?.removeEventListener?.('change', onScheme);
       document.body.classList.remove('circles-live');
