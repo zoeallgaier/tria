@@ -17622,6 +17622,9 @@
      a keyboard and a screen reader), and over it a canvas of hairlines at the
      screen's own resolution, so a meeting can merge them. */
   let circlesOff = null;
+  // Where the view was when you left the field, so coming back (from a
+  // circle, by its back) lands where you were looking, not at the start.
+  let circlesCam = null;
   function renderExploreCircles() {
     const list = exploreList();
     const authed = Store.isAuthed();
@@ -17688,9 +17691,6 @@
     const { nodes } = field;
     settleField(field, grav());
 
-  // Where the view was when you left the field, so coming back (from a
-  // circle, by its back) lands where you were looking, not at the start.
-  let circlesCam = null;
     // Each ring's words, fitted: the name in the serif at a size its radius
     // can carry, shrunk until its longest word fits the ring's inner width.
     const ringHtml = (nd, i) => {
@@ -17793,11 +17793,15 @@
       }
       const c = nodes[i].c;
       sheet.innerHTML = `<div class="cx-sheet-in">` +
+          communityCardHtml(c) +
           `<div class="cx-pull" aria-hidden="true">` +
             `<span class="cx-pull-chev">${svgIcon('chevUp')}</span>` +
             `<span class="cx-pull-word">Open ${esc(communityHandle(c))}</span>` +
           `</div>` +
         `</div>`;
+      // The cue is the card's own foot, under Join.
+      const pullCue = sheet.querySelector('.cx-pull');
+      sheet.querySelector('.daily-card')?.append(pullCue);
       wireCommunityJoins(sheet);
       sheet.classList.add('is-up');
       caption.classList.add('is-away');
@@ -17858,16 +17862,12 @@
         cam.y += dy * (focus >= 0 ? 1 : out(cam.y, r.y));
       }
       hand.x = p.x; hand.y = p.y; hand.lastT = now;
-          communityCardHtml(c) +
       wake();
     };
     const onUp = (e) => {
       if (!hand || e.pointerId !== hand.id) return;
       const h = hand;
       hand = null;
-      // The cue is the card's own foot, under Join.
-      const pullCue = sheet.querySelector('.cx-pull');
-      sheet.querySelector('.daily-card')?.append(pullCue);
       wake();
       if (!h.moved) {
         swallowUntil = performance.now() + 700;
@@ -18090,6 +18090,7 @@
     } catch { mq = null; }
 
     circlesOff = () => {
+      circlesCam = { x: cam.x, y: cam.y };
       clearTimeout(captionTimer);
       cancelAnimationFrame(raf);
       raf = 0;
@@ -18156,7 +18157,6 @@
             : '') +
         `</div>`;
     }).join('');
-      circlesCam = { x: cam.x, y: cam.y };
     openSheet({
       title: `In ${communityHandle(c)}`,
       dock: 'Done',
@@ -28830,6 +28830,10 @@
       if (lastPath && !lastPath.startsWith('#/c/') && !lastPath.startsWith('#/p/')
           && !lastPath.startsWith('#/u/') && !lastPath.startsWith('#/publish')) communityOrigin = lastPath;
     }
+    // The field keeps where you were looking only for a way back from a
+    // circle (or a hop inside one); arriving fresh starts on the biggest.
+    if (path === '#/circles' && lastPath !== '#/circles'
+        && !['#/c/', '#/p/', '#/u/'].some((p) => lastPath?.startsWith(p))) circlesCam = null;
     lastPath = path;
     chatLive = null;   // the page that set it is going; a chat page sets its own
 
@@ -28914,10 +28918,6 @@
       }
       switch (path) {
         case '#/':         renderHome(); break;
-    // The field keeps where you were looking only for a way back from a
-    // circle (or a hop inside one); arriving fresh starts on the biggest.
-    if (path === '#/circles' && lastPath !== '#/circles'
-        && !['#/c/', '#/p/', '#/u/'].some((p) => lastPath?.startsWith(p))) circlesCam = null;
         case '#/discover': renderDiscover(); break;
         case '#/circles':  renderExploreCircles(); break;
         case '#/friends':  go('#/discover'); break;   // Friends folded into Discover; keep old links alive
