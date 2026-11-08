@@ -8011,21 +8011,46 @@ button.card-song-play:active { transform: scale(0.9); }
   body.tabs-live .topbar--edge-instant::before { transition: none; }
   body.tabs-stuck .topbar::before { bottom: calc(-1 * var(--profile-tabs-h)); }
 }
+/* ON A DESKTOP IT IS THE SIDEBAR'S MATERIAL (2026-11-07). The bar there is
+   bare discs floating over the page with no band to join, so the strip is a
+   small glass segmented control, centred on the column, glyphs only (their
+   names on hover), and where you are is the sidebar's soft neutral capsule,
+   sliding. It looks the same stuck or not. Stuck, it floats in the bar's row
+   level with the back disc where the column leaves room (1100px and up), and
+   just under the row where it doesn't. One layer over the desktop bar (101). */
 @media (min-width: 681px) {
-  .profile-tabs::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background: color-mix(in srgb, var(--bg) 60%, transparent);
-    backdrop-filter: blur(20px) saturate(1.6);
-    -webkit-backdrop-filter: blur(20px) saturate(1.6);
-    border-bottom: 0.5px solid var(--rule);
-    opacity: 0;
-    transition: opacity var(--dur-quick) var(--ease);
+  .profile-tabs {
+    --tab-w: 56px;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: var(--tab-w);
+    width: max-content;
+    margin-inline: auto;
+    padding: 4px;
+    z-index: 102;
+    top: calc(1rem + var(--topbar-h) + 0.5rem);
+    border-radius: 999px;
+    border: var(--glass-edge);
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
   }
-  .profile-tabs.is-stuck::before { opacity: 1; }
+  .profile-tabs .profile-tab { height: 40px; border-radius: 999px; }
+  .profile-tabs .profile-tab svg { width: 22px; height: 22px; }
+  .profile-tabs .profile-tabs-line { left: 4px; top: 4px; bottom: auto; width: var(--tab-w); height: 40px; }
+  .profile-tabs .profile-tabs-line::after {
+    inset: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+  }
+  @media (hover: hover) {
+    .profile-tab[aria-selected="false"]:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+  }
+  .profile-tabs .profile-tab:focus-visible { outline-offset: 0; border-radius: 999px; }
+}
+@media (min-width: 1100px) {
+  /* 50px: the capsule's 40, its 4px pad twice, its 1px edge twice. */
+  .profile-tabs { top: calc(1rem + (var(--topbar-h) - 50px) / 2); }
 }
 @media (prefers-reduced-motion: reduce) {
   body.tabs-live .topbar::before { transition: opacity var(--dur-quick) var(--ease); }

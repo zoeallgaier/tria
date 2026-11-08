@@ -49,8 +49,12 @@ foot and the bar's OWN band (`.topbar::before`) lets its bottom down by
 (`body.tabs-stuck`, `body.tabs-live` for the band's transition; a separate
 band on the strip showed a seam). The strip is z 101 over the bar's 100,
 which works only because nothing between it and the root makes a stacking
-context; keep it that way. The desktop bar has no band, so there the strip
-brings its own. A type picked while stuck opens at its own top under the
+context; keep it that way. **On a desktop the strip is a small glass
+segmented control** centred on the column (the sidebar's material, glyphs
+only with their names on hover), where you are the sidebar's soft neutral
+capsule sliding; the desktop bar has no band to join, so it looks the same
+stuck or not, docking in the bar's row beside the back disc at 1100px and up
+and just under the row below that. A type picked while stuck opens at its own top under the
 strip, a tap on the tab you're on goes back there, and every switch holds the
 pane a screen tall, so the strip never jumps. `profileTabsOff` drops the
 scroll watch in route().

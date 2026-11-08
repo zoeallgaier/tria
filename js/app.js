@@ -10412,7 +10412,7 @@
           `aria-label="${esc(isSelf ? 'Your posts' : `${u.name}’s posts`)}" style="--tabs:${filters.length}">` +
           filters.map(f =>
             `<button type="button" class="profile-tab" role="tab" data-key="${f.key}" ` +
-              `aria-selected="${f.key === profileFilter}" aria-label="${esc(f.label)}">` +
+              `aria-selected="${f.key === profileFilter}" aria-label="${esc(f.label)}" title="${esc(f.label)}">` +
               (f.key === 'all' ? ICON_ALL : svgIcon(f.ico || TYPE_GLYPH[f.key])) +
             `</button>`).join('') +
           `<span class="profile-tabs-line" aria-hidden="true"></span>` +
