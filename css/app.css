@@ -12315,13 +12315,18 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 :is(.cx-node, .cxm-node).is-inked::after { opacity: 1; }
 
 /* ── THE CIRCLES CARD (Zoe, 2026-11-07), the very top of Discover ──────────
-   The daily's card (circlesCardHtml), and only a picture and a name: the
-   three biggest circles as the page's discs, a triad floating each on its own
-   slow loop, centred over "Explore circles" and the two doors. */
+   The daily's card (circlesCardHtml): the words on the left, left aligned,
+   "Explore circles" over one line of hint, and on the right a small Venn,
+   three discs in Tria's mark's own geometry, pink, blue and Tria's teal,
+   blended so where they cross the colours mix (multiply on paper, screen on
+   ink, inside the art's own isolation), each on its own slow float. Under
+   them, the two doors. */
 .discover-body > .circles-card:not(:last-child) { margin-bottom: 0.95rem; }
 .discover-body > .circles-card:last-child { margin-bottom: 2rem; }
-/* Its two doors, Explore and New circle, side by side in even columns under
-   the count (Zoe: "make buttons 2columns"), each the daily pill's height. */
+.circles-card-top { display: flex; align-items: center; gap: 1rem; }
+.circles-card-words { flex: 1; min-width: 0; }
+/* Its two doors, Explore and New circle, side by side in even columns (Zoe:
+   "make buttons 2columns"), each the daily pill's height. */
 .circles-card-acts {
   flex: 1 0 100%;
   display: grid;
@@ -12334,21 +12339,26 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
   min-width: 0;
   flex: none;
 }
+.circles-card .daily-foot { margin-top: 1rem; }
 .circles-card-art {
   position: relative;
-  height: 184px;
-  margin: 0.35rem 0 0.9rem;
+  flex: none;
+  width: 104px;
+  height: 98px;
+  margin-right: 0.15rem;
+  isolation: isolate;
   pointer-events: none;
 }
-.circles-card .daily-open { text-align: center; }
-.circles-card .daily-foot { margin-top: 1.1rem; }
 .cxm-node {
   position: absolute;
   isolation: isolate;
   border-radius: 50%;
+  mix-blend-mode: multiply;
   animation: cxm-float var(--float, 8s) ease-in-out var(--float-at, 0s) infinite alternate;
 }
-/* Its hairline, over the disc (which sits at z -1 inside the node). */
+.cxm-node.is-inked::after { opacity: var(--ink-amt, 1); }
+/* Its hairline, over the disc (which sits at z -1 inside the node): each
+   ring whole, as a Venn draws them. */
 .cxm-node::before {
   content: '';
   position: absolute;
@@ -12357,9 +12367,10 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent);
 }
 @keyframes cxm-float {
-  0%   { transform: translate(-2px, 2px); }
-  100% { transform: translate(2px, -2px); }
+  0%   { transform: translate(-1.5px, 1.5px); }
+  100% { transform: translate(1.5px, -1.5px); }
 }
+@media (prefers-color-scheme: dark) { .cxm-node { mix-blend-mode: screen; } }
 @media (prefers-reduced-motion: reduce) { .cxm-node { animation: none; } }
 
 /* ── EXPLORE CIRCLES (#/circles, renderExploreCircles) ──────────────────────

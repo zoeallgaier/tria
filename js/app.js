@@ -17372,22 +17372,22 @@
 
      SPACED, NEVER OVERLAPPING AT REST (Zoe: "drop the overlap idea, space at
      all properly"): every pair keeps FIELD_GAP apart. A Venn of real shared
-     members was built first and taken out the same day. The field is allowed
-     to run off the screen ("okay with things off screen to explore"): drag the
-     paper to look around.
+     members was built first and taken out the same day, and packing them
+     touching like bubbles was tried and taken back within minutes (Zoe: "bad
+     call"). The field runs off the screen ("okay with things off screen to
+     explore").
 
-     WHERE TWO DO MEET, mid drift or under a finger, THEIR HAIRLINES BECOME ONE
-     (Zoe: "I want the hairlines to combine/disappear on overlap"): the rings
-     are drawn on a canvas over the discs, every ring stroked and then every
-     disc cut out of the others (destination-out), so what is left is the
-     outline of the union. The discs are solid, so where they cross one simply
-     lies over the other, no darker lens: one shape in two colours. Push is
-     soft against a dragged circle, so it really sinks into its neighbours
-     before they give way.
+     WHERE TWO DO MEET, mid drift, THEIR HAIRLINES BECOME ONE (Zoe: "I want
+     the hairlines to combine/disappear on overlap"): the rings are drawn on a
+     canvas over the discs, every ring stroked and then every disc cut out of
+     the others (destination-out), so what is left is the outline of the
+     union. The discs are solid, so where they cross one lies over the other,
+     no darker lens.
 
-     A FIELD, NOT A LIST: a little physics keeps it alive. Rings keep apart, a
-     gravity holds them together in the screen's own shape, and each wanders on
-     a slow sine of its own, so the field floats. A tap lifts a circle (the
+     A FIELD YOU LOOK AROUND, NOT ONE YOU REARRANGE (Zoe: "you shouldnt be
+     able to move the circles"): a drag anywhere, on a circle or the paper,
+     moves the view. Each circle still wanders on a slow sine of its own, so
+     the field floats. A tap lifts a circle (the
      rest dim) and raises its card, the Discover card itself, Join and all; a
      second tap goes in. New circle is the bar's, always. Reduced motion
      keeps every circle still.
@@ -17443,24 +17443,26 @@
      ramp is the brand's two ends and their middle, and None is the page's own
      muted ink, thinned, so a colourless circle is a soft grey cloud. */
   function circleInks(c) {
-    return personTone(c).then((tone) => {
-      const root = getComputedStyle(document.documentElement);
-      if (tone === 'none') {
-        const L = blobLight(false);
-        const g = L.lit(rgbOfToken(root.getPropertyValue('--muted')) || { r: 92, g: 99, b: 107 });
-        return { stops: [g, g, g], amt: L.amt * 0.5 };
-      }
-      const rgb = tone !== 'tria' && cssToRgb(tone);
-      if (rgb) {
-        const L = blobLight(false);
-        return { stops: stopsAround(rgb, WASH_ARC).map(cssToRgb).map(L.lit), amt: L.amt };
-      }
-      const L = blobLight(true);
-      const a = rgbOfToken(root.getPropertyValue('--brand-start')) || { r: 0, g: 201, b: 206 };
-      const b = rgbOfToken(root.getPropertyValue('--brand-end')) || { r: 0, g: 204, b: 158 };
-      const mid = { r: (a.r + b.r) / 2, g: (a.g + b.g) / 2, b: (a.b + b.b) / 2 };
-      return { stops: [a, mid, b].map(L.lit), amt: L.amt };
-    }, () => null);
+    return personTone(c).then(toneInks, () => null);
+  }
+  // A tone ('none', 'tria', or a css colour) as its inks, at once.
+  function toneInks(tone) {
+    const root = getComputedStyle(document.documentElement);
+    if (tone === 'none') {
+      const L = blobLight(false);
+      const g = L.lit(rgbOfToken(root.getPropertyValue('--muted')) || { r: 92, g: 99, b: 107 });
+      return { stops: [g, g, g], amt: L.amt * 0.5 };
+    }
+    const rgb = tone !== 'tria' && cssToRgb(tone);
+    if (rgb) {
+      const L = blobLight(false);
+      return { stops: stopsAround(rgb, WASH_ARC).map(cssToRgb).map(L.lit), amt: L.amt };
+    }
+    const L = blobLight(true);
+    const a = rgbOfToken(root.getPropertyValue('--brand-start')) || { r: 0, g: 201, b: 206 };
+    const b = rgbOfToken(root.getPropertyValue('--brand-end')) || { r: 0, g: 204, b: 158 };
+    const mid = { r: (a.r + b.r) / 2, g: (a.g + b.g) / 2, b: (a.b + b.b) / 2 };
+    return { stops: [a, mid, b].map(L.lit), amt: L.amt };
   }
   const rgba = (c, a) => `rgba(${c.r}, ${c.g}, ${c.b}, ${a})`;
   // A lit stop laid on a paper at the inks' alpha, as one solid colour, so a
@@ -17499,14 +17501,10 @@
       glow: 1, aim: 1, scale: 1, inks: null,
     };
   }
-  /* One step. `held` is the circle under a finger: it goes where the finger
-     does and everything else gives way to it. `push` is how hard an overlap
-     is undone per step, `soft` the same against the held one, so a circle
-     you carry really sinks into its neighbours (and the hairlines merge)
-     before they give way. `gx`, `gy`
-     pull to the middle, harder across a tall screen so the field takes its
-     shape. */
-  function stepField({ nodes, pairs }, { gx, gy, t = 0, wander = 0, held = null, push = 0.5, soft = 0.12 }) {
+  /* One step. `push` is how much of an overlap past a pair's least distance
+     is undone per step. `gx`, `gy` pull to the middle, harder across a tall
+     screen so the field takes its shape. */
+  function stepField({ nodes, pairs }, { gx, gy, t = 0, wander = 0, push = 0.5 }) {
     for (const p of pairs) {
       const A = nodes[p.a], B = nodes[p.b];
       let dx = B.x - A.x, dy = B.y - A.y;
@@ -17515,15 +17513,13 @@
       if (d < 0.01) { dx = Math.cos(A.seed * 6.283); dy = Math.sin(A.seed * 6.283); d = 1; }
       const ux = dx / d, uy = dy / d;
       const ma = A.r * A.r, mb = B.r * B.r;
-      // The lighter one moves more; one under a finger doesn't move at all.
-      let wa = mb / (ma + mb), wb = ma / (ma + mb);
-      if (A === held) { wa = 0; wb = 1; } else if (B === held) { wa = 1; wb = 0; }
-      const f = (p.min - d) * (A === held || B === held ? soft : push);
+      // The lighter one moves more.
+      const wa = mb / (ma + mb), wb = ma / (ma + mb);
+      const f = (p.min - d) * push;
       A.x -= ux * f * wa; A.y -= uy * f * wa;
       B.x += ux * f * wb; B.y += uy * f * wb;
     }
     for (const nd of nodes) {
-      if (nd === held) continue;
       nd.vx -= nd.x * gx;
       nd.vy -= nd.y * gy;
       if (wander) {
@@ -17562,35 +17558,38 @@
   const exploreList = () => (Store.communitiesReady() ? communitiesInOrder() : []);
 
   /* THE CARD, the daily's (Zoe: "a new card akin to daily"), at the very top
-     of Discover (Zoe: "lets put this at the very top"). Since the same
-     evening it says only Explore circles (Zoe: "remove the names of the
-     circles and the text under"), over its picture: the THREE biggest
-     circles as the page's own discs (Zoe: "use three circles instead"), sized
-     by their members but held near one another so they sit as a triad, the
-     way Tria's circle mark does, each on its own slow float. Its foot is two
-     even doors, Explore and New circle. The whole card goes in. */
-  const PREVIEW_MAX = 3;
+     of Discover (Zoe: "lets put this at the very top"). The words on the left,
+     left aligned, "Explore circles" over a line of hint (Zoe: "bring back some
+     secondary text"); on the right a small Venn (Zoe: "circles can be smaller
+     and have ven diagram overlaps"), three discs in Tria's circle mark's own
+     geometry (ICONS.circle: centres 6 apart, radius 4.4), in fixed colours
+     rather than any circle's: pink, blue and Tria's teal (Zoe: "use pink
+     instead of orange"). Its foot is two even doors, Explore and New circle.
+     The whole card goes in. */
+  const CARD_VENN = [
+    { tone: 'rose', x: 9, y: 9.8 }, { tone: 'ocean', x: 15, y: 9.8 }, { tone: 'tria', x: 12, y: 15 },
+  ];
+  const CARD_VENN_R = 4.4;
+  const CARD_VENN_PX = 6.8;    // px to a unit of the mark
   function circlesCardHtml() {
     if (!Store.communitiesReady()) return '';
-    const all = exploreList();
-    if (!all.length) return '';
-    const big = all.slice().sort((a, b) => Store.communitySize(b.id) - Store.communitySize(a.id));
-    // The little field: settled small, the biggest at the top left, as the
-    // mark's. Positions are px off the art's middle, so it centres at any width.
-    const field = circleField(big.slice(0, PREVIEW_MAX), { rMin: 34, rMax: 48, gap: 8 });
-    settleField(field, { gx: 0.004, gy: 0.004, steps: 400 });
-    const b = fieldBounds(field.nodes);
-    const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
-    const art = field.nodes.map((nd) => {
-      const d = Math.round(nd.r * 2);
-      const x = Math.round(nd.x - cx - d / 2), y = Math.round(nd.y - cy - d / 2);
-      return `<span class="cxm-node" data-community="${esc(nd.c.id)}" ` +
-          `style="width:${d}px;height:${d}px;left:calc(50% + ${x}px);top:calc(50% + ${y}px);` +
-          `--float:${(6.5 + nd.seed * 4).toFixed(2)}s;--float-at:${(-nd.seed * 9).toFixed(2)}s"></span>`;
-    }).join('');
+    if (!exploreList().length) return '';
+    const u = CARD_VENN_PX, d = Math.round(CARD_VENN_R * 2 * u);
+    const x0 = Math.min(...CARD_VENN.map(v => v.x)) - CARD_VENN_R;
+    const y0 = Math.min(...CARD_VENN.map(v => v.y)) - CARD_VENN_R;
+    const art = CARD_VENN.map((v, i) =>
+      `<span class="cxm-node" data-tone="${v.tone}" ` +
+        `style="width:${d}px;height:${d}px;left:${Math.round((v.x - CARD_VENN_R - x0) * u)}px;` +
+        `top:${Math.round((v.y - CARD_VENN_R - y0) * u)}px;` +
+        `--float:${(7 + i * 1.3).toFixed(1)}s;--float-at:${(-i * 2.7).toFixed(1)}s"></span>`).join('');
     return `<section class="daily-card circles-card">` +
-        `<div class="circles-card-art" aria-hidden="true">${art}</div>` +
-        `<a class="daily-open" href="#/circles"><span class="daily-prompt">Explore circles</span></a>` +
+        `<div class="circles-card-top">` +
+          `<div class="circles-card-words">` +
+            `<a class="daily-open" href="#/circles"><span class="daily-prompt">Explore circles</span></a>` +
+            `<p class="daily-hint">Find a circle for what you’re into, or start a new one.</p>` +
+          `</div>` +
+          `<div class="circles-card-art" aria-hidden="true">${art}</div>` +
+        `</div>` +
         `<div class="daily-foot">` +
           // Two doors, side by side (Zoe, 2026-11-07: "add add circle button
           // and make buttons 2columns"): look around, or start your own.
@@ -17601,15 +17600,16 @@
         `</div>` +
       `</section>`;
   }
-  // The picture's colours, once each circle's tone resolves.
+  // The Venn's colours, lit as a wash is: the palette's pink and ocean and
+  // Tria's ramp, each its spectrum through THE LIGHT.
   function inkCirclesCard(root) {
-    root.querySelectorAll('.cxm-node[data-community]').forEach((el) => {
-      const c = Store.community(el.dataset.community);
-      if (!c) return;
-      circleInks(c).then((inks) => {
-        if (!inks || !el.isConnected) return;
-        setInks(el, inks, paperOf('--surface'));
-      });
+    root.querySelectorAll('.cxm-node[data-tone]').forEach((el) => {
+      const t = el.dataset.tone;
+      const inks = toneInks(t === 'tria' ? 'tria' : accentCss(t));
+      if (!inks) return;
+      inks.stops.forEach((s, i) => el.style.setProperty('--ink-' + 'abc'[i], rgba(s, 1)));
+      el.style.setProperty('--ink-amt', inks.amt.toFixed(3));
+      el.classList.add('is-inked');
     });
   }
 
@@ -17799,10 +17799,11 @@
       wake();
     };
 
-    // THE HAND. One pointer: on a circle it may be a tap (lift, or go in when
-    // it is already lifted) or a drag (carry it); on the paper it is a tap
-    // (let go of what is lifted) or a pan. A click that ends one of our own
-    // taps is swallowed, so a link only navigates for a keyboard or a reader.
+    // THE HAND. One pointer: a drag anywhere moves the view (the circles stay
+    // where they are); a tap on a circle lifts it, or goes in when it is
+    // already lifted, and a tap on the paper lets go of what is lifted. A
+    // click that ends one of our own taps is swallowed, so a link only
+    // navigates for a keyboard or a reader.
     const hitAt = (sx, sy) => {
       const wx = sx - cam.x, wy = sy - cam.y;
       let best = -1, bestQ = 1;
@@ -17813,7 +17814,6 @@
       return best;
     };
     let hand = null;
-    let held = null;
     let swallowUntil = 0;
     const local = (e) => {
       const box = fieldEl.getBoundingClientRect();
@@ -17838,20 +17838,16 @@
         hand.moved = true;
         camAim = null;
         spendCaption();
-        if (hand.i >= 0) held = nodes[hand.i];
       }
       if (hand.moved) {
         const dt = Math.max(1, now - hand.lastT);
         hand.vx = hand.vx * 0.5 + (dx / dt) * 16 * 0.5;
         hand.vy = hand.vy * 0.5 + (dy / dt) * 16 * 0.5;
-        if (held) { held.x += dx; held.y += dy; }
-        else {
-          // Past the field's edge the paper gives, half as far.
-          const r = homeRange();
-          const out = (v, [lo, hi]) => (v < lo || v > hi ? 0.45 : 1);
-          cam.x += dx * (focus >= 0 ? 1 : out(cam.x, r.x));
-          cam.y += dy * (focus >= 0 ? 1 : out(cam.y, r.y));
-        }
+        // Past the field's edge the view gives, half as far.
+        const r = homeRange();
+        const out = (v, [lo, hi]) => (v < lo || v > hi ? 0.45 : 1);
+        cam.x += dx * (focus >= 0 ? 1 : out(cam.x, r.x));
+        cam.y += dy * (focus >= 0 ? 1 : out(cam.y, r.y));
       }
       hand.x = p.x; hand.y = p.y; hand.lastT = now;
       wake();
@@ -17860,7 +17856,6 @@
       if (!hand || e.pointerId !== hand.id) return;
       const h = hand;
       hand = null;
-      if (held) { held.vx = h.vx * 0.6; held.vy = h.vy * 0.6; held = null; }
       wake();
       if (!h.moved) {
         swallowUntil = performance.now() + 700;
@@ -17872,7 +17867,7 @@
         lift(h.i);
         return;
       }
-      if (h.i < 0) { cam.vx = h.vx; cam.vy = h.vy; }
+      cam.vx = h.vx; cam.vy = h.vy;
       swallowUntil = performance.now() + 400;
     };
     // A link is draggable to the browser, and a drag that starts on one (a
@@ -18024,7 +18019,7 @@
       last = now;
       const g = grav();
       while (acc >= STEP) {
-        stepField(field, { ...g, t: now, wander: reduce ? 0 : 0.016, held });
+        stepField(field, { ...g, t: now, wander: reduce ? 0 : 0.016 });
         acc -= STEP;
       }
       // The camera: a glide, a coast, or a spring home.
@@ -18033,7 +18028,7 @@
         cam.x += (camAim.x - cam.x) * (reduce ? 1 : 0.12);
         cam.y += (camAim.y - cam.y) * (reduce ? 1 : 0.12);
         if (Math.abs(camAim.x - cam.x) + Math.abs(camAim.y - cam.y) < 0.5) camAim = null;
-      } else if (!hand || held) {
+      } else if (!hand || !hand.moved) {
         cam.x += cam.vx; cam.y += cam.vy;
         cam.vx *= 0.92; cam.vy *= 0.92;
         // Home only with nothing lifted: a lifted circle keeps the place the
@@ -18052,7 +18047,7 @@
       const appear = nodes.map((nd, i) => (reduce ? 1 : ease(Math.min(1, Math.max(0, (now - born - Math.min(i, 14) * 45) / 700)))));
       nodes.forEach((nd, i) => {
         nd.glow += (nd.aim - nd.glow) * (reduce ? 1 : 0.1);
-        const aimS = i === focus ? 1.06 : nd === held ? 1.04 : 1;
+        const aimS = i === focus ? 1.06 : 1;
         nd.scale += (aimS - nd.scale) * (reduce ? 1 : 0.18);
         const a = appear[i];
         const s = nd.scale * (0.72 + 0.28 * a);

@@ -25,10 +25,13 @@ The same files also serve a website; that is a byproduct, not a target. See
 
 **Discover leads with the Explore circles card** (Zoe: "a new card akin to
 daily", "at the very top of discover"), above the daily, `circlesCardHtml`:
-the three biggest circles as the page's discs, a floating triad
-(`.cxm-node`), over the one line "Explore circles" (Zoe: "remove the names of
-the circles and the text under"), and two even doors, **Explore** and **New
-circle** (`.circles-card-acts`). **The
+words left aligned ("Explore circles" over "Find a circle for what you're
+into, or start a new one.", Zoe's line), and on the
+right a small floating Venn: three discs in the circle mark's own geometry
+(`CARD_VENN`), in FIXED colours, the palette's pink and ocean and Tria's teal
+(Zoe: "use pink instead of orange"), blended so the overlaps mix
+(`.cxm-node`, multiply on paper, screen on ink). Its foot is two even doors,
+**Explore** and **New circle** (`.circles-card-acts`). **The
 circle rails stay in the square** (Zoe: "Keep circle carousels in the feed").
 `#/circles` (`renderExploreCircles`, signed out too) is the whole window,
 fixed: **every circle a disc, its AREA by its members** (radius by the square
@@ -37,20 +40,22 @@ mesh inside (`circleInks` through `personTone`, lit with THE LIGHT's numbers
 and laid solid on the paper, `setInks`), a hairline, its face, name and size.
 Blurred bokeh blobs came first and went the same day (Zoe: "not modern or
 clean enough"), and so did a Venn of real shared members ("drop the overlap
-idea, space at all properly"). **They float**: a small physics (`stepField`),
-seeded by id so the field is the same each visit, runs off the screen and is
-looked around by dragging the paper. **Where two meet, their hairlines merge
-into one outline** (Zoe: "combine/disappear on overlap"): the rings are a
-canvas over the discs, stroked then every disc cut out (destination-out),
-and the push against a dragged circle is soft so it really sinks in. A tap
+idea, space at all properly"). Packing them touching like bubbles was tried and
+taken back within minutes (Zoe: "bad call"). **They float, spaced**
+(`FIELD_GAP` 16px): a small physics (`stepField`), seeded by id so the field
+is the same each visit. **The circles can't be moved** (Zoe): a drag anywhere
+moves the view, which runs off the screen. **Where two meet mid drift, their
+hairlines merge into one outline** (Zoe: "combine/disappear on overlap"): the
+rings are a canvas over the discs, stroked then every disc cut out
+(destination-out). A tap
 lifts a circle (the rest dim) and raises its Discover card from the foot; a
 second tap goes in, and so does **a pull up on the card, the Moments Reply
 pull** (Zoe: "take a note from moments replies"): a chevron over "Open
 c/slug", the card rising at half pace and stiffening past `OPEN_AT` (70px)
 with a LIGHT haptic, carrying on up and away on an armed let-go; a pull down
-puts it away. The drag is the window's while it runs, and the field refuses
+puts it away. The pull is the window's while it runs, and the field refuses
 native link drags (`dragstart`, `-webkit-user-drag`), which had swallowed the
-pointer on desktop. The foot's "Drag to look around" goes after 3.2s or the
+pointer. The foot's "Drag to look around" goes after 3.2s or the
 first drag (`spendCaption`). **New circle is the bar's, always** (Zoe: "a perma button
 like dailies top right"); the bar's band shows from the first frame here
 (`body.circles-live`). `circlesOff` stops the frame loop in route().
