@@ -5660,6 +5660,15 @@ button.poll-option:disabled { cursor: default; }
 /* The friends stat is a live button — opens their circle. The tap hint is a
    quiet underline on hover. */
 .account-stat--friends { cursor: pointer; }
+/* A profile's line is icons and counts (Zoe, 2026-11-08): smaller type, each
+   glyph the height of its number, no separating dots, just air. */
+.account-stats--icons { gap: 0.9rem; font-size: 0.78rem; align-items: center; }
+.account-stats--icons .account-stat { display: inline-flex; align-items: center; gap: 0.28rem; }
+.account-stat-ico {
+  width: 1.15em; height: 1.15em; flex: none;
+  fill: none; stroke: currentColor; stroke-width: 1.9;
+  stroke-linecap: round; stroke-linejoin: round;
+}
 /* A circle's host, a link to them, worn as an @mention is (.mention): bold, in
    the reader's own colour, so a name you can tap reads the same everywhere. */
 .account-stat-host { font-weight: 700; color: var(--mention-ink); text-decoration: none; }
@@ -5897,6 +5906,11 @@ button.poll-option:disabled { cursor: default; }
   border-radius: 50%;
   font-size: 2.5rem;
 }
+/* A face wearing charms: the box they sit on is the face's own (6px of room
+   for the ring kept round it), above the ring. */
+.np-face { position: relative; z-index: 1; display: block; width: 92px; height: 92px; margin: 6px; }
+.np-face > .np-art.np-avatar { margin: 0; }
+.np-face .charm--worn { z-index: 2; }
 .np-art.avatar { border: 0; background: var(--text); color: var(--bg); }
 .np-art.avatar--photo { background: none; }
 /* UNSEEN WEARS A RING (Zoe, 2026-11-06: "a solid ring instead of a glow"), in

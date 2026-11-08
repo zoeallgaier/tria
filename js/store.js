@@ -3388,6 +3388,11 @@ const Store = (() => {
   const inCommunity = (id) => !!state.session && !!id &&
     (groupOf(state.communityMembers, 'communityId').get(id) || NO_ROWS).some(m => m.user === state.session);
   const myCommunities = () => state.communities.filter(c => inCommunity(c.id));
+  // The circles someone is in, as the reader's rosters say (signed in only).
+  const communitiesOf = (username) => {
+    const ids = new Set(state.communityMembers.filter(m => m.user === username).map(m => m.communityId));
+    return state.communities.filter(c => ids.has(c.id));
+  };
   // Newest first, through posts() so it shares the one sort.
   const communityPosts = (id) => posts().filter(p => p.communityId === id && visibleRepost(p) && !offFeed(p));
   // The last sign of life in a circle that this reader can see: a post (only
@@ -4429,7 +4434,7 @@ const Store = (() => {
     sendMessage, deleteMessage, toggleMessageHeart, markChatRead, setChatMuted,
     answerChatRequest, clearChat, leaveChat, onChats,
     // Circles (the room; `community` in code, see "Circles")
-    communitiesReady, communities, community, communityMembers, communitySize, inCommunity, myCommunities,
+    communitiesReady, communities, community, communityMembers, communitySize, inCommunity, myCommunities, communitiesOf,
     communityPosts, communityPulse, slugFrom, slugProblem,
     createCommunity, updateCommunity, joinCommunity, leaveCommunity, removeCommunityMember,
     communityToolsReady, setCommunityPhoto, deleteCommunity,

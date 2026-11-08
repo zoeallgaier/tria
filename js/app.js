@@ -257,6 +257,9 @@
     // centred and grown to the old ring's size, its shine kept. It was a ring
     // with a filled centre (you in the middle of your people) from 2026-10-22,
     // and a house for an afternoon before that; both are in git.
+    // One plain ring: a circle you're in, on a profile's stat line (the
+    // triad there is friends, Zoe 2026-11-08).
+    ring: '<circle cx="12" cy="12" r="7.5"/>',
     myCircle: '<circle cx="12" cy="12" r="7"/><path d="M8.6 10.25a3.73 3.73 0 0 1 2-2.1"/>',
     /* THE TAB YOU'RE ON IS DRAWN SOLID, and the bar has no labels (Zoe,
        2026-11-05, "like insta"; picked in
@@ -10351,23 +10354,32 @@
     // stat is a tappable button only for you or a friend, plain text otherwise.
     // A locked profile fences its feed, so its post stat is dropped (a "0 posts"
     // would mislead) and the line carries the friend count alone (no leading dot).
+    // Icons, not words (Zoe, 2026-11-08): a pencil for posts, the triad for
+    // friends, a ring for the circles they're in. Each names itself to a
+    // screen reader. The circles stat needs rosters, so signed in only.
+    const statIco = (key, label) =>
+      svgIcon(key, 'account-stat-ico') + `<span class="visually-hidden"> ${label}</span>`;
     const postNum = list.length;
     const postStat = locked ? ''
       : `<span class="account-stat">` +
-          `<span class="account-stat-num">${postNum}</span> ` +
-          `<span class="account-stat-label">${postNum === 1 ? 'post' : 'posts'}</span>` +
+          statIco('pencil', postNum === 1 ? 'post' : 'posts') +
+          `<span class="account-stat-num">${postNum}</span>` +
         `</span>`;
     const fc = Store.friendCount(u.username);
     const canSeeFriends = (isSelf || isFriend) && fc > 0;
     const friendInner =
-      `<span class="account-stat-num">${fc}</span> ` +
-      `<span class="account-stat-label">${fc === 1 ? 'friend' : 'friends'}</span>`;
+      statIco('circle', fc === 1 ? 'friend' : 'friends') +
+      `<span class="account-stat-num">${fc}</span>`;
     const friendStat = canSeeFriends
       ? `<button type="button" class="account-stat account-stat--friends" id="show-friends">${friendInner}</button>`
       : `<span class="account-stat">${friendInner}</span>`;
-    const statSep = (postStat && friendStat)
-      ? `<span class="account-stat-dot" aria-hidden="true">·</span>` : '';
-    const statsRow = `<div class="account-stats">${postStat}${statSep}${friendStat}</div>`;
+    const cc = (Store.communitiesReady() && Store.isAuthed()) ? Store.communitiesOf(u.username).length : -1;
+    const circleStat = cc < 0 ? ''
+      : `<span class="account-stat">` +
+          statIco('ring', cc === 1 ? 'circle' : 'circles') +
+          `<span class="account-stat-num">${cc}</span>` +
+        `</span>`;
+    const statsRow = `<div class="account-stats account-stats--icons">${postStat}${friendStat}${circleStat}</div>`;
 
     // The in-flow action row, at the foot of the identity block. Your own
     // carries Edit profile and Share profile (Zoe, 2026-10-23: out of the •••
@@ -16113,6 +16125,10 @@
     // gets no rail, not an empty + over an empty feed (2.0's first-run pass).
     if (!stacks.length && !Store.friends().length) return '';
     const share = Store.momentsReady() ? 'Share a moment' : 'Share a song';
+    const rimCharms = (s) => {
+      const u = s.mine && s.u.charms ? { ...s.u, charms: s.u.charms.slice(0, 1) } : s.u;
+      return charmsOnFace(u);
+    };
     const item = (s) => {
       // The face and the name, nothing under it (Zoe).
       const who = s.mine ? 'You' : (s.u.name || s.u.username);
@@ -16120,7 +16136,10 @@
           `data-who="${esc(s.u.username)}" data-posts="${esc(s.posts.map(p => String(p.id)).join(' '))}">` +
           `<button type="button" class="np-open" aria-label="${esc(`${who}’s moments${s.unseen ? ', new' : ''}`)}">` +
             `<span class="np-ring" aria-hidden="true"></span>` +
-            avatarEl(s.u, { cls: 'np-art np-avatar' }) +
+            // Their charms on the rim, as on their profile (Zoe). Your own
+            // face's + takes the four thirty corner, so yours wears the first.
+            (rimCharms(s) ? `<span class="np-face">` + avatarEl(s.u, { cls: 'np-art np-avatar' }) + rimCharms(s) + `</span>`
+              : avatarEl(s.u, { cls: 'np-art np-avatar' })) +
             `<span class="np-song">${esc(who)}</span>` +
           `</button>` +
           (s.mine ? `<button type="button" class="np-add pill-quiet" data-np="add" aria-label="${share}">${svgIcon('plus')}</button>` : '') +
@@ -17992,7 +18011,7 @@
             panel.style.opacity = '0';
           }
         }
-        go(communityRoute(c));
+        goKept(communityRoute(c));
       };
       const opened = performance.now();
       let tapAt = null, tapHit = -1, pull = null, swallow = 0;
@@ -28727,6 +28746,21 @@
   function go(hash) {
     if (location.hash === hash || (hash === '#/' && location.hash === '')) route();
     else location.hash = hash;   // hashchange → route()
+  }
+  // The same, asked of the app (TriaSettings.goTo), for a way in that may come
+  // with no user activation (a drag's let-go): WebKit marks an entry script
+  // made then, and the back swipe off it skips the page under it as well. A
+  // load the app itself asks for is never marked. Off the app, or on a binary
+  // without goTo, it is go().
+  const nativeGoTo = (() => {
+    try {
+      return !!window.Capacitor?.PluginHeaders?.find((p) => p.name === 'TriaSettings')
+        ?.methods?.some((m) => m.name === 'goTo');
+    } catch { return false; }
+  })();
+  function goKept(hash) {
+    if (!nativeGoTo || location.hash === hash) { go(hash); return; }
+    window.Capacitor.nativePromise('TriaSettings', 'goTo', { hash }).catch(() => go(hash));
   }
 
   /* ── Where you were ─────────────────────────────────────────────────────────

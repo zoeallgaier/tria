@@ -38,8 +38,32 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "pageHead", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "playClip", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "prepareClip", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "stopClip", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "stopClip", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "goTo", returnType: CAPPluginReturnPromise)
     ]
+
+    /// A route opened BY THE APP, so the back swipe never skips the page
+    /// under it (Zoe, 2026-11-08: back from a circle opened off the field went
+    /// past Circles). WebKit marks a history entry made by script without a
+    /// recent user activation, and a back swipe off a marked entry skips the
+    /// one before it too; a drag (the sheet's pull up) is not an activation.
+    /// A load the client asks for is never marked (`isRequestFromClientOrUserInput`),
+    /// and with only the fragment changed it is the same document's hash
+    /// change, so app.js's hashchange routes it as ever.
+    @objc func goTo(_ call: CAPPluginCall) {
+        let hash = call.getString("hash") ?? ""
+        DispatchQueue.main.async {
+            guard hash.hasPrefix("#"), let web = self.bridge?.webView, let here = web.url,
+                  var parts = URLComponents(url: here, resolvingAgainstBaseURL: false) else {
+                call.reject("Couldn't go there.")
+                return
+            }
+            parts.percentEncodedFragment = String(hash.dropFirst())
+            guard let there = parts.url else { call.reject("Couldn't go there."); return }
+            web.load(URLRequest(url: there))
+            call.resolve()
+        }
+    }
 
     /// A song's 30 second preview, played HERE and not in the web view (Zoe,
     /// 2026-11-06: "get rid of dynamic island for music and ios player").
