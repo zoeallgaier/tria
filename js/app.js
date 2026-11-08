@@ -12748,7 +12748,7 @@
       momentLink(`#/p/${encodeURIComponent(id)}${pane === 'likers' ? '?pane=likers' : ''}`);
     if (asMoment) {
       momentLanding = asMoment;
-      location.replace('#/');   // hashchange → route(), which opens it
+      replaceHash('#/');   // hashchange → route(), which opens it
       return;
     }
 
@@ -12887,7 +12887,7 @@
     // rather than on an error: `replace`, so the way back doesn't walk through a
     // page that refused to exist.
     if (!post || post.author !== Store.session() || post.type === 'poll') {
-      location.replace(postRoute(id));
+      replaceHash(postRoute(id));
       return;
     }
 
@@ -18045,13 +18045,19 @@
         leaving = true;
         if (panel?.isConnected) {
           handHeadOver(panel.querySelector('.cx-peek'), c.slug);
-          if (!reduce) {
-            const t = getComputedStyle(panel).transform;
-            panel.style.transition = 'opacity 0.22s var(--ease-soft)';
-            if (t && t !== 'none') panel.style.transform = t;
-            panel.style.opacity = '0';
-          }
+          // Gone AT ONCE, scrim and all, and the field undimmed: WebKit's
+          // back swipe shows a picture of this page taken as we leave, and a
+          // sheet still fading in it flashed up and vanished on the way back
+          // (Zoe, 2026-11-08: "just bring in like with the back button").
+          scrimEl.style.transition = 'none';
+          scrimEl.style.visibility = 'hidden';
         }
+        nodes.forEach((nd, j) => {
+          nd.aim = nd.glow = 1;
+          els[j].style.opacity = String(nd.alpha ?? 1);
+        });
+        focus = -1;
+        drawLines(performance.now());
         goKept(communityRoute(c));
       };
       const opened = performance.now();
@@ -20112,7 +20118,7 @@
         const pending = shot ? Store.setCommunityPhoto(res.id, shot) : null;
         // In place of the form, so back from the new circle is where you were
         // before you started it, not a form that already did its job.
-        location.replace(`#/c/${encodeURIComponent(newSlug)}`);
+        replaceHash(`#/c/${encodeURIComponent(newSlug)}`);
         if (res.privacyError) toast(res.privacyError);
         if (pending) pending.then(r => {
           if (!(r && r.ok)) toast((r && r.error) || 'Couldn’t save the photo, try again.');
@@ -22470,7 +22476,7 @@
         if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t start that chat, try again.'); return; }
         hapticTap('LIGHT');
         // Replace, so backing out of the new chat lands on the list, not this picker.
-        location.replace(`#/chat/${encodeURIComponent(res.id)}`);
+        replaceHash(`#/chat/${encodeURIComponent(res.id)}`);
       } catch {
         toast('Couldn’t reach Tria just now. Try again in a moment.');
       } finally {
@@ -28836,6 +28842,46 @@
   const scrollMemory = new Map();
   let navSerial = 0;
   let navHere = null;                     // the entry currently on screen
+  // THE TRAIL: the entry on screen's path, then the paths of the entries
+  // under it, nearest first. Each entry files the trail it was pushed on in
+  // its own history.state the first time it is stood on (a stack never
+  // changes under an entry, and the state outlives a reload), so a back
+  // chevron can step back onto an entry already there (backStepsTo) rather
+  // than push a copy that a back swipe would then walk into.
+  let navTrail = [];
+  let trailReplacing = false;
+  // A replace takes the place of the entry on screen, so it inherits what
+  // was under that one. Every hash replace goes through here.
+  function replaceHash(h) {
+    trailReplacing = location.hash !== h;
+    location.replace(h);
+  }
+  // Back to the circles' field steps back onto the field's own entry when
+  // there is one (Zoe, 2026-11-08: "make sure swiping back from circles page
+  // always goes back to discover"): a chevron that pushed a fresh #/circles
+  // left the circle under it, and a back swipe from the field walked into it.
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('a.toolbar-back[href="#/circles"]');
+    if (!a || e.defaultPrevented) return;
+    const n = backStepsTo('#/circles');
+    if (!n) return;
+    e.preventDefault();
+    e.stopPropagation();
+    history.go(-n);
+  }, true);
+  function fileTrail(path) {
+    const st = history.state || {};
+    let back = st.back;
+    const replaced = trailReplacing;
+    trailReplacing = false;
+    if (!Array.isArray(back)) {
+      back = navTrail.slice(replaced ? 1 : 0, replaced ? 13 : 12);
+      try { history.replaceState({ ...st, back }, ''); } catch { /* keep going */ }
+    }
+    navTrail = [path, ...back];
+  }
+  // How many steps back the nearest entry at `path` is, or 0 if none is known.
+  const backStepsTo = (path) => Math.max(0, navTrail.indexOf(path, 1));
   // Circle and Discover hold their place across a TAB TAP, not just a back. The
   // key above is per history ENTRY, which is exactly right for a traversal and
   // useless for a tab: tapping Circle from Discover mints a NEW entry, so there
@@ -29130,6 +29176,7 @@
     const prevHere = navHere;
     const arriving = navStamp();
     navHere = arriving;
+    fileTrail((location.hash || '#/').split('?')[0]);
 
     // Navigating away from Publish must stop a live camera/mic stream — the
     // capture surface's own DOM is about to be replaced, which wouldn't
@@ -29247,7 +29294,7 @@
       // these": a new account baselines empty, so its first circle is an unlock.
       const me = Store.session();
       if (me && !charmsSeen(me)) setCharmsSeen(me, []);
-      location.replace('#/welcome');
+      replaceHash('#/welcome');
       return;
     }
     // A copied post link USED to carry ?p=<id> onto the author's profile, and
@@ -29262,7 +29309,7 @@
       if (p) {
         scrollMemory.delete(arriving);
         navHere = null;   // so the next route() files nothing under it either
-        location.replace(postRoute(p) + seekQuery(q));
+        replaceHash(postRoute(p) + seekQuery(q));
         return;
       }
     }
