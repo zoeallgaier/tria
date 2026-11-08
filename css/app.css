@@ -5617,6 +5617,18 @@ button.poll-option:disabled { cursor: default; }
   letter-spacing: 0;
   color: var(--text);
 }
+/* An invite-only circle's lock, after its name (Zoe, 2026-11-08): small,
+   muted, sat on the serif's x-height, carried with the last word. */
+.account-name-tail { white-space: nowrap; }
+.account-name-lock {
+  width: 0.5em; height: 0.5em;
+  margin-left: 0.2em;
+  vertical-align: 0.06em;
+  stroke-width: 2.2;
+  color: var(--muted);
+}
+body[data-ambient="profile"] .account-name-lock,
+body[data-ambient="tria"] .account-name-lock { color: var(--wash-ink-soft); }
 .account-handle {
   margin-top: 0.12rem;
   font-size: 0.92rem;

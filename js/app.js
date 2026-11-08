@@ -18847,6 +18847,13 @@
   // one from the sheet carries the head up into its place (handHeadOver).
   // `peek`: the sheet's, where a circle you're in has no pills (Zoe, 2026-11-08:
   // "no buttons on circles I host or am a part of"); the page has its own.
+  // A name's last word and a lock, held together so a wrap never strands it.
+  const nameWithLock = (name) => {
+    const t = String(name || '');
+    const cut = t.lastIndexOf(' ') + 1;
+    return esc(t.slice(0, cut)) + `<span class="account-name-tail">${esc(t.slice(cut))}` +
+      svgIcon('lock', 'account-name-lock') + `<span class="visually-hidden">, invite only</span></span>`;
+  };
   function communityHeadHtml(c, peek = false) {
     const me = Store.session();
     const member = Store.inCommunity(c.id);
@@ -18857,8 +18864,7 @@
     // each icon naming itself to a screen reader. A pencil for its posts
     // (only where they can be read, so a fenced room never says "0"), the
     // people mark for who is in it, the host as their own small face and
-    // name, and a lock for an invite-only room, said to its members (anyone
-    // else reads it on the pill below).
+    // name. An invite-only room's lock is on its name, not here.
     const readable = !c.inviteOnly || member;
     const pc = readable ? Store.communityPosts(c.id).filter(p => !Blocks.has(p.author)).length : -1;
     const posts = pc < 0 ? ''
@@ -18880,9 +18886,7 @@
           avatarEl(host, { cls: 'account-stat-face', px: 40 }) +
           `<span class="account-stat-num">${host.username === me ? 'You' : esc(host.name || host.username)}</span></a>`
       : '';
-    const fenced = c.inviteOnly && member
-      ? `<span class="account-stat">${statIco('lock', 'Invite only')}</span>` : '';
-    const stats = posts + people + hostedBy + fenced;
+    const stats = posts + people + hostedBy;
     // An invite-only circle you hold no invite to has no Join to offer, so
     // its place says why, quietly and untappable, the way Requested does.
     const acts = !me
@@ -18906,7 +18910,10 @@
               svgIcon('circle', 'community-photo-ico') + `</div>`) +
         `<div class="account-meta">` +
           `<div class="account-id">` +
-            `<h1 class="account-name">${esc(c.name)}</h1>` +
+            // An invite-only room wears a small lock after its name (Zoe,
+            // 2026-11-08: "in the titles"), to everyone: it is what the room
+            // is, not a count. It rides with the last word, never alone.
+            `<h1 class="account-name">${c.inviteOnly ? nameWithLock(c.name) : esc(c.name)}</h1>` +
             // A profile's rule: the handle steps aside at phone width, where
             // the bar's title already says it, and stays on a desktop.
             `<p class="account-handle account-handle--bare">${esc(communityHandle(c))}</p>` +

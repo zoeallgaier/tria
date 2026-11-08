@@ -190,8 +190,9 @@ drops the 122px floor). **Its stat line is the profile's** (2026-11-08, Zoe:
 "use icons ... like how we updated profiles friend count"): icons and counts,
 no words or dots (`statIco`, one `.account-stats` rule for both heads), a
 pencil for its posts (only where they can be read), the people mark for its
-members (a button signed in), the host's own small face and name, and a lock
-for an invite-only room, shown to its members. A change to the line alone
+members (a button signed in) and the host's own small face and name. **An
+invite-only circle's lock is on its NAME** (Zoe: "in the titles"), small and
+muted after the last word, to everyone (`nameWithLock`), not on the line. A change to the line alone
 swaps the line, never the head, so the face doesn't blink (`wireStats`).
 
 ## Pictures are their own files, no renderer (2026-11-06)
