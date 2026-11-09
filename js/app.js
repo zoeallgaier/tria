@@ -10706,11 +10706,12 @@
     // character-count threshold, no jump to a separate full-width slot).
     const bio = u.bio ? `<div class="account-bio">${parasHtml(u.bio)}</div>` : '';
 
-    // Your own profile is a tab, so it has no back: the nav pill below already
-    // says where you are and there is nothing to return to. A visitor's was
-    // pushed from somewhere, so it takes the toolbar's leading chevron, aimed
-    // by backTarget().
-    const b = isSelf ? null : backTarget();
+    // Your own profile is a tab, so by itself it has no back: the nav pill below
+    // already says where you are and there is nothing to return to. A visitor's
+    // was pushed from somewhere, so it takes the toolbar's leading chevron,
+    // aimed by backTarget(). So is yours when a link pushed it (your name in a
+    // feed, say) or it is #/u/<you>, which is no tab: selfBackTarget() says.
+    const b = isSelf ? selfBackTarget() : backTarget();
     /* THE TYPES ARE TABS OVER THE POSTS (Zoe, 2026-11-07: "like a swipable
        instagram filter for profiles post types"). The bar's filter disc and
        its dial are gone from a profile: a strip of the type glyphs sits
@@ -10732,7 +10733,10 @@
     mountToolbar({
       // Your own profile wore My Circle's + from 2026-10-23, then the filter
       // (2026-11-05); the filter is the tab strip in the page since 2026-11-07.
-      leading: b ? toolbarBackEl(b.href, b.label) : '',
+      // No href is the pop (history.back(), wired below): the chevron of a
+      // profile a link pushed, which steps back onto the page it was pushed
+      // from rather than pushing a copy of it.
+      leading: b ? toolbarBackEl(b.href, b.label, b.href ? '' : 'self-back') : '',
       // The @HANDLE, since 1.8, Instagram's arrangement: the bar title is up
       // from the first frame on every page now, and the card under it already
       // says the name in big serif, so the bar says the other half of who this
@@ -10819,6 +10823,9 @@
     // ••• down the column repaints the stack above it. Only your own, because
     // nothing you can do changes what somebody else has pinned.
     pinsRepaint = isSelf ? paintPins : null;
+    // A profile a link pushed pops its entry; getElementById, not view.query,
+    // because the bar's leading control lives in #toolbar-page.
+    document.getElementById('self-back')?.addEventListener('click', () => history.back());
     // Your own new photo, or a friend you just made (celebrateFriend).
     if (arrivedChanged('u/' + u.username)) {
       if (isSelf) celebrateFace(view.querySelector('.account'), true);
@@ -29801,6 +29808,70 @@
   }
   // How many steps back the nearest entry at `path` is, or 0 if none is known.
   const backStepsTo = (path) => Math.max(0, navTrail.indexOf(path, 1));
+
+  /* YOUR OWN PROFILE, WHEN A LINK PUSHED IT (Zoe, 2026-11-09: "ensure 'my
+     profile' always has a back button when needed (if tapped on feed, etc)").
+     #/profile is the Profile TAB, and a tab has no chevron: the bar says where
+     you are. But your own name and face in a feed card, a repost line, a
+     Moment, a circle's host or a list all link to that same route, so a reader
+     who tapped their way there landed on a page with no way out but the edge
+     swipe. Told apart by HOW they arrived, not where: a tap on a link to
+     #/profile that isn't the tab bar's nor a chevron (a chevron is a RETURN;
+     counting it would make a post's back and the profile's back point at each
+     other forever, as a profile and a circle's once did) stamps the entry it
+     makes (`selfPushed`, in its history.state, so a back onto it and a reload
+     keep the chevron and a tab tap's entry never has one). The chevron pops
+     (history.back()) rather than pushing a copy of where you were.
+     #/u/<you> is what a byline, a comment, a mention or a list row links to
+     for your own name (most of them; only a few swap in the tab's route), and
+     it is no tab: no bar, so it ALWAYS takes the chevron, popping the same way
+     (backTarget() would aim a post page's or Updates' profile at Discover). */
+  let selfLinkAt = -1e9;
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('a[href="#/profile"]');
+    if (!a || a.closest('#nav') || a.classList.contains('toolbar-back')) return;
+    if ((location.hash || '#/').split('?')[0] === '#/profile') return;   // no hop, no route()
+    selfLinkAt = performance.now();
+  }, true);
+  // Called by route() once the entry is filed. The click and the route are
+  // milliseconds apart; a click that never navigated (a long press, a default
+  // someone prevented) must not stamp whatever page comes next, so it expires.
+  function stampSelfPush(path) {
+    const fresh = performance.now() - selfLinkAt < 1000;
+    selfLinkAt = -1e9;
+    if (path !== '#/profile' || !fresh) return;
+    const st = history.state || {};
+    if (st.selfPushed) return;
+    try { history.replaceState({ ...st, selfPushed: 1 }, ''); } catch { /* the chevron just won't show */ }
+  }
+  // What the page under this entry is called, for the chevron's label.
+  function trailLabel(path = '') {
+    const fixed = { '#/': 'My Circle', '#/discover': 'Discover', '#/updates': 'Updates',
+      '#/chats': 'Chats', '#/circles': 'Circles', '#/profile': 'Profile' };
+    if (fixed[path]) return fixed[path];
+    if (path.startsWith('#/c/')) {
+      const c = Store.community(decodeURIComponent(path.slice(4).split('/')[0]));
+      return c ? c.name : 'Circle';
+    }
+    if (path.startsWith('#/u/')) return displayNameOf(decodeURIComponent(path.slice(4)));
+    if (path.startsWith('#/chat/')) return 'Chat';
+    if (path.startsWith('#/p/')) return 'Post';
+    if (path.startsWith('#/daily/')) return 'Daily';
+    return 'the last page';   // "Back to the last page", never "Back to Back"
+  }
+  // The chevron for a profile that is yours, or null for the tab as it is. An
+  // empty href is the pop. A cold arrival with nothing under it (a shared link,
+  // a reload at #/u/<you>) has nothing to pop, so #/u/<you> falls back to a
+  // friend's chevron, which is a navigation.
+  function selfBackTarget() {
+    const path = (location.hash || '#/').split('?')[0];
+    const under = navTrail.length > 1;
+    if (path === '#/profile') {
+      return history.state && history.state.selfPushed && under
+        ? { href: '', label: trailLabel(navTrail[1]) } : null;
+    }
+    return under ? { href: '', label: trailLabel(navTrail[1]) } : backTarget();
+  }
   // Circle and Discover hold their place across a TAB TAP, not just a back. The
   // key above is per history ENTRY, which is exactly right for a traversal and
   // useless for a tab: tapping Circle from Discover mints a NEW entry, so there
@@ -30103,6 +30174,7 @@
     const arriving = navStamp();
     navHere = arriving;
     fileTrail((location.hash || '#/').split('?')[0]);
+    stampSelfPush((location.hash || '#/').split('?')[0]);
 
     // Navigating away from Publish must stop a live camera/mic stream — the
     // capture surface's own DOM is about to be replaced, which wouldn't

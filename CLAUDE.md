@@ -41,6 +41,25 @@ them out (an invite-only one only while you're in it). **Not on the lifted
 sheet on Explore circles** (Zoe: "save does not need to be on the circles
 sheets"; it was there for an hour).
 
+## Your own profile has a back when you were pushed there (2026-11-09)
+
+**Zoe: "ensure 'my profile' always has a back button when needed (if tapped
+on feed, etc)".** The Profile TAB (`#/profile`) has no chevron, but most of
+your own name's links (a byline, a comment, a mention, likes, a circle's
+members) go to `#/u/<you>`, which is no tab (no bar) and had no chevron
+either: a dead end but for the edge swipe. Now **`#/u/<you>` always has
+one**, and **`#/profile` has one when a LINK pushed it** (a repost line, a
+Moment's face, a circle's host, a list row): a capture click on
+`a[href="#/profile"]` outside `#nav` and not a `.toolbar-back` stamps the
+entry `selfPushed` in its history.state (`stampSelfPush`, expiring 1s after
+the click), so a back onto it or a reload keeps it and a tab tap never has
+one. A chevron's return to `#/profile` never counts, or a post's back and the
+profile's would point at each other. **Both POP** (`#self-back`,
+`history.back()`, labelled by `trailLabel(navTrail[1])`), so back is wherever
+you were; `backTarget()` would have sent a post page's or Updates' profile to
+Discover. A cold `#/u/<you>` with nothing under it falls back to
+`backTarget()`. A pushed `#/profile` keeps the tab bar, Profile lit.
+
 ## Tips are dashed cards in your colour (2026-11-08)
 
 **A tip is `.tip` (`tipHtml`)** (Zoe: "a tutorial category of cards that
