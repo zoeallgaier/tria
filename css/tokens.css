@@ -536,6 +536,10 @@
 @media (prefers-reduced-motion: reduce) {
   :root, .has-paper { transition: none; }
 }
+/* Under a back swipe's picture the look lands at once (snapLook in app.js):
+   the paper, the wash and the bar's band, all already drawn in the picture. */
+html.nav-snap, html.nav-snap .has-paper, html.nav-snap body,
+html.nav-snap .ambient, html.nav-snap .topbar::before { transition: none !important; }
 
 /* Where linear() easing exists (Safari 17.2+ / modern engines), --spring becomes
    a sampled underdamped spring: ~10% overshoot, a whisper of settle. A bezier

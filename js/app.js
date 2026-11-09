@@ -28753,7 +28753,8 @@
     });
     // An older binary has no setPaper; its overscroll stays neutral.
     if (nativeShell()) {
-      Promise.resolve(window.Capacitor.nativePromise('TriaSettings', 'setPaper', { lt, dk, keep: mine }))
+      Promise.resolve(window.Capacitor.nativePromise('TriaSettings', 'setPaper', { lt, dk, keep: mine,
+        animated: !document.documentElement.classList.contains('nav-snap') }))
         .catch(() => {});
     }
   }
@@ -29513,6 +29514,21 @@
   const scrollMemory = new Map();
   let navSerial = 0;
   let navHere = null;                     // the entry currently on screen
+  /* A RETURN NO TAP ASKED FOR is the back (or forward) swipe: WebKit has
+     already slid a picture of the page in, in its final colours, so the paper
+     and the wash land at once under it (html.nav-snap) rather than easing out
+     of the page just left, which read as the old colour flashing back. A
+     chevron's history.back() follows a click and keeps the ease. */
+  let lastClick = -1e9;
+  let snapTimer = 0;
+  document.addEventListener('click', () => { lastClick = performance.now(); }, true);
+  function snapLook(on) {
+    const html = document.documentElement;
+    clearTimeout(snapTimer);
+    html.classList.toggle('nav-snap', on);
+    // Long enough for a pinned photo tone to resolve; a removal eases nothing.
+    if (on) snapTimer = setTimeout(() => html.classList.remove('nav-snap'), 400);
+  }
   // THE TRAIL: the entry on screen's path, then the paths of the entries
   // under it, nearest first. Each entry files the trail it was pushed on in
   // its own history.state the first time it is stood on (a stack never
@@ -29858,6 +29874,9 @@
     rememberScroll();
     dropNewPosts();
     const prevHere = navHere;
+    const tk = history.state && history.state.tk;
+    snapLook(typeof tk === 'string' && tk.startsWith(NAV_LOAD + ':') && tk !== prevHere
+      && performance.now() - lastClick > 600);
     const arriving = navStamp();
     navHere = arriving;
     fileTrail((location.hash || '#/').split('?')[0]);

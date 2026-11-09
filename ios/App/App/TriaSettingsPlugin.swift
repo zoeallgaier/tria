@@ -351,6 +351,7 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func setPaper(_ call: CAPPluginCall) {
         let lt = call.getString("lt") ?? "", dk = call.getString("dk") ?? ""
         let keep = call.getBool("keep") ?? true
+        let animated = call.getBool("animated") ?? true   // false under a back swipe's picture
         DispatchQueue.main.async {
             let paper: [String: String]? = lt.isEmpty || dk.isEmpty ? nil : ["lt": lt, "dk": dk]
             TriaViewController.paperHex = paper
@@ -358,7 +359,7 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
                 if let paper { UserDefaults.standard.set(paper, forKey: TriaViewController.paperKey) }
                 else { UserDefaults.standard.removeObject(forKey: TriaViewController.paperKey) }
             }
-            (self.bridge?.viewController as? TriaViewController)?.repaper(animated: true)
+            (self.bridge?.viewController as? TriaViewController)?.repaper(animated: animated)
             call.resolve()
         }
     }
