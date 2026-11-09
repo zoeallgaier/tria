@@ -758,7 +758,8 @@ left edge**, on My Circle and Discover (the right, My Circle only, until
 Circle reading it, `pickFeed`) (Zoe: "like reddit almost", `openFeedSide`, `ICONS.sidebar`,
 `.sheet-scrim--side`; a blur was tried and removed the same day, then came back
 subtle on 2026-11-04: `--glass-blur-veil` (6px, 0 under Reduce Transparency)
-under a lighter 22% dim, the radius fixed so only the scrim's opacity fades): Friends (the whole feed), every
+under a lighter 22% dim, the radius fixed so only the scrim's opacity fades): Friends (the whole feed),
+**Explore circles** (a way to `#/circles`, not a pick; Zoe, 2026-11-08), every
 circle you're in by name, then People, friends and follows as one list (Zoe:
 "friends can include following"), each alphabetical. Circles and People are
 small Oxygen labels that fold (Instrument was tried and taken back the same day); People starts closed unless your pick is in it. It is `openSheet` with `side`, so its focus trap, the chrome

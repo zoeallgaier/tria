@@ -7031,12 +7031,18 @@
       side: true,
       scrimClass: 'sheet-scrim--side',
       head: feedSideRowHtml(friends) +
+        // Explore circles, under Friends (Zoe): a way to the field, not a pick.
+        `<button class="feed-side-row feed-side-explore" type="button">` +
+          `<span class="feed-side-all">${svgIcon('circle')}</span>` +
+          `<span class="feed-side-name">Explore circles</span>` +
+        `</button>` +
         section('Circles', rows.filter(r => r.key.startsWith('c:')), true) +
         section('People', rows.filter(r => r.key.startsWith('u:')), activeFilter.startsWith('u:')) +
         (rows.length ? '' : `<button class="pill-quiet feed-side-find" type="button">Find people and circles</button>`),
       wire: (scrim, close) => {
         scrim.querySelector('.sheet-items').addEventListener('click', (e) => {
           if (e.target.closest('.feed-side-find')) return close(() => go('#/discover'));
+          if (e.target.closest('.feed-side-explore')) return close(() => go('#/circles'));
           const head = e.target.closest('.feed-side-head');
           if (head) {
             const open = head.parentElement.classList.toggle('is-open');
