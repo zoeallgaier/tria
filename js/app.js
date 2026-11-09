@@ -402,9 +402,11 @@
     // A pushpin, for pinning a post to a profile. NOT `pin`, which is the map
     // marker on an activity's location line — two different senses of the word,
     // and the one that means "held up on purpose" is the thumbtack.
-    pinned:  '<path d="M9 3.5h6"/>' +
-             '<path d="M10.2 3.5v5.4c0 1.2-.6 2.3-1.6 2.9l-1.1.7h9l-1.1-.7c-1-.6-1.6-1.7-1.6-2.9V3.5"/>' +
-             '<path d="M12 12.5V21"/>',
+    // Redrawn 2026-11-09: tilted 45 degrees like a pin pressed into a board,
+    // a capped head, a waisted shank flaring to a round plate, then the needle.
+    pinned:  '<path d="M14.2 3.6l6.2 6.2"/>' +
+             '<path d="M15.6 5l-3.9 3.9c-1.7-.6-3.6-.2-4.9 1.1l7 7c1.3-1.3 1.7-3.2 1.1-4.9L19 8.4"/>' +
+             '<path d="M10.3 13.7 4 20"/>',
     // The at-sign, for Updates' Mentions row in the filter dial. It's the one
     // dial row whose subject is a piece of punctuation rather than a thing, and
     // drawing the punctuation is more direct than any metaphor for it — you
@@ -3875,6 +3877,7 @@
     const going = goingControlHtml(goingPost, full);
     const like = likeButtonHtml(post, full);
     const repost = repostBtnHtml(post);
+    const pin = pinBtnHtml(post);
     const n = Store.commentsFor(post.id).filter(c => !Blocks.has(c.author)).length;
     const label = `aria-label="${n ? n + ' comment' + (n === 1 ? '' : 's') : 'Comments'}"`;
     const inner = svgIcon('comment') + (n ? `<span class="card-comment-count">${n}</span>` : '');
@@ -3927,7 +3930,7 @@
     // headcount, and it went back into the ••• on 2026-09-16 (Zoe: for
     // cleanliness), so an activity's row is the same four glyphs as the rest.
 
-    if (!going && !like && !comment && !repost && !menu) return '';
+    if (!going && !like && !comment && !repost && !pin && !menu) return '';
 
     // One row for every card type now that the headcount and the RSVP are a
     // single control: social cluster on the right, the ••• menu tucked left
@@ -3936,7 +3939,22 @@
     // control they sit flush with notes and photos instead, which is most of what
     // made them read busy in the feed. The headcount leads the cluster, so
     // comment, repost and like stay the three rightmost glyphs on every card.
-    return `<div class="card-actions"><div class="card-social">${going}${comment}${repost}${like}</div>${menu}</div>`;
+    return `<div class="card-actions"><div class="card-social">${going}${comment}${repost}${pin}${like}</div>${menu}</div>`;
+  }
+
+  /* The pin, between repost and like, on your OWN posts on your OWN profile
+     (Zoe, 2026-11-09). The same rule as the ••• row: no circle post, no
+     Moment, and a pinned one can always come off. Solid while pinned. */
+  function pinBtnHtml(post) {
+    const me = Store.session();
+    if (!me || post.author !== me || post.repostOf) return '';
+    const h = location.hash;
+    if (!(h === '#/profile' || h.startsWith('#/profile?') || h === '#/u/' + encodeURIComponent(me))) return '';
+    const on = myPins().some(e => e.k === 'post' && e.id === post.id);
+    if (!on && (post.communityId || post.moment)) return '';
+    return `<button class="card-pin${on ? ' is-pinned' : ''}" type="button" data-pin="${esc(post.id)}" ` +
+      `aria-pressed="${on}" aria-label="${on ? 'Unpin from profile' : 'Pin to profile'}" ` +
+      `title="${on ? 'Pinned' : 'Pin'}">${svgIcon('pinned', 'pin-mark')}</button>`;
   }
 
   // ── Reposts ────────────────────────────────────────────────────────────────
@@ -14253,6 +14271,30 @@
       items.push({ label: 'Quote', icon: 'pencil', run: () => { pendingQuote = orig; go('#/publish'); } });
     if (items.length) openSheet({ items });
   }
+
+  // The card's pin: on or off in one tap, every copy of the glyph following.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.card-pin');
+    if (!btn) return;
+    e.preventDefault();
+    const id = btn.dataset.pin;
+    const pins = myPins();
+    const at = pins.findIndex(x => x.k === 'post' && x.id === id);
+    const mark = (on) => document.querySelectorAll(`.card-pin[data-pin="${String(id)}"]`).forEach(b => {
+      b.classList.toggle('is-pinned', on);
+      b.setAttribute('aria-pressed', String(on));
+      b.setAttribute('aria-label', on ? 'Unpin from profile' : 'Pin to profile');
+    });
+    if (at >= 0) {
+      mark(false);
+      commitPins(pins.filter((_, j) => j !== at), { toastOk: 'Unpinned.' });
+      return;
+    }
+    const post = Store.posts().find(p => p.id === id);
+    if (!post) return;
+    if (pins.length < PIN_MAX) mark(true);
+    pinPostFromMenu(post);
+  });
 
   // The tap target for the circle, delegated at the document like the ••• beside
   // it — one listener, so every card everywhere works with no per-render wiring.
@@ -29920,7 +29962,7 @@
   // ahead of both the per-card listeners and the document-delegated ones (the
   // repost circle, the •••), and the write never starts.
   const GUEST_ASKS = ['.card-like', '.poll-option[data-choice]', '.rsvp-opt',
-    '.card-repost', '.card-menu', '#account-more',
+    '.card-repost', '.card-pin', '.card-menu', '#account-more',
     '.daily-answer:not([href="#/circles"]):not([href="#/signin"])'].join(',');
   window.addEventListener('click', (e) => {
     if (Store.isAuthed() || nativeShell() || !(e.target instanceof Element)) return;

@@ -2201,6 +2201,14 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
 
 .card-repost { --burst: var(--heart); }
 
+/* The pin (your own profile): the repost's inks, solid in --heart once pinned.
+   Scaled a touch like the repost: its plate fills more of the box than a heart. */
+.card-pin svg { transform: scale(0.86); }
+.card-pin.is-pinned { color: var(--heart); }
+.card-pin.is-pinned svg path { fill: currentColor; }
+.card-pin:active { color: var(--text); }
+@media (hover: hover) { .card-pin:hover { color: var(--text); } }
+
 .card-repost:active { color: var(--text); }
 @media (hover: hover) { .card-repost:hover { color: var(--text); } }
 
