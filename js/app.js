@@ -28659,7 +28659,7 @@
        is also what applyAmbient stamps on every route that isn't a person at
        all. One value for both meant a stylesheet could not tell them apart, and
        the house-ramp wash written for this case went under the feed as well.
-       See the [data-ambient="tria"] block in app.css.
+       See the Tria wash block (data-wash) in app.css.
 
        But 'none' is not that person. withAccent returns null for both because
        neither NAMES a hue, and that is the right answer to "what colour is
@@ -28674,13 +28674,29 @@
        this is that split arriving on the page. */
     const bare = user && user.accent === 'none' ? 'none' : 'tria';
     withAccent(user, (css) => {
-      if (!css) { body.style.removeProperty('--glow-photo'); body.dataset.ambient = bare; return; }
-      body.style.setProperty('--glow-photo', css);
-      body.style.setProperty('--glow-wash', css);
-      const rgb = cssToRgb(css);
-      if (rgb) stopsAround(rgb, WASH_ARC).forEach((c, i) => body.style.setProperty('--wash-' + 'abc'[i], c));
-      body.dataset.ambient = mode;
+      const rgb = css && cssToRgb(css);
+      if (css) {
+        body.style.setProperty('--glow-photo', css);
+        body.style.setProperty('--glow-wash', css);
+      } else body.style.removeProperty('--glow-photo');
+      if (rgb) layWash(stopsAround(rgb, WASH_ARC), 'colour', mode);
+      else if (!css && bare === 'tria') layWash(TRIA_STOPS, 'tria', 'tria');
+      else body.dataset.ambient = css ? mode : 'none';
     });
+  }
+  // Tria's ramp as the wash's three stops, its ends and their oklab middle,
+  // so a colour and the ramp are one gradient and tween into each other.
+  const TRIA_STOPS = ['var(--brand-start)', 'color-mix(in oklab, var(--brand-start), var(--brand-end))', 'var(--brand-end)'];
+  /* Lay the wash's look (its stops, and `kind`, whose light it takes), then
+     light it. The look eases only while the wash is lit (app.css), so on a
+     page that wasn't washing it is flushed in first, unseen, and the wash
+     rises in its own colour rather than tweening out of the last person's. */
+  function layWash(stops, kind, ambient) {
+    const body = document.body;
+    stops.forEach((c, i) => body.style.setProperty('--wash-' + 'abc'[i], c));
+    body.dataset.wash = kind;
+    if (!/^(profile|tria)$/.test(body.dataset.ambient || '')) void getComputedStyle(body).opacity;
+    body.dataset.ambient = ambient;
   }
 
   function applyAmbient(path) {

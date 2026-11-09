@@ -358,7 +358,7 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
                 if let paper { UserDefaults.standard.set(paper, forKey: TriaViewController.paperKey) }
                 else { UserDefaults.standard.removeObject(forKey: TriaViewController.paperKey) }
             }
-            (self.bridge?.viewController as? TriaViewController)?.repaper()
+            (self.bridge?.viewController as? TriaViewController)?.repaper(animated: true)
             call.resolve()
         }
     }

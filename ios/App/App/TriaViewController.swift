@@ -94,11 +94,19 @@ class TriaViewController: CAPBridgeViewController {
     }
 
     /// Lay the current paper on the three surfaces that show it (see viewDidLoad).
-    func repaper() {
+    /// `animated` eases it on the page's own clock (`--dur-move`, `--ease-soft`
+    /// in tokens.css), so what shows past the page's edge moves with the page.
+    func repaper(animated: Bool = false) {
         let paper = Self.paper
-        view.backgroundColor = paper
-        webView?.backgroundColor = paper
-        webView?.scrollView.backgroundColor = paper
+        let lay = { [weak self] in
+            guard let self else { return }
+            self.view.backgroundColor = paper
+            self.webView?.backgroundColor = paper
+            self.webView?.scrollView.backgroundColor = paper
+        }
+        guard animated, !UIAccessibility.isReduceMotionEnabled else { return lay() }
+        UIViewPropertyAnimator(duration: 0.36, controlPoint1: CGPoint(x: 0.4, y: 0),
+                               controlPoint2: CGPoint(x: 0.2, y: 1), animations: lay).startAnimation()
     }
 
     override func viewDidLoad() {
