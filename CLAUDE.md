@@ -127,7 +127,7 @@ the card"), the same with or without Join. The field and the sheet refuse
 native drags (`dragstart`, `-webkit-user-drag`): one that began on a link or
 the face's image was the browser's and took the pointer. A click on the scrim
 within 450ms of a lift is the lifting tap's own (WebKit hit-tests a touch's
-click after it) and is dropped (`firstClick`). **"Drag to look around." is
+click after it) and is dropped (`firstClick`). **"Swipe to explore, pinch to zoom." (Zoe's words; just "Swipe to explore." once the pinch is learnt or the field already fits) is
 the app's toast**, after the rise, on every visit until a first drag on this
 device (`tria:circles-dragged`), and goes at a drag or a lift. **New circle is the bar's, always** (Zoe: "a perma button
 like dailies top right"); the bar's band shows from the first frame here

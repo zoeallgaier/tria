@@ -18078,8 +18078,8 @@
     const learnt = (key) => { try { return !!localStorage.getItem(key); } catch { return false; } };
     const told = { drag: learnt(CIRCLES_DRAGGED), pinch: learnt(CIRCLES_PINCHED) || !canZoom() };
     const HINT = !told.drag
-      ? (told.pinch ? 'Drag to look around.' : 'Drag to look around, pinch to see them all.')
-      : told.pinch ? '' : 'Pinch to see them all.';
+      ? (told.pinch ? 'Swipe to explore.' : 'Swipe to explore, pinch to zoom.')
+      : told.pinch ? '' : 'Pinch to zoom.';
     const hintTimer = !HINT ? 0 : setTimeout(() => {
       if (world.isConnected) toast(HINT);
     }, fresh ? 900 : 300);
