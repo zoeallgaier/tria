@@ -12618,6 +12618,10 @@ body.circles-live .topbar--bare::before { opacity: 1; }
   white-space: nowrap;
 }
 .cx-sub-ico { width: 11px; height: 11px; flex-shrink: 0; }
+/* A favourite's bookmark (or a joined circle's check), no box of its own so
+   an empty one leaves no gap. The bookmark wears the reader's heart. */
+.cx-sub-mark { display: contents; }
+.cx-sub-fav { color: var(--heart); }
 /* A friend of yours in the circle: a small face leading its size, ringed in
    the paper so it reads as cut out of the disc, the daily's stack in little. */
 .cx-pals { display: inline-flex; margin-right: 0.1rem; }
@@ -12650,6 +12654,29 @@ body.circles-live .topbar--bare::before { opacity: 1; }
   user-select: none;
 }
 @media (min-width: 681px) { .cx-peek { padding-inline: 1.3rem; } }
+/* FAVOURITE CIRCLES: the bookmark on the sheet's top right corner (the page
+   has it on its bar), solid in --heart while it is one, as a pinned post's
+   pin is. The name keeps clear of it, on the page too, so its lines break
+   alike and the head carried up lands with no snap. */
+.cx-peek { position: relative; }
+.cx-fav {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  -webkit-tap-highlight-color: transparent;
+}
+.cx-fav svg { width: 24px; height: 24px; }
+.cx-fav.is-fav, .toolbar-fav.is-fav { color: var(--heart); }
+.cx-fav:active svg { transform: scale(0.88); }
+.community-head .account-id { padding-right: 30px; }
 .cx-peek img { -webkit-user-drag: none; }
 /* The copy that flies from the sheet to the page (handHeadOver): fixed over
    everything, its corner its origin, and never in the way of a finger. */

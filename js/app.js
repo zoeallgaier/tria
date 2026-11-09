@@ -408,6 +408,10 @@
     // needle. Centred against comment, repost and heart on the card's row.
     pinned:  '<path d="M12.53 8.64L12.18 8.29A1.5 1.5 0 0 1 12.18 6.17L12.88 5.46A1.5 1.5 0 0 1 15.01 5.46L18.54 8.99A1.5 1.5 0 0 1 18.54 11.12L17.83 11.82A1.5 1.5 0 0 1 15.71 11.82L15.36 11.47L13.24 13.59C12.25 14.58 13.59 16.91 12.53 18.54L5.46 11.47C7.09 10.41 9.42 11.75 10.41 10.76Z"/>' +
              '<path d="M8.99 15.01 5.46 18.54"/>',
+    // A bookmark, for a favourite circle (Zoe, 2026-11-09): the ribbon, its
+    // foot notched. Solid while it is one, as the pin is while pinned.
+    bookmark:   '<path d="M7.5 4h9A1.5 1.5 0 0 1 18 5.5V20l-6-4.3L6 20V5.5A1.5 1.5 0 0 1 7.5 4z"/>',
+    bookmarkOn: '<path d="M7.5 4h9A1.5 1.5 0 0 1 18 5.5V20l-6-4.3L6 20V5.5A1.5 1.5 0 0 1 7.5 4z" fill="currentColor"/>',
     // The at-sign, for Updates' Mentions row in the filter dial. It's the one
     // dial row whose subject is a piece of punctuation rather than a thing, and
     // drawing the punctuation is more direct than any metaphor for it — you
@@ -7017,10 +7021,53 @@
     ? Store.communityPosts(activeFilter.slice(2))
     : Store.feed();
   const byLabel = (a, b) => a.label.localeCompare(b.label);
+  /* FAVOURITE CIRCLES (Zoe, 2026-11-09), a bookmark: kept per device and
+     reader (`tria:fav-circles:<me>`, ids), like the paper and the tips. A
+     favourite leads the sidebar under its own name, wears a solid bookmark on
+     its page's bar and its sheet on Explore circles, and its disc there wears
+     a small one. Any circle you can open can be one, joined or not; one that
+     has closed simply drops out of every list. */
+  const favKey = () => `tria:fav-circles:${Store.session()}`;
+  function favCircles() {
+    if (!Store.session()) return new Set();
+    try {
+      const ids = JSON.parse(localStorage.getItem(favKey()) || '[]');
+      return new Set(Array.isArray(ids) ? ids.map(String) : []);
+    } catch { return new Set(); }
+  }
+  const isFavCircle = (c) => !!c && favCircles().has(String(c.id));
+  // Flips it, says so, and answers the new state.
+  function toggleFavCircle(c) {
+    const ids = favCircles();
+    const on = !ids.has(String(c.id));
+    if (on) ids.add(String(c.id)); else ids.delete(String(c.id));
+    try { localStorage.setItem(favKey(), JSON.stringify([...ids])); } catch { /* private window */ }
+    hapticTap('LIGHT');
+    toast(on ? `${communityHandle(c)} is a favorite.` : `${communityHandle(c)} is out of your favorites.`);
+    return on;
+  }
+  // The bookmark as a bar or sheet button, solid while it is one.
+  const favBtnInner = (on) => svgIcon(on ? 'bookmarkOn' : 'bookmark');
+  const favLabel = (on) => on ? 'Remove from favorites' : 'Add to favorites';
+  function syncFavBtn(btn, on) {
+    if (!btn) return;
+    btn.innerHTML = favBtnInner(on);
+    btn.classList.toggle('is-fav', on);
+    btn.setAttribute('aria-pressed', String(on));
+    btn.setAttribute('aria-label', favLabel(on));
+  }
   function feedSideRows() {
     const people = new Set([...Store.friends(), ...Store.following()]);
+    const favs = favCircles();
+    const mine = new Set(Store.myCommunities().map(c => String(c.id)));
     return [
+      // Favourites first, joined or not.
+      ...[...favs].map(id => Store.communities().find(c => String(c.id) === id)).filter(Boolean)
+        .filter(c => !(c.owner && Blocks.has(c.owner)) && (!c.inviteOnly || mine.has(String(c.id))))
+        .map(c => ({ key: `c:${c.id}`, fav: true, label: c.name, art: () => communityPicHtml(c, 'feed-side-pic', 36) }))
+        .sort(byLabel),
       ...Store.myCommunities()
+        .filter(c => !favs.has(String(c.id)))
         .filter(c => !(c.owner && Blocks.has(c.owner)))
         .map(c => ({ key: `c:${c.id}`, label: c.name, art: () => communityPicHtml(c, 'feed-side-pic', 36) }))
         .sort(byLabel),
@@ -7070,7 +7117,8 @@
           `<span class="feed-side-all">${svgIcon('circle')}</span>` +
           `<span class="feed-side-name">Explore circles</span>` +
         `</button>` +
-        section('Circles', rows.filter(r => r.key.startsWith('c:')), true) +
+        section('Favorites', rows.filter(r => r.fav), true) +
+        section('Circles', rows.filter(r => r.key.startsWith('c:') && !r.fav), true) +
         section('People', rows.filter(r => r.key.startsWith('u:')), activeFilter.startsWith('u:')) +
         (rows.length ? '' : `<button class="pill-quiet feed-side-find" type="button">Find people and circles</button>`),
       wire: (scrim, close) => {
@@ -18152,6 +18200,10 @@
     // can carry, shrunk until its longest word fits the ring's inner width;
     // under it the size, led by the faces of friends of yours in it (Zoe,
     // 2026-11-08: "make it easier to connect"), as many as the ring has room for.
+    // The small mark leading a disc's size: a favourite's bookmark, else a
+    // joined circle's check where no friend's face says it already.
+    const subMark = (nd, pals) => isFavCircle(nd.c) ? svgIcon('bookmarkOn', 'cx-sub-ico cx-sub-fav')
+      : !nd.c.inviteOnly && nd.mine && !pals ? svgIcon('check', 'cx-sub-ico') : '';
     const bubbleHtml = (nd) => {
       const c = nd.c;
       const inner = nd.r * 2 * 0.66;
@@ -18171,7 +18223,9 @@
             `--rest:${((face || icon * 0.6) / icon).toFixed(3)}">${communityPicHtml(c, 'cx-face-pic', icon)}</span>` +
           `<span class="cx-name" style="font-size:${fs.toFixed(1)}px">${esc(c.name)}</span>` +
           `<span class="cx-sub">` +
-            (c.inviteOnly ? svgIcon('lock', 'cx-sub-ico') : nd.mine && !pals.length ? svgIcon('check', 'cx-sub-ico') : '') +
+            (c.inviteOnly ? svgIcon('lock', 'cx-sub-ico') : '') +
+            // A favourite wears its bookmark (it says more than the check).
+            `<span class="cx-sub-mark">${subMark(nd, pals.length)}</span>` +
             (pals.length
               ? `<span class="cx-pals">${pals.map(u => avatarEl(u, { cls: 'cx-pal', px: 40 })).join('')}</span>`
               : '') +
@@ -18182,7 +18236,8 @@
     const labelOf = (nd) => {
       const names = nd.friends.slice(0, 2).map(u => u.name || u.username);
       return `${nd.c.name}, ${communityHandle(nd.c)}, ${nd.n} ${memberWord(nd.n)}` +
-        (names.length ? `, with ${names.join(' and ')}` : '') + (nd.mine ? ', joined' : '');
+        (names.length ? `, with ${names.join(' and ')}` : '') + (nd.mine ? ', joined' : '') +
+        (isFavCircle(nd.c) ? ', a favorite' : '');
     };
     world.innerHTML = nodes.map(nd =>
       `<a class="cx-node" href="${communityRoute(nd.c)}" role="listitem" aria-label="${esc(labelOf(nd))}" ` +
@@ -18424,8 +18479,16 @@
        at half the finger's pace and
        stiffens past OPEN_AT, where "Open c/slug" inks, its chevron rises and
        a LIGHT haptic arms it; let go armed and it carries on up and away. */
+    // The bookmark rides the sheet's top right corner, signed in, where the
+    // page has it on its bar; the copy carried up to the page leaves it here.
     const peekHtml = (nd) =>
-      `<div class="account community-head cx-peek">${communityHeadHtml(nd.c, true)}</div>`;
+      `<div class="account community-head cx-peek">${communityHeadHtml(nd.c, true)}` +
+        (Store.session()
+          ? `<button class="cx-fav${isFavCircle(nd.c) ? ' is-fav' : ''}" type="button" ` +
+              `aria-pressed="${isFavCircle(nd.c)}" aria-label="${favLabel(isFavCircle(nd.c))}">` +
+              `${favBtnInner(isFavCircle(nd.c))}</button>`
+          : '') +
+      `</div>`;
     function openPeek(i, kept) {
       const nd = nodes[i], c = nd.c;
       let scrimEl = null, panel = null;
@@ -18531,6 +18594,14 @@
           // the roster waits for this one to go). A link leaves the field.
           const q = (sel) => scrim.querySelector(sel);
           q('#community-join')?.addEventListener('click', () => { close(); joinHere(i); });
+          const fav = q('.cx-fav');
+          fav?.addEventListener('click', () => {
+            syncFavBtn(fav, toggleFavCircle(c));
+            if (!world.isConnected) return;
+            els[i].innerHTML = bubbleHtml(nd);
+            measureFace(i);
+            els[i].setAttribute('aria-label', labelOf(nd));
+          });
           // A member's pills, the page's own (Zoe, 2026-11-08): Post and Edit
           // leave the field in the tap; Invite waits for this sheet to go,
           // since sheets don't stack.
@@ -19440,6 +19511,7 @@
     if (!box.width) return;
     const clone = src.cloneNode(true);
     clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+    clone.querySelector('.cx-fav')?.remove();   // the page has it on its bar
     clone.classList.add('head-morph');
     clone.setAttribute('aria-hidden', 'true');
     Object.assign(clone.style, {
@@ -19519,7 +19591,13 @@
       // already says the name in big serif.
       title: communityHandle(first),
       lock: !!first.inviteOnly,
-      actions: `<button class="toolbar-btn" type="button" id="community-more" aria-label="Circle options">` +
+      // The bookmark, then the ••• (signed in: a favourite is a reader's).
+      actions: (Store.session()
+          ? `<button class="toolbar-btn toolbar-fav${isFavCircle(first) ? ' is-fav' : ''}" type="button" id="community-fav" ` +
+              `aria-pressed="${isFavCircle(first)}" aria-label="${favLabel(isFavCircle(first))}">` +
+              `${favBtnInner(isFavCircle(first))}</button>`
+          : '') +
+        `<button class="toolbar-btn" type="button" id="community-more" aria-label="Circle options">` +
         `${svgIcon('dots')}</button>`,
     });
     view.innerHTML =
@@ -19679,6 +19757,11 @@
     document.getElementById('community-more')?.addEventListener('click', () => {
       const c = Store.community(id);
       if (c) openCommunityMenu(c);
+    });
+    const favBtn = document.getElementById('community-fav');
+    favBtn?.addEventListener('click', () => {
+      const c = Store.community(id);
+      if (c) syncFavBtn(favBtn, toggleFavCircle(c));
     });
 
     communityRepaint = () => {

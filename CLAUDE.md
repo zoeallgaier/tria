@@ -21,6 +21,24 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## Favorite circles are a bookmark (2026-11-09)
+
+**Any circle you can open can be a favorite** (Zoe: "Favorite circles for
+the menu, circles view, etc use bookmark icon"), joined or not, signed in.
+`ICONS.bookmark`/`bookmarkOn` (solid in `--heart` while on, as a pinned
+post's pin). Kept **per device and reader** (`tria:fav-circles:<me>`, ids;
+`favCircles`, `isFavCircle`, `toggleFavCircle`, which toasts and taps LIGHT),
+no column: give it one if favorites should follow a reader across devices.
+Where it shows: the circle page's bar, before the ••• (`#community-fav`,
+swapped in place by `syncFavBtn`, the bar's observer carries it native);
+the lifted sheet on Explore circles, its top right corner (`.cx-fav`,
+dropped from the head carried up to the page); the disc's size line, the
+bookmark in place of the joined check (`subMark`); and **the sidebar's
+Favorites section, over Circles**, which then leaves them out (an
+invite-only one only while you're in it). The head's `.account-id` keeps
+30px clear on the right, page and sheet alike, so the name never runs under
+the sheet's bookmark and the carried head breaks its lines the same.
+
 ## Tips are dashed cards in your colour (2026-11-08)
 
 **A tip is `.tip` (`tipHtml`)** (Zoe: "a tutorial category of cards that
