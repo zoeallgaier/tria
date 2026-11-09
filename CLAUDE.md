@@ -1,6 +1,6 @@
 # Tria — working notes for Claude
 
-A social app for small circles of friends. Tagline "Social media made local."
+A social app for small circles of friends. Tagline "No algorithm, ad-free social." (Zoe, 2026-11-08; it was "Social media made local.")
 Ethos: low-tech, non-addictive, anti-bloat. It promotes context (long posts read
 well), not an infinite feed.
 
@@ -20,6 +20,66 @@ The same files also serve a website; that is a byproduct, not a target. See
   `CapApp-SPM/` (CLI-managed), `verify-plugins.sh`.
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
+
+## Tips are dashed cards in your colour (2026-11-08)
+
+**A tip is `.tip` (`tipHtml`)** (Zoe: "a tutorial category of cards that
+combines the users color preference (color itself not bg) and the dotted
+line soft cta stuff ... small dismissable tutorials"): a dashed edge in
+`--heart`, no fill (the paper shows through), the glyph in `--heart`, the
+title in a note's H2 (italic Instrument Serif, Zoe: "italic instrument h2 to
+the card titles") in `--mention-ink`, one short line in ink, and an x.
+**A tip has no button and sits BY what it teaches** (Zoe: "tutorials should
+never need a button because they should be by the feature already"; a
+quiet pill, `TIP_ACTS`, went the same evening). **Voice: a title that names
+the thing, one short line of how, never where to find it** (Zoe: "use as
+little words to get the point across"). **A tip next to buttons keeps the
+head's gap** (`--account-gap` over it; the feed or tabs under it bring their
+own, the tabs 12px less since their glyphs stand in by that much).
+**A dashed card means a tip and nothing else**: the empty circle's dashed
+first post went the same day. Each is told once per device and reader
+(`tria:tip:<key>:<me>`, `tipSeen`, `spendTip`), spent by its x (a LIGHT
+tap) or quietly by doing the thing it teaches, and **a page shows one at a
+time** (`firstTip`, `paintTipHost`). `TIPS` holds them: **moments** (under
+the rail, while friends have faces; a like spends it; honours the old
+`tria:song-hint-seen:v6` key), **side** (My Circle's `#home-tip` under the
+bar's menu, "One at a time ... view one circle or friend", not on a
+brand-new empty circle nor while the Moments tip shows; opening the sidebar
+spends it), **takes** (the composer, under the note box whose star it
+points at, plain posts only, not a daily or a Moment; Zoe: "put takes on
+the publish page"; pressing the star spends it), **paper** (Edit profile,
+over the Background color row; opening it spends it), **tabs** (over a
+profile's tabs; changing tab spends it), **circle** (under a circle's head
+and Join, signed in, only where you could join: not a member, not invite
+only; joining spends it) and **field** (Explore circles, see below). Not
+written: a composer tip for the poem quill; add one to `TIPS` if poets get
+lost.
+
+**Explore circles' hint is a tip now**, floating at the field's foot on the
+sheet's paper (`.cx-tip`), titled Getting around (the bar already says
+Explore circles): "Swipe to explore, pinch to zoom, tap a circle to peek."
+(Zoe's words plus the tap; the sheet's own Open foot tells the pull up),
+"Pinch to zoom." for someone who has only dragged, on the same rule as the
+toast it replaced: every visit until a first drag (and pinch), gone at a
+drag or a lift, and its x spends it for good.
+
+**The CTA sweep** (same day, "change oddly placed cta links into cards or
+buttons"): signed out, Discover's "You're looking around signed out. Make an
+account" sentence is a card under Explore circles (`guestCard`, Make an
+account and Log in as two even doors; `GUEST_ASKS` lets `#/signin` through);
+the guest pitch's Log in and App Store lines are two quiet pills under
+Create an account ("Look around Discover" went, the tab bar is the way
+there); About's "See the plans →" and the business page's "Start an
+organization account →" are pills (`.about-go`). `.about-more`,
+`.guest-note` and `.guest-more` are gone. The auth forms keep their small
+links (Forgot password, Log in under Sign up): that is the convention there.
+
+**A circle's page, signed out, is a profile's** (Zoe: "make the circle page
+the same as an empty users like the buttons"): no pill in its head (it was
+Make an account to join), and an invite-only one's fence says its line
+alone, as a private profile's does. **An empty circle you're in is an empty
+profile**: a line, Share the first <type> as THE BUTTON with the + sheet's
+walk through the types, and Invite friends as the quiet one.
 
 ## The paper wears a colour (2026-11-08)
 
@@ -135,8 +195,7 @@ Moments Reply foot**, a chevron over "Open c/slug" (Zoe: "the consistent swipe
 up as before ... like replies to moments"; for an hour it was an Open row).
 **Join is in place** (`joinHere`): the sheet goes and the disc bursts
 with `celebrateFace`'s stars in its own colours and wears its check, so you
-can join a few without leaving. Signed out the head's own "Make an account to join" goes to `#/join`, and so does
-Discover's cards' Join (it toasted "You need to be signed in." and stopped). A tap round the sheet on the lifted circle goes in,
+can join a few without leaving. Signed out the head has no pill (2026-11-08, a profile's rule); Discover's cards' Join goes to `#/join` (it toasted "You need to be signed in." and stopped). A tap round the sheet on the lifted circle goes in,
 on another lifts that one, on the paper puts it away, as does a pull down;
 **a pull up opens it, the Moments Reply pull** (Zoe: "take a note from
 moments replies"): the panel rises at half pace and stiffens past `OPEN_AT`
@@ -158,9 +217,9 @@ the card"), the same with or without Join. The field and the sheet refuse
 native drags (`dragstart`, `-webkit-user-drag`): one that began on a link or
 the face's image was the browser's and took the pointer. A click on the scrim
 within 450ms of a lift is the lifting tap's own (WebKit hit-tests a touch's
-click after it) and is dropped (`firstClick`). **"Swipe to explore, pinch to zoom." (Zoe's words; just "Swipe to explore." once the pinch is learnt or the field already fits) is
-the app's toast**, after the rise, on every visit until a first drag on this
-device (`tria:circles-dragged`), and goes at a drag or a lift. **New circle is the bar's, always** (Zoe: "a perma button
+click after it) and is dropped (`firstClick`). **"Swipe to explore, pinch to zoom, tap a circle to peek." (Zoe's words and the tap; without the pinch once it is learnt or the field already fits) is
+a tip card at the field's foot since 2026-11-08** (it was the app's toast; see "Tips are dashed cards"), after the rise, on every visit until a first drag on this
+device (`tria:circles-dragged`), gone at a drag or a lift. **New circle is the bar's, always** (Zoe: "a perma button
 like dailies top right"); the bar's band shows from the first frame here
 (`body.circles-live`). `circlesOff` stops the frame loop in route(). **A circle opened from the field
 goes back to it** (Zoe: "make sure back goes back to circles"):
@@ -1248,7 +1307,7 @@ bio clamps to two lines), and its search rows 56px.
 
 ## 2.0 is circles (2026-10-22)
 
-**A circle is a room for an interest** that anyone can start and anyone can
+**A circle is a space for an interest** (in copy a circle is a circle, a place or a space, never a room: Zoe, 2026-11-08) that anyone can start and anyone can
 join, at `#/c/<slug>` (clean link `/c/<slug>`, the way reddit has `/r/`). Zoe:
 "use existing audience and group chat features", so it is NOT a third kind of
 thing. Its posts are an **audience** (`posts.audience = 'community'` plus
@@ -1727,7 +1786,9 @@ is no live preview**) → commit and push to `main` **after** the iOS work.
 ## Copy style
 
 User-facing copy uses commas and periods, **no em dashes** (code comments are
-exempt). Voice is playful but not trying-too-hard.
+exempt). Voice is playful but not trying-too-hard. **A circle is a circle,
+a place or a space, never a room** (Zoe, 2026-11-08). The tagline is "No
+algorithm, ad-free social."
 
 ## The reference docs
 

@@ -7015,6 +7015,8 @@
     if (mark && mark.getAttribute('aria-haspopup') === 'dialog' && !sheetOpen && !momentsAway) openFeedSide();
   };
   function openFeedSide() {
+    // Found it: the sidebar's tip is spent.
+    if (!tipSeen('side')) spendTip('side');
     const rows = feedSideRows();
     // A list folds under its own name. Circles start open and People closed
     // (Zoe), unless the person you're reading is in there.
@@ -7331,6 +7333,7 @@
       `<section class="view view--home">` +
         `<div class="np-host" id="np-host"></div>` +
         `<div class="week-cards" id="week-cards" hidden></div>` +
+        `<div class="tip-host" id="home-tip" hidden></div>` +
         `<div class="feed" id="feed"></div>` +
       `</section>`;
 
@@ -7863,7 +7866,7 @@
         open.addEventListener('pointerdown', () => primeMoments(item.dataset.who), { passive: true });
         ringFor(item);
       });
-      host.querySelector('.np-hint-x')?.addEventListener('click', dismissMomentHint);
+      wireTips(host);
     }
     // A post just shared is in no feed, so it lands here, on your own face,
     // with a new face's stars in your --heart (Zoe: "like updating pfps").
@@ -8709,7 +8712,7 @@
     const like = (x, y) => {
       const p = cur().post;
       if (own()) return;
-      dismissMomentHint();
+      spendTip('moments');
       const pop = document.createElement('span');
       pop.className = 'mv-pop';
       pop.setAttribute('aria-hidden', 'true');
@@ -9038,21 +9041,107 @@
     });
   }
 
-  /* Told ONCE, under the rail (Zoe, 2026-10-26: "a quiet soft cta"): a week
-     card, its title in the page's own weight, there until its x or the first
-     double tap. Per device and reader. v6: the stacks and the viewer
-     (2026-11-04); v4 and v5 taught the rail's own gestures, which are gone. */
-  const momentHintKey = () => `tria:song-hint-seen:v6:${Store.session()}`;
-  function momentHintSeen() {
-    try { return !!localStorage.getItem(momentHintKey()); } catch { return true; }
+  /* TIPS (2026-11-08, Zoe: "a tutorial category of cards that combines the
+     users color preference (color itself not bg) and the dotted line soft cta
+     stuff ... small dismissable tutorials"). One card, `.tip`: the dashed
+     edge an empty slot is drawn with, in the reader's own --heart, its glyph
+     in that colour and its title in --mention-ink (the accent deepened for
+     words) in the italic serif of a note's H2, the words in the page's ink,
+     and an x. No button: each is drawn by the feature it teaches. A dashed card means a tip and
+     nothing else now: the empty circle's dashed first-post card became the
+     empty profile's buttons the same day.
+     Each is told once per device and reader (`tria:tip:<key>:<me>`), gone on
+     its x or on the thing it teaches being done, and a page shows ONE at a
+     time, the first unspent in its own order, so a fresh install meets them
+     a visit apart rather than as a stack. `text` may be a function, for a
+     tip whose words depend on the shell or the state. */
+  const TIPS = {
+    // The rail's, under the faces (it was the week card hint, v4 to v6).
+    // Voice (Zoe: "use as little words to get the point across"): a title
+    // that names the thing, then one short line of how. Never where to
+    // find it: a tip is drawn by its feature, so it needs no button either.
+    moments: { ico: 'moment', title: 'Moments',
+      text: 'Here for a day. Tap a face to watch, double tap to like, pull up to reply.' },
+    takes: { ico: 'star', title: 'Takes',
+      text: 'Tap the star to rate a film, show, book or podcast.' },
+    side: { ico: 'sidebar', title: 'One at a time',
+      text: () => `Open the menu${nativeShell() ? ', or swipe in from the edge,' : ''} to view one circle or friend.` },
+    paper: { ico: 'tint', title: 'Background color',
+      text: 'Your pages wear your color, and friends’ wear theirs.' },
+    tabs: { ico: 'grid', title: 'Tabs',
+      text: 'Swipe the posts to switch tabs.' },
+    circle: { ico: 'circle', title: 'Circles',
+      text: 'A space for one thing people love. Join to post.' },
+    // Not "Explore circles": the bar already says so.
+    field: { ico: 'circle', title: 'Getting around' },
+  };
+  // The Moments hint's own key before it was a tip: whoever waved it off
+  // has met Moments.
+  const TIP_WAS = { moments: () => `tria:song-hint-seen:v6:${Store.session()}` };
+  const tipKey = (k) => `tria:tip:${k}:${Store.session() || 'guest'}`;
+  function tipSeen(k) {
+    try {
+      return !!localStorage.getItem(tipKey(k)) || !!(TIP_WAS[k] && localStorage.getItem(TIP_WAS[k]()));
+    } catch { return true; }
   }
-  function dismissMomentHint() {
-    if (momentHintSeen()) return;
-    try { localStorage.setItem(momentHintKey(), '1'); } catch { /* private window */ }
-    const hint = view.querySelector('.np-hint');
-    if (!hint) return;
-    hint.classList.add('is-leaving');
-    setTimeout(() => hint.remove(), prefersReduced() ? 0 : 220);
+  // The first unspent of a page's own order; `keys` may hold falsy entries
+  // for tips that don't apply here.
+  const firstTip = (keys) => keys.find(k => k && !tipSeen(k)) || null;
+  function tipHtml(k, text) {
+    const t = TIPS[k];
+    if (!t) return '';
+    const words = text || (typeof t.text === 'function' ? t.text() : t.text);
+    return `<aside class="tip" data-tip="${k}" aria-label="${esc(t.title)}, a tip">` +
+        `<p class="tip-kicker">${svgIcon(t.ico)}<span>${esc(t.title)}</span></p>` +
+        `<p class="tip-text">${esc(words)}</p>` +
+        `<button type="button" class="tip-x" data-tip-x="${k}" aria-label="Got it">${svgIcon('close')}</button>` +
+      `</aside>`;
+  }
+  // Spend a tip, and fold its card away wherever it is drawn. `tap`: its own
+  // x, the one way that buzzes (learning it by doing it is quiet).
+  function spendTip(k, tap = false) {
+    if (!k) return;
+    try { localStorage.setItem(tipKey(k), '1'); } catch { /* private window */ }
+    document.querySelectorAll(`.tip[data-tip="${k}"]`).forEach((el) => {
+      el.classList.add('is-leaving');
+      setTimeout(() => {
+        const host = el.parentElement;
+        el.remove();
+        if (host?.classList.contains('tip-host') && !host.children.length) host.hidden = true;
+      }, prefersReduced() ? 0 : 220);
+    });
+    if (tap) hapticTap('LIGHT');
+  }
+  // The x, wired per host, so a repaint that rebuilds the card wires it
+  // again. A tip has no other control (Zoe: "tutorials should never need a
+  // button because they should be by the feature already").
+  function wireTips(root) {
+    root.querySelectorAll('[data-tip-x]').forEach(b => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      spendTip(b.dataset.tipX, true);
+    }));
+  }
+  // A host that holds one tip, repainted only when which one changed.
+  function paintTipHost(host, k) {
+    if (!host) return;
+    const sig = k || '';
+    if (host.dataset.tip === sig) return;
+    host.dataset.tip = sig;
+    host.innerHTML = k ? tipHtml(k) : '';
+    host.hidden = !k;
+    if (k) wireTips(host);
+  }
+  // MY CIRCLE'S, over the feed, under the bar whose menu it points at: the
+  // sidebar. Not while the rail carries the Moments tip (one at a time), and
+  // not on a brand-new account's empty circle, whose own two buttons are
+  // the way in. (Takes' is in the composer, by its star.)
+  function paintHomeTip() {
+    const host = view.querySelector('#home-tip');
+    if (!host) return;
+    const k = !Store.isAuthed() || !Store.friends().length || view.querySelector('#np-host .tip')
+      ? null
+      : firstTip(['side']);
+    paintTipHost(host, k);
   }
 
   /* A REPLY IS A MESSAGE, from the viewer's Reply pill or a pull up (it was
@@ -9095,6 +9184,7 @@
     if (!feedEl) return;
     paintOnRepeat();
     paintWeekCards();
+    paintHomeTip();
     syncFeedMark();
     const list = feedPool().filter(p => {
       if (Blocks.has(p.author)) return false;   // blocked authors never surface
@@ -9282,7 +9372,7 @@
     return `<header class="auth-topbar">` +
         `<div class="auth-topbar-brand">` +
           `<span class="wordmark brand-mark" role="img" aria-label="Tria"></span>` +
-          `<span class="auth-topbar-tag">Social media made local</span>` +
+          `<span class="auth-topbar-tag">No algorithm, ad-free social</span>` +
         `</div>` +
       `</header>`;
   }
@@ -10589,9 +10679,14 @@
         // for the same reason: rebuilding the whole profile to move one card
         // would re-run the ambient wash and re-decode the photograph.
         `<div class="pins-host" id="pins"></div>` +
+        // The swipe between the tabs, told over them. (Background color's
+        // tip is on its row in Edit profile.)
+        `<div class="tip-host profile-tip" id="profile-tip" hidden></div>` +
         tabsHtml +
         `<div class="feed" id="feed"></div>` +
       `</section>`;
+    paintTipHost(view.querySelector('#profile-tip'),
+      Store.isAuthed() && canFilter ? firstTip(['tabs']) : null);
 
     // Whatever this reader may see of what this person pinned. `locked` rides
     // along so a private profile's pins meet the same public-only fence its wall
@@ -10779,6 +10874,7 @@
       (key) => {
         profileFilter = key;
         profileFilterFor = u.username;
+        if (!tipSeen('tabs')) spendTip('tabs');
         paintPosts(false, true);
       });
 
@@ -11375,6 +11471,9 @@
           // (paintPaper, the APP ICON note): the background in every shell,
           // the home screen icon in the app only, hidden until the plugin
           // says it can (iOS switches only between icons in the binary).
+          // Its tip sits on the row it is about (Zoe: a tip is by its
+          // feature, so it needs no button).
+          (!welcome && !tipSeen('paper') ? `<div class="tip-host pf-tip">${tipHtml('paper')}</div>` : '') +
           settingRowHtml('paper', 'Background color', colourLabel(paperPick())) +
           (nativeShell() ? settingRowHtml('icon', 'App icon color', 'My theme', true) : '') +
           settingRowHtml('music', 'Open songs in', musicLabel()) +
@@ -11449,16 +11548,21 @@
     // Background color commits on the tap, under a see-through scrim, so the
     // page is already wearing it as the sheet goes.
     const paperValEl = view.querySelector('#paper-value');
-    view.querySelector('#paper-pick').addEventListener('click', () => colourSheet({
-      title: 'Background color',
-      now: paperPick(),
-      pick: (k) => {
-        setPaperPick(k);
-        paintPaper();
-        paperValEl.textContent = colourLabel(k);
-        hapticEvent('SELECT');
-      },
-    }));
+    const pfTip = view.querySelector('.pf-tip');
+    if (pfTip) wireTips(pfTip);
+    view.querySelector('#paper-pick').addEventListener('click', () => {
+      if (!tipSeen('paper')) spendTip('paper');   // found it
+      colourSheet({
+        title: 'Background color',
+        now: paperPick(),
+        pick: (k) => {
+          setPaperPick(k);
+          paintPaper();
+          paperValEl.textContent = colourLabel(k);
+          hapticEvent('SELECT');
+        },
+      });
+    });
 
     // App icon color: Tria's own, the nine (each built as TriaAppIcon-<key>),
     // None, and My theme, which follows the profile's (see APP ICON below).
@@ -16263,15 +16367,9 @@
         `<span class="np-song">${share}</span>` +
       `</button>`;
     const friends = stacks.some(s => !s.mine);
-    const hint = friends && Store.momentsReady() && Store.isAuthed() && !momentHintSeen()
-      ? `<div class="week-card np-hint">` +
-          `<div class="week-card-link">` +
-            `<span class="week-card-kicker">${svgIcon('moment')}Moments</span>` +
-            `<span class="week-card-title">Moments last a day. Tap someone to see theirs, and double tap one to like it.</span>` +
-          `</div>` +
-          `<button class="week-card-x np-hint-x" type="button" aria-label="Got it">${svgIcon('close')}</button>` +
-        `</div>`
-      : '';
+    // THE MOMENTS TIP, under the faces, while there are faces to try it on.
+    const hint = friends && Store.momentsReady() && Store.isAuthed() && !tipSeen('moments')
+      ? tipHtml('moments') : '';
     return `<section class="nowplaying" aria-label="Moments and songs from your people">` +
         `<div class="np-strip">${own}${stacks.map(item).join('')}</div>${hint}` +
       `</section>`;
@@ -17219,7 +17317,7 @@
   // a width change and has none now, so nothing ever sets it.
   let discoverResizeOff = null;
   /* ── Circles (2.0) ──────────────────────────────────────────────────────────
-     A CIRCLE is a room for an interest: anyone can start one, anyone can join,
+     A CIRCLE is a space for an interest (never "a room", Zoe, 2026-11-08): anyone can start one, anyone can join,
      and it lives at #/c/<slug> (the clean link is /c/<slug>, the way a subreddit
      is /r/<name>). Zoe, 2026-10-22: "use existing audience and group chat
      features". So it is not a third kind of thing: its posts are an AUDIENCE.
@@ -18102,17 +18200,34 @@
     // The pinch is told the same way, until a first zoom, and only where the
     // field is bigger than the screen (with all of it in view there is
     // nothing to zoom out to).
+    // A TIP SINCE 2026-11-08 (Zoe: the tutorial cards "should include and
+    // redeux things such as the how to navigate circles notif"): the same
+    // words and the same rule, on a tip card floating at the field's foot
+    // instead of the toast, plus the tap the toast never told (the sheet's
+    // own Open foot tells the pull up from there). Its x spends it for good.
     const learnt = (key) => { try { return !!localStorage.getItem(key); } catch { return false; } };
     const told = { drag: learnt(CIRCLES_DRAGGED), pinch: learnt(CIRCLES_PINCHED) || !canZoom() };
-    const HINT = !told.drag
-      ? (told.pinch ? 'Swipe to explore.' : 'Swipe to explore, pinch to zoom.')
+    const HINT = tipSeen('field') ? '' : !told.drag
+      ? (told.pinch ? 'Swipe to explore, tap a circle to peek.'
+        : 'Swipe to explore, pinch to zoom, tap a circle to peek.')
       : told.pinch ? '' : 'Pinch to zoom.';
+    let hintEl = null;
     const hintTimer = !HINT ? 0 : setTimeout(() => {
-      if (world.isConnected) toast(HINT);
+      if (!world.isConnected || focus >= 0) return;
+      const box = document.createElement('div');
+      box.className = 'tip-host cx-tip';
+      box.innerHTML = tipHtml('field', HINT);
+      fieldEl.after(box);
+      wireTips(box);
+      hintEl = box;
     }, fresh ? 900 : 300);
+    // Folded away for this visit (a lift), and gone for good once spent.
     const quietHint = () => {
-      const t = document.querySelector('.toast.show');
-      if (HINT && t && t.textContent === HINT) t.classList.remove('show');
+      const el = hintEl;
+      hintEl = null;
+      if (!el) return;
+      el.classList.add('is-leaving');
+      setTimeout(() => el.remove(), prefersReduced() ? 0 : 220);
     };
     const spendHint = (what) => {
       clearTimeout(hintTimer);
@@ -19145,8 +19260,13 @@
     const stats = posts + people + hostedBy;
     // An invite-only circle you hold no invite to has no Join to offer, so
     // its place says why, quietly and untappable, the way Requested does.
+    // SIGNED OUT THERE IS NO PILL (Zoe, 2026-11-08: "make the circle page the
+    // same as an empty users like the buttons"): a profile's head offers a
+    // guest nothing, since the tap couldn't do what it says, and a circle's
+    // head is the profile's. A write a guest tries still lands on #/join
+    // (GUEST_ASKS).
     const acts = !me
-      ? `<a class="friend-btn publish-fill" href="#/join">Make an account to join</a>`
+      ? ''
       : member
         ? `<button class="friend-btn publish-fill" type="button" id="community-post">Post</button>` +
           `<button class="friend-btn pill-quiet" type="button" id="community-invite">Invite</button>` +
@@ -19179,7 +19299,7 @@
           (c.about ? `<div class="account-bio">${parasHtml(c.about)}</div>` : '') +
         `</div>` +
       `</div>` +
-      `<div class="account-actions">${acts}</div>`;
+      (acts ? `<div class="account-actions">${acts}</div>` : '');
   }
 
   /* THE HEAD CARRIED UP (Zoe, 2026-11-08: "because the content is the same it
@@ -19288,10 +19408,13 @@
     view.innerHTML =
       `<section class="view view--community">` +
         `<div class="account community-head" id="community-head"></div>` +
+        // What a circle is, told once, between its head and its posts.
+        `<div class="tip-host community-tip" id="community-tip" hidden></div>` +
         `<div class="feed" id="feed"></div>` +
       `</section>`;
     const headEl = view.querySelector('#community-head');
     const feedEl = view.querySelector('#feed');
+    const tipEl = view.querySelector('#community-tip');
     const headHtml = communityHeadHtml;
 
     // A tag on a circle's card is a search of the whole room, the way a tag
@@ -19308,11 +19431,11 @@
           `<div class="profile-locked">` +
             svgIcon('circle', 'profile-locked-ico') +
             `<p class="profile-locked-line">What’s said here is for this circle.</p>` +
-            `<p class="profile-locked-sub">${!Store.isAuthed()
-              ? 'Make an account, then join to read along.'
-              : !Store.canJoinCommunity(c)
-                ? 'It’s invite only. Someone in it can invite you.'
-                : 'You’re invited. Join to read along and say something.'}</p>` +
+            // Signed out, the line alone, as a private profile's is.
+            (!Store.isAuthed() ? ''
+              : `<p class="profile-locked-sub">${!Store.canJoinCommunity(c)
+                  ? 'It’s invite only. Someone in it can invite you.'
+                  : 'You’re invited. Join to read along and say something.'}</p>`) +
           `</div>`;
         return;
       }
@@ -19326,23 +19449,30 @@
       }
       if (!list.length) {
         dropCards();
-        // An empty room asks for its first post in the dashed card Discover
-        // starts a circle with (Zoe: "a soft cta ... with the dotted line
-        // thing"): an empty slot to fill, and a quiet pill, not a commit.
-        feedEl.innerHTML =
-          `<section class="daily-card community-card community-card--start community-first">` +
-            `<a class="daily-open" href="#/publish"><span class="daily-prompt">Share the first post</span></a>` +
-            `<p class="daily-hint">Every circle starts with a post. Say hello, or share a bit about yourself.</p>` +
-            `<div class="daily-foot">` +
-              `<a class="daily-answer pill-quiet" href="#/publish">` +
-                `Write the first post</a>` +
-            `</div>` +
-          `</section>`;
-        feedEl.querySelectorAll('.community-first a').forEach(a => a.addEventListener('click', (e) => {
+        // AN EMPTY ROOM IS AN EMPTY PROFILE (Zoe, 2026-11-08: "make the circle
+        // page the same as an empty users like the buttons"): a line, the
+        // first post as THE BUTTON with the + sheet's walk through the types,
+        // and Invite as the quiet one. It was a dashed card, and a dashed card
+        // is a tip now (tipHtml).
+        if (feedEl.querySelector('#circle-first')) return;   // already drawn: keep its walk going
+        feedEl.innerHTML = `<div class="feed-empty feed-empty--welcome">` +
+          `<p>Nobody has posted here yet. Say hello, or share a bit about yourself.</p>` +
+          `<a class="welcome-go publish-fill" id="circle-first" href="#/publish">` +
+            svgIcon(TYPE_GLYPH[POST_CYCLE[0]]) +
+            `<span class="welcome-go-text">Share the first <span>${TYPE_LABEL[POST_CYCLE[0]].toLowerCase()}</span></span>` +
+          `</a>` +
+          `<button class="welcome-go pill-quiet" type="button" id="circle-first-invite">Invite friends</button>` +
+        `</div>`;
+        const first = feedEl.querySelector('#circle-first');
+        cycleTypes(first.querySelector('svg'), first.querySelector('.welcome-go-text > span'),
+          'welcome-ico sheet-cycle sheet-cycle--ico', (t) => TYPE_LABEL[t].toLowerCase());
+        first.addEventListener('click', (e) => {
           e.preventDefault();
           pendingCommunity = c.id;
           go('#/publish');
-        }));
+        });
+        feedEl.querySelector('#circle-first-invite').addEventListener('click', () =>
+          openCommunityInvite(Store.community(c.id) || c));
         return;
       }
       // The column Circle reads in, built as far as it is read (lazy).
@@ -19384,6 +19514,10 @@
           wireHead(c);
         }
       }
+      // Told to someone who can join: in it already, or held at an invite
+      // only fence, it has nothing to say.
+      paintTipHost(tipEl, Store.isAuthed() && !c.inviteOnly && !Store.inCommunity(c.id)
+        ? firstTip(['circle']) : null);
       paintFeed(c);
       return true;
     };
@@ -19419,6 +19553,7 @@
         if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t join, try again.'); return; }
         hapticTap('LIGHT');
         toast(`You’ve joined ${communityHandle(c)}.`);
+        if (!tipSeen('circle')) spendTip('circle');   // joining is the lesson
         if (feedEl.isConnected) paint();
         noticeCharmsSoon(2400);   // after the toast has had its say
       });
@@ -20567,9 +20702,6 @@
     view.innerHTML =
       `<section class="view view--discover">` +
         `<nav class="discover-chips" id="discover-chips" aria-label="Trending tags"></nav>` +
-        (Store.isAuthed() ? '' :
-          `<p class="guest-note">You’re looking around signed out. ` +
-            `<a class="about-more" href="#/join">Make an account</a> to join a circle.</p>`) +
         `<div class="discover-body" id="discover-body"></div>` +
         // THE SQUARE (Store.square): its own box under the body, never inside
         // its innerHTML, so a repaint up there (a join, a pull) diffs these
@@ -20899,7 +21031,19 @@
       // The circles' field, its card at the very top (Zoe, 2026-11-07), out of
       // a search as the daily is.
       const fieldCard = searching ? '' : circlesCardHtml();
-      const sig = JSON.stringify([q, type, roomsHtml, fieldCard, occ && [occ.slug, answers.length],
+      // SIGNED OUT, A CARD, not a sentence with a link in it (2026-11-08,
+      // the sweep: "change oddly placed cta links into cards or buttons"):
+      // the two doors as the circles card's two even pills, under it.
+      const guestCard = searching || Store.isAuthed() ? ''
+        : `<section class="daily-card guest-card">` +
+            `<p class="daily-prompt">You’re looking around</p>` +
+            `<p class="daily-hint">Make an account to join circles, add friends and post. No algorithm, no ads.</p>` +
+            `<div class="daily-foot"><div class="circles-card-acts">` +
+              `<a class="daily-answer publish-fill" href="#/join">Make an account</a>` +
+              `<a class="daily-answer pill-quiet" href="#/signin">Log in</a>` +
+            `</div></div>` +
+          `</section>`;
+      const sig = JSON.stringify([q, type, roomsHtml, fieldCard, guestCard, occ && [occ.slug, answers.length],
         people.map(u => [u.username, u.name, u.bio || '', u.avatar || '',
           isLocked(u.username), Store.friendStatus(u.username)]),
         morePeople, found.map(p => p.id)]);
@@ -20939,7 +21083,7 @@
       // under it is the rest of the page.
       bodyEl.innerHTML = searching
         ? peopleHtml + roomsHtml + postsHtml + none
-        : fieldCard + (occ ? dailyCardEl(occ, answers) : '');
+        : fieldCard + guestCard + (occ ? dailyCardEl(occ, answers) : '');
       if (!bodyEl.dataset.risen) {
         const risers = bodyEl.querySelectorAll('.daily-card');
         risers.forEach((el, i) => { el.style.animationDelay = staggerDelay(i); });
@@ -23972,6 +24116,8 @@
       fieldsEl.querySelector('#c-add-event')?.setAttribute('aria-pressed', String(pubType === 'activity'));
       fieldsEl.querySelector('#c-add-song')?.setAttribute('aria-pressed', String(pubType === 'song'));
       fieldsEl.querySelector('#c-add-take')?.setAttribute('aria-pressed', String(pubType === 'take'));
+      // A take begun: its tip has done its job.
+      if (pubType === 'take' && !tipSeen('takes')) spendTip('takes');
       // The headline stops being optional on an activity — it is the plan's name and
       // submitComposer refuses one without it — so the box says so up front instead
       // of letting the reader find out at the foot of the form. Same field either
@@ -24119,6 +24265,14 @@
         pubAudienceTouched = true;
       }
       fieldsEl.innerHTML = fieldsFor(quote ? 'quote' : 'post', { event: !daily && !moment, song: !daily && (moment || !Store.momentsReady()), moment });
+      // The Takes tip sits under the box whose star it points at (Zoe: "put
+      // takes on the publish page", a tip is by its feature). A plain post
+      // only: a daily answers a prompt and a Moment has no take.
+      if (family === 'base' && !daily && !moment && !tipSeen('takes')) {
+        fieldsEl.querySelector('#c-add-take')?.closest('.field--rich')
+          ?.insertAdjacentHTML('afterend', `<div class="tip-host compose-tip">${tipHtml('takes')}</div>`);
+        wireTips(fieldsEl);
+      }
       // The audience joins Share in the send row, in THE BUTTON's quiet
       // weight beside Share's commit; its label stays for a screen reader.
       const aud = family === 'base' && fieldsEl.querySelector('.aud-field');
@@ -28909,8 +29063,7 @@
         `sees everything you post, in the order you posted it.</p>` +
       `<p>Every business on Tria runs on an organization account. Three plans, ` +
         `starting at $19.99 a month.</p>` +
-      `<p><a class="about-more" href="#/business">See the plans and what they ` +
-        `cost &rarr;</a></p>`);
+      `<a class="pill-quiet about-go" href="#/business">See the plans</a>`);
 
     const feedbackHtml = aboutFold('feedback', 'Feedback',
       `<p><strong>Questions? Concerns? Feature ideas? Mildly dramatic monologues?</strong></p>` +
@@ -29145,7 +29298,7 @@
       `<section class="view about business${gated ? ' about--front' : ''}">` +
         (gated ? authHeader() : '') +
         (gated ? `<p class="about-back"><a href="#/about">&larr; Back to About</a></p>` : '') +
-        mastheadEl('Social media made local', 'Tria for business') +
+        mastheadEl('No algorithm, ad-free social', 'Tria for business') +
         `<div class="about-body">` +
           // One paragraph, and it sells rather than explains. It leads on the
           // two things a business owner actually gets (a price that isn't an
@@ -29168,8 +29321,7 @@
             `Send us a note through the feedback form and say which plan looks ` +
             `right, roughly how many people will be posting, and whether you ` +
             `need activities. We'll take it from there.</p>` +
-          `<p><a class="about-more" href="#/about?open=feedback">Start an ` +
-            `organization account &rarr;</a></p>` +
+          `<a class="publish-fill about-go" href="#/about?open=feedback">Start an organization account</a>` +
         `</div>` +
       `</section>`;
   }
@@ -29659,15 +29811,19 @@
     mountToolbar({ leading: tabbedRoute(location.hash.split('?')[0]) ? '' : toolbarBackEl('#/discover', 'Discover'), title: p.title });
     view.innerHTML =
       `<section class="view about guest-pitch">` +
-        mastheadEl(p.kicker === undefined ? 'Social media made local' : p.kicker, p.title) +
+        mastheadEl(p.kicker === undefined ? 'No algorithm, ad-free social' : p.kicker, p.title) +
         `<div class="about-body">` +
           p.lede.map(t => `<p class="about-lede">${t}</p>`).join('') +
+          // Buttons, not a commit followed by three underlined sentences
+          // (2026-11-08, the CTA sweep): the commit, then Log in and the App
+          // Store as two even quiet pills. "Look around Discover" went: the
+          // tab bar under it is already the way there.
           `<div class="guest-acts">` +
             `<a class="auth-submit publish-fill guest-join" href="#/join">Create an account</a>` +
-            `<p class="auth-alt">Already on Tria? <a href="#/signin">Log in</a></p>` +
-            (kind === 'post' ? `<p class="guest-more"><a class="about-more" href="#/discover">Look around Discover</a></p>` : '') +
-            `<p class="guest-more">On iPhone? <a class="about-more" href="${APP_STORE_URL}" ` +
-              `target="_blank" rel="noopener">Get Tria on the App Store</a></p>` +
+            `<div class="guest-pair">` +
+              `<a class="pill-quiet guest-alt" href="#/signin">Log in</a>` +
+              `<a class="pill-quiet guest-alt" href="${APP_STORE_URL}" target="_blank" rel="noopener">Get the iPhone app</a>` +
+            `</div>` +
           `</div>` +
         `</div>` +
       `</section>`;
@@ -29678,7 +29834,7 @@
   // repost circle, the •••), and the write never starts.
   const GUEST_ASKS = ['.card-like', '.poll-option[data-choice]', '.rsvp-opt',
     '.card-repost', '.card-menu', '#account-more',
-    '.daily-answer:not([href="#/circles"])'].join(',');
+    '.daily-answer:not([href="#/circles"]):not([href="#/signin"])'].join(',');
   window.addEventListener('click', (e) => {
     if (Store.isAuthed() || nativeShell() || !(e.target instanceof Element)) return;
     if (!e.target.closest(GUEST_ASKS)) return;

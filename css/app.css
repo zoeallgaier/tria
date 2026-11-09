@@ -5945,34 +5945,28 @@ button.poll-option:disabled { cursor: default; }
   transition: opacity var(--dur-quick) var(--ease), transform var(--dur-quick) var(--ease);
 }
 .tip.is-leaving { opacity: 0; transform: scale(0.98); }
+/* The title is a note's H2 (Zoe: "italic instrument h2 to the card
+   titles"), in the reader's colour, its glyph sitting on the serif's
+   x-height rather than its line box. */
 .tip-kicker {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.4rem;
-  margin: 0 1.9rem 0 0;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  gap: 0.45rem;
+  margin: 0 2rem 0 0;
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.22rem;
+  line-height: 1.15;
   color: var(--mention-ink);
 }
-.tip-kicker svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--heart); }
-.tip-text { margin: 0 1.25rem 0 0; font-size: 0.95rem; line-height: 1.42; color: var(--text); }
-/* Its one way on, THE BUTTON's quiet weight, sized to the words. */
-.tip-act {
-  align-self: flex-start;
-  margin-top: 0.5rem;
-  min-height: 38px;
-  padding: 0 1.05rem;
-  border-radius: var(--radius-pill);
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text);
-}
+.tip-kicker svg { width: 17px; height: 17px; flex-shrink: 0; color: var(--heart); }
+.tip-text { margin: 0 0.5rem 0 0; text-wrap: pretty; font-size: 0.92rem; line-height: 1.42; color: var(--text); }
+/* The x on the title's line, its glyph's centre on the title's centre. */
 .tip-x {
   position: absolute;
-  top: 0.2rem;
-  right: 0.2rem;
+  top: 0.15rem;
+  right: 0.15rem;
   display: grid;
   place-items: center;
   width: 44px;
@@ -5986,10 +5980,20 @@ button.poll-option:disabled { cursor: default; }
 .tip-x svg { width: 16px; height: 16px; }
 .tip-host { display: block; margin-bottom: 1.4rem; }
 .tip-host[hidden] { display: none; }
-/* A profile's sits between the pins and the tabs, on the identity's gap. */
-.profile-tip { margin-bottom: var(--account-gap, 1.5rem); }
-/* A circle's, under its head, on the same gap the head keeps. */
-.community-tip { margin-bottom: var(--account-gap, 1.5rem); }
+/* A profile's sits between the pins and the tabs, the identity's gap over
+   it (its pills, or the pins); the tabs bring their own under it. */
+.profile-tip { margin: var(--account-gap, 1.5rem) 0 0; }
+/* A circle's, under its head (and its Join) on the head's own gap; the
+   feed under it brings that gap again (.account ~ .feed). */
+.community-tip { margin: var(--account-gap, 1.5rem) 0 0; }
+/* The composer's, under the note box whose star it means, on the form's
+   own field gap. */
+.compose-tip { margin: 0.9rem 0 0; }
+/* Edit profile's, over the Background color row, clear of the box above. */
+.pf-tip { margin: 1.1rem 0 0.35rem; }
+/* Under a tip the tabs come up by the 12px their glyphs already stand in
+   from the strip's edge, so the gap under the tip reads as the gap over it. */
+.profile-tip:not([hidden]) + .profile-tabs { margin-top: calc(var(--account-gap, 1.5rem) - 12px); }
 /* Explore circles' floats at the field's foot, over the discs, so it takes
    the sheet's solid paper under its dashed edge. */
 .cx-tip {
