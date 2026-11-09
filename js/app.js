@@ -402,12 +402,12 @@
     // A pushpin, for pinning a post to a profile. NOT `pin`, which is the map
     // marker on an activity's location line — two different senses of the word,
     // and the one that means "held up on purpose" is the thumbtack.
-    // Tilted 45 degrees like a pin pressed into a board (Zoe, 2026-11-09): a
-    // rounded cap, a shank flaring to the plate, a short needle. Sized and
-    // centred against comment, repost and heart on the card's row.
-    pinned:  '<path d="M12.73 6.60A1.3 1.3 0 0 1 12.73 4.76L12.87 4.62A1.3 1.3 0 0 1 14.71 4.62L19.38 9.29A1.3 1.3 0 0 1 19.38 11.13L19.24 11.27A1.3 1.3 0 0 1 17.40 11.27Z"/>' +
-             '<path d="M13.51 7.38L11.53 9.36C10.54 10.06 8.84 10.06 7.85 9.07L14.93 16.15C13.94 15.16 13.94 13.46 14.64 12.47L16.62 10.49"/>' +
-             '<path d="M11.39 12.61 7.29 16.71"/>',
+    // Tilted 45 degrees like a pin pressed into a board (Zoe, 2026-11-09): ONE
+    // outline, cap, neck and flared plate, with no line across it (a separate
+    // cap drew a seam over the gap, Zoe: "I don't like the line"), and a short
+    // needle. Centred against comment, repost and heart on the card's row.
+    pinned:  '<path d="M12.53 8.64L12.18 8.29A1.5 1.5 0 0 1 12.18 6.17L12.88 5.46A1.5 1.5 0 0 1 15.01 5.46L18.54 8.99A1.5 1.5 0 0 1 18.54 11.12L17.83 11.82A1.5 1.5 0 0 1 15.71 11.82L15.36 11.47L13.24 13.59C12.25 14.58 13.59 16.91 12.53 18.54L5.46 11.47C7.09 10.41 9.42 11.75 10.41 10.76Z"/>' +
+             '<path d="M8.99 15.01 5.46 18.54"/>',
     // The at-sign, for Updates' Mentions row in the filter dial. It's the one
     // dial row whose subject is a piece of punctuation rather than a thing, and
     // drawing the punctuation is more direct than any metaphor for it — you
