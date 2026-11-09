@@ -3868,7 +3868,12 @@ const Store = (() => {
       // A DB that hasn't run add-pins.sql says so in its own words, the same way
       // the listening status does — "couldn't save" would send someone looking
       // at their network instead of at their migrations.
-      return { ok: false, error: /pinned|column|schema/i.test(error.message || '')
+      // A CHECK refusal (23514) is the cap: users_pinned_shape names "pinned",
+      // so it used to read as the column missing. Until pins-four.sql runs the
+      // database holds three while the client offers four (found 2026-11-09).
+      if (error.code === '23514')
+        return { ok: false, error: 'Your profile can hold three pins for now. Unpin one first.' };
+      return { ok: false, error: error.code === '42703' || /column .*pinned/i.test(error.message || '')
         ? 'Pinned cards aren\u2019t set up on this server yet.'
         : 'Couldn\u2019t save that, try again.' };
     }

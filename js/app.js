@@ -402,11 +402,12 @@
     // A pushpin, for pinning a post to a profile. NOT `pin`, which is the map
     // marker on an activity's location line — two different senses of the word,
     // and the one that means "held up on purpose" is the thumbtack.
-    // Redrawn 2026-11-09: tilted 45 degrees like a pin pressed into a board,
-    // a capped head, a waisted shank flaring to a round plate, then the needle.
-    pinned:  '<path d="M14.2 3.6l6.2 6.2"/>' +
-             '<path d="M15.6 5l-3.9 3.9c-1.7-.6-3.6-.2-4.9 1.1l7 7c1.3-1.3 1.7-3.2 1.1-4.9L19 8.4"/>' +
-             '<path d="M10.3 13.7 4 20"/>',
+    // Tilted 45 degrees like a pin pressed into a board (Zoe, 2026-11-09): a
+    // rounded cap, a shank flaring to the plate, a short needle. Sized and
+    // centred against comment, repost and heart on the card's row.
+    pinned:  '<path d="M12.73 6.60A1.3 1.3 0 0 1 12.73 4.76L12.87 4.62A1.3 1.3 0 0 1 14.71 4.62L19.38 9.29A1.3 1.3 0 0 1 19.38 11.13L19.24 11.27A1.3 1.3 0 0 1 17.40 11.27Z"/>' +
+             '<path d="M13.51 7.38L11.53 9.36C10.54 10.06 8.84 10.06 7.85 9.07L14.93 16.15C13.94 15.16 13.94 13.46 14.64 12.47L16.62 10.49"/>' +
+             '<path d="M11.39 12.61 7.29 16.71"/>',
     // The at-sign, for Updates' Mentions row in the filter dial. It's the one
     // dial row whose subject is a piece of punctuation rather than a thing, and
     // drawing the punctuation is more direct than any metaphor for it — you
@@ -14272,7 +14273,7 @@
     if (items.length) openSheet({ items });
   }
 
-  // The card's pin: on or off in one tap, every copy of the glyph following.
+  // The card's pin: on or off in one tap. commitPins lights every copy.
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('.card-pin');
     if (!btn) return;
@@ -14280,21 +14281,25 @@
     const id = btn.dataset.pin;
     const pins = myPins();
     const at = pins.findIndex(x => x.k === 'post' && x.id === id);
-    const mark = (on) => document.querySelectorAll(`.card-pin[data-pin="${String(id)}"]`).forEach(b => {
-      b.classList.toggle('is-pinned', on);
-      b.setAttribute('aria-pressed', String(on));
-      b.setAttribute('aria-label', on ? 'Unpin from profile' : 'Pin to profile');
-    });
-    if (at >= 0) {
-      mark(false);
-      commitPins(pins.filter((_, j) => j !== at), { toastOk: 'Unpinned.' });
-      return;
-    }
+    if (at >= 0) { commitPins(pins.filter((_, j) => j !== at), { toastOk: 'Unpinned.' }); return; }
     const post = Store.posts().find(p => p.id === id);
-    if (!post) return;
-    if (pins.length < PIN_MAX) mark(true);
-    pinPostFromMenu(post);
+    if (post) pinPostFromMenu(post);
   });
+
+  // Every card pin on screen read back off your pins, whoever changed them (the
+  // glyph, the •••, the swap sheet, a failed save putting them back). A card
+  // the feed keeps across a repaint is never rebuilt, so it can't be left to
+  // pinBtnHtml alone.
+  function syncPinBtns() {
+    const on = new Set(myPins().filter(e => e.k === 'post').map(e => String(e.id)));
+    document.querySelectorAll('.card-pin[data-pin]').forEach(b => {
+      const pinned = on.has(b.dataset.pin);
+      b.classList.toggle('is-pinned', pinned);
+      b.setAttribute('aria-pressed', String(pinned));
+      b.setAttribute('aria-label', pinned ? 'Unpin from profile' : 'Pin to profile');
+      b.title = pinned ? 'Pinned' : 'Pin';
+    });
+  }
 
   // The tap target for the circle, delegated at the document like the ••• beside
   // it — one listener, so every card everywhere works with no per-render wiring.
@@ -16808,8 +16813,10 @@
     const paint = repaint || pinsRepaint;
     const p = Store.setPins(next);
     paint?.();
-    const failed = (msg) => { toast(msg); paint?.(); return false; };
+    syncPinBtns();
+    const failed = (msg) => { toast(msg); paint?.(); syncPinBtns(); return false; };
     return p.then(res => {
+      syncPinBtns();
       if (res && res.ok) { if (!quiet) hapticTap('LIGHT'); if (toastOk) toast(toastOk); return true; }
       return failed((res && res.error) || 'Couldn’t save that, try again.');
     }).catch(() => failed('Couldn’t save that, try again.'));
