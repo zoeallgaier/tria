@@ -7044,7 +7044,7 @@
       wire: (scrim, close) => {
         scrim.querySelector('.sheet-items').addEventListener('click', (e) => {
           if (e.target.closest('.feed-side-find')) return close(() => go('#/discover'));
-          if (e.target.closest('.feed-side-explore')) return close(() => go('#/circles'));
+          if (e.target.closest('.feed-side-explore')) return close(() => goKept('#/circles'));
           const head = e.target.closest('.feed-side-head');
           if (head) {
             const open = head.parentElement.classList.toggle('is-open');
@@ -17958,8 +17958,13 @@
     // NEW CIRCLE IS THE BAR'S, always there, the way a daily's Add yours is
     // (Zoe, 2026-11-07: "a perma button like dailies top right for adding
     // circles").
+    // Back goes where you came from (Zoe, 2026-11-08): My Circle when the
+    // sidebar's Explore circles brought you, else Discover. The chevron
+    // steps back onto that entry (STEP_BACK's handler), so a back swipe and
+    // the chevron agree and nothing is pushed for a swipe to walk into.
+    const cxFrom = navTrail[1] === '#/' ? '#/' : '#/discover';
     mountToolbar({
-      leading: toolbarBackEl('#/discover', 'Discover'),
+      leading: toolbarBackEl(cxFrom, cxFrom === '#/' ? 'My Circle' : 'Discover'),
       title: 'Circles',
       actions: Store.communitiesReady()
         ? `<button type="button" class="toolbar-cta publish-fill" id="cx-new" data-slots="2">New circle</button>`
@@ -29534,8 +29539,11 @@
     const a = e.target.closest && e.target.closest('a.toolbar-back[href]');
     if (!a || e.defaultPrevented) return;
     const to = a.getAttribute('href');
-    if (!STEP_BACK.has(to)) return;
-    const n = backStepsTo(to);
+    // The field's own way back steps onto the entry right under it (My
+    // Circle or Discover), never further.
+    const field = (location.hash || '').split('?')[0] === '#/circles' && navTrail[1] === to;
+    if (!STEP_BACK.has(to) && !field) return;
+    const n = field ? 1 : backStepsTo(to);
     if (!n) return;
     e.preventDefault();
     e.stopPropagation();
