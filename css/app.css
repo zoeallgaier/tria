@@ -116,42 +116,20 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
    there: it names whose page this is. Where it was decoration, it's gone. A profile's colour spent a while
    as a glow clipped inside the identity card instead, which was a smaller answer
    to the same question and is retired with the card (see .account below). */
+/* ONE LAYER, ALWAYS LAID (2026-11-08, Zoe: "a smooth transition everytime").
+   The wash keeps its shape and its last colour on every route, and only its
+   opacity says whether it shows, so leaving a profile fades it out. It used to
+   be two copies, this one a fixed and never lit gate copy, and a page that
+   stopped washing swapped the shape out with the colour, so the fade ran over
+   nothing and the wash cut. Its shape and colour are the second .ambient
+   rule, below. */
 .ambient {
-  /* This base copy (the signed-out gate) is FIXED, and the reason is the iOS
-     rubber band: body::before (fixed) paints the entire overscroll gap, so a
-     scrolled layer clipped to the document slides out from under the fixed paper
-     and opens a band of bare page above it — a hard step across a single row.
-     Growing THIS box upward is completely inert, and the reason is the position
-     rather than the painting: fixed is anchored to the viewport, so a negative
-     top parks the gradient above the screen, and a fixed layer doesn't move
-     during a rubber band either. It is the wrong lever here and the right one
-     one rule down.
-
-     The washed pages below are ABSOLUTE, because the gate does not scroll and
-     they do — and being in document space is what lets them start above the
-     origin and paint the gap this layer would otherwise leave bare. They do
-     exactly that now (see --wash-rise), so the seam is closed rather than
-     accepted, and `overscroll-behavior-y: none` — the old lever, at the price of
-     the top bounce on those routes — is not needed and should not be added.
-
-     inset:0 rather than a 100vh box: on iOS `100vh` is the LARGE
-     (toolbar-hidden) viewport while `top: 0` pins to the small one, so a 100vh
-     box's top edge can land below the true top when the toolbar is collapsed —
-     and this glow is brightest at that very edge. */
-  position: fixed;
-  inset: 0;
   z-index: -1;
   pointer-events: none;
-  --glow: transparent;
-  background: radial-gradient(ellipse 78% 62% at 50% -14%, var(--glow), transparent 70%);
-  /* Its own layer: a fixed, static full-viewport gradient is exactly what you
-     want cached rather than repainted under a scrolling page. */
-  transform: translate3d(0, 0, 0);
-  /* Fade in/out with the page transition (a gradient can't tween, but opacity
-     can) so it eases in alongside the rest of the site rather than snapping. */
   opacity: 0;
-  transition: opacity 0.4s ease;
+  transition: opacity var(--dur-move) var(--ease-soft);
 }
+body:is([data-ambient="profile"], [data-ambient="tria"]) .ambient { opacity: 1; }
 
 /* TWO PAGES WASH, they are the same wash, and they wash the same THING: a
    person. A profile and Edit profile — the page that shows someone's colour and
@@ -281,11 +259,15 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
   inherits: true;
   initial-value: #00c9ce;
 }
-/* The wash's three stops (stopsAround, WASH_ARC in app.js), registered for the
-   reason --glow-wash is: so one person's colour tweens into the next. */
+/* The wash's three stops (stopsAround, WASH_ARC in app.js; Tria's ramp is
+   three too, TRIA_STOPS) and THE LIGHT's numbers, registered so all of it
+   tweens: one person's colour into the next, a colour into Tria's ramp. */
 @property --wash-a { syntax: '<color>'; inherits: true; initial-value: #00c9ce; }
 @property --wash-b { syntax: '<color>'; inherits: true; initial-value: #00c9ce; }
 @property --wash-c { syntax: '<color>'; inherits: true; initial-value: #00c9ce; }
+@property --wash-keep { syntax: '<percentage>'; inherits: true; initial-value: 60%; }
+@property --wash-amt  { syntax: '<percentage>'; inherits: true; initial-value: 62%; }
+@property --wash-sat  { syntax: '<number>'; inherits: true; initial-value: 2.4; }
 /* One mode left. `publish` sat beside `profile` on every rule in this block
    until the composer stopped washing altogether — the form is a sheet of paper
    somebody is about to write on, and a page-sized bloom over it was lighting the
@@ -298,22 +280,36 @@ body[data-ambient="profile"] {
      chroma bought back, luminance-cheap, --wash-amt, the hottest alpha. */
   --wash-ink: color-mix(in srgb, var(--muted) 30%, var(--text));
   --wash-ink-soft: color-mix(in srgb, var(--muted) 70%, var(--text));
-  /* The colour's spectrum, each stop tinted on its own for the reason the
-     house ramp's are (see below). Declared here, where the tint lives. */
+}
+/* The colour's spectrum, each stop tinted on its own for the reason the
+   house ramp's are (see below). Declared on body, where paintWash lays the
+   stops, on every route, so a wash leaving still has its colour to fade. */
+body {
   --wash-band: linear-gradient(115deg,
     color-mix(in srgb, var(--wash-a) var(--wash-keep), var(--wash-tint)),
     color-mix(in srgb, var(--wash-b) var(--wash-keep), var(--wash-tint)),
     color-mix(in srgb, var(--wash-c) var(--wash-keep), var(--wash-tint)));
 }
+/* Lit, every part of it eases, on the paper's own clock, so the page, its
+   cards and its wash move as one. Unlit, a change lands at once and unseen:
+   paintWash lays the next look before it lights (layWash), so a wash rises in
+   its own colour rather than tweening out of the last person's. They ease on
+   BODY, where they are set: the band is resolved here, so a tween on
+   .ambient's inherited copies never reached it and every change cut. */
+body:is([data-ambient="profile"], [data-ambient="tria"]) {
+  transition: --wash-a var(--dur-move) var(--ease-soft), --wash-b var(--dur-move) var(--ease-soft),
+    --wash-c var(--dur-move) var(--ease-soft), --wash-keep var(--dur-move) var(--ease-soft),
+    --wash-sat var(--dur-move) var(--ease-soft), --wash-amt var(--dur-move) var(--ease-soft);
+}
 @supports (background: linear-gradient(in oklab, #000, #fff)) {
-  body[data-ambient="profile"] {
+  body {
     --wash-band: linear-gradient(115deg in oklab,
       color-mix(in srgb, var(--wash-a) var(--wash-keep), var(--wash-tint)),
       color-mix(in srgb, var(--wash-b) var(--wash-keep), var(--wash-tint)),
       color-mix(in srgb, var(--wash-c) var(--wash-keep), var(--wash-tint)));
   }
 }
-body[data-ambient="profile"] .ambient {
+.ambient {
   /* ABSOLUTE, not fixed: this is part of the page's background, sitting at the
      top of the document and scrolling away with the header it belongs to. Being
      an ordinary layer inside the scrolled content is the entire point — the
@@ -364,9 +360,6 @@ body[data-ambient="profile"] .ambient {
   mask-image: radial-gradient(ellipse 112% 43vh at var(--wash-at),
     color-mix(in srgb, #000 var(--wash-amt), transparent), transparent 82%);
   filter: saturate(var(--wash-sat));
-  opacity: 1;
-  transition: --wash-a var(--dur-move) var(--ease), --wash-b var(--dur-move) var(--ease),
-    --wash-c var(--dur-move) var(--ease), opacity 0.4s ease;
   transform: translateZ(0);
 }
 
@@ -387,10 +380,12 @@ body[data-ambient="profile"] .ambient {
    paper, deliberately: the wash answers WHOSE is the thing in front of me, and
    on a feed nobody is asking.
 
-   It is deliberately the same geometry as the block above, down to the last
-   value: same ellipse, same --wash-rise and --wash-drop, same 82% falloff, same
-   tint-first mix. Only the colour source differs. If the shape ever changes,
-   change it in both or the two washes stop being one idea.
+   It IS the wash above, not a copy of it (2026-11-08): paintWash lays the
+   ramp as the wash's three stops (TRIA_STOPS: the two ends and their oklab
+   middle, which a two stop oklab ramp passes through anyway), so a colour and
+   the ramp are one gradient and tween into each other. Only THE LIGHT
+   differs, keyed on data-wash, which paintWash lays with the stops and
+   nothing clears, so a ramp fading out keeps its own numbers to the end.
 
    THE RAMP IS TINTED PER STOP AND NOT AS A LAYER (and since 2026-10-24 an
    accent's three stops are too, above). One colour is tinted with a single
@@ -401,67 +396,31 @@ body[data-ambient="profile"] .ambient {
    lopsided. Mixing each stop toward the tint at --wash-keep is exactly what the
    accent path does, once per stop.
 
-   --wash-band is declared HERE and not on :root, and that is not tidiness: a
-   custom property's var()s resolve in the scope of the element it is declared
-   on, so a :root copy would mix toward :root's --wash-tint — which does not
-   exist — rather than this body's. It has to live where the tint does.
-
-   Written without `in oklab` and upgraded in the @supports block below, for the
-   reason recorded beside --brand-band in tokens.css: a custom property accepts
-   any token stream, so an unparseable interpolation hint doesn't fail the
-   declaration, it fails at the point of use and takes the whole background to
-   nothing on iOS 15. */
+   The band is written without `in oklab` and upgraded in its @supports block,
+   for the reason recorded beside --brand-band in tokens.css: a custom property
+   accepts any token stream, so an unparseable interpolation hint doesn't fail
+   the declaration, it fails at the point of use and takes the whole background
+   to nothing on iOS 15. */
 /* QUIETER SINCE 2.0'S BRAND (Zoe, 2026-10-22: "a bitttt intense"), then
    brought back up the same day (Zoe: "too dull"), so it sits between the
    pastel-era settings and that first cut: a little less paper in each stop,
-   some chroma bought back, and a fuller bloom (--wash-amt-tria). */
-body[data-ambient="tria"], .person-card--tria, .mv--tria {
+   some chroma bought back, and a fuller bloom (--wash-amt-tria).
+
+   LOUDER THAN A READER'S COLOUR (--wash-amt-tria), which is the opposite of
+   where this started. It was set at 30% on the arithmetic that four hues at
+   equal alpha put four times as much colour on screen as one — true, and
+   beside the point, because the four are spread ACROSS the page rather than
+   stacked, so at any single pixel there is one hue at 30% and the whole thing
+   read as a smudge of nothing. The tint mix does the luminance protection here
+   (--wash-keep is up too, so less of the paper is mixed in), and this dial is
+   free to be the loudness it looks like. Down from 68% to 50% with 2.0's
+   brand, which is louder per pixel than any pastel was, back to 60% when that
+   read dull, and to 66% with the bloom in the corner, the same step as a
+   reader's colour. */
+body[data-wash="tria"], .person-card--tria, .mv--tria {
   --wash-keep: var(--wash-keep-tria);
   --wash-sat: var(--wash-sat-tria);
   --wash-amt: var(--wash-amt-tria);
-}
-body[data-ambient="tria"] {
-  --wash-band: linear-gradient(115deg,
-    color-mix(in srgb, var(--brand-start) var(--wash-keep), var(--wash-tint)),
-    color-mix(in srgb, var(--brand-end)  var(--wash-keep), var(--wash-tint)));
-}
-@supports (background: linear-gradient(in oklab, #000, #fff)) {
-  body[data-ambient="tria"] {
-    --wash-band: linear-gradient(115deg in oklab,
-      color-mix(in srgb, var(--brand-start) var(--wash-keep), var(--wash-tint)),
-      color-mix(in srgb, var(--brand-end)  var(--wash-keep), var(--wash-tint)));
-  }
-}
-body[data-ambient="tria"] .ambient {
-  position: absolute;
-  inset: calc(-1 * var(--wash-rise)) 0 auto 0;
-  height: calc(100vh + var(--wash-rise));
-  --wash-rise: 32vh;
-  --wash-drop: 4vh;
-  --wash-at: 100% calc(var(--wash-rise) + var(--wash-drop));
-  /* LOUDER THAN A READER'S COLOUR (--wash-amt-tria), which is the opposite of where this started.
-     It was set at 30% on the arithmetic that four hues at equal alpha put four
-     times as much colour on screen as one — true, and beside the point, because
-     the four are spread ACROSS the page rather than stacked, so at any single
-     pixel there is one hue at 30% and the whole thing read as a smudge of
-     nothing. The tint mix does the luminance protection here (--wash-keep is up
-     too, so less of the paper is mixed in), and this dial is free to be the
-     loudness it looks like. Down from 68% to 50% with 2.0's brand, which is
-     louder per pixel than any pastel was, back to 60% when that read dull, and to
-     66% with the bloom in the corner, the same step as a reader's colour. */
-  /* The mask carries the bloom's SHAPE and the band carries its colour, which
-     is the one structural difference from the accent version: there the shape
-     and the colour are the same gradient, because one colour can live in a
-     radial's stops and a ramp cannot. Identical ellipse, identical falloff. */
-  background: var(--wash-band);
-  -webkit-mask-image: radial-gradient(ellipse 112% 43vh at var(--wash-at),
-    color-mix(in srgb, #000 var(--wash-amt), transparent), transparent 82%);
-  mask-image: radial-gradient(ellipse 112% 43vh at var(--wash-at),
-    color-mix(in srgb, #000 var(--wash-amt), transparent), transparent 82%);
-  filter: saturate(var(--wash-sat));
-  opacity: 1;
-  transition: opacity 0.4s ease;
-  transform: translateZ(0);
 }
 
 /* The chrome that stands on the colour rather than under it, in two weights,
@@ -522,7 +481,7 @@ body[data-ambient="tria"] .account-stat { color: var(--wash-ink-soft); }
 
 @media (prefers-reduced-motion: reduce) {
   /* Colour still updates, just without the tween. */
-  body[data-ambient="profile"] .ambient { transition: opacity 0.4s ease; }
+  body:is([data-ambient="profile"], [data-ambient="tria"]) { transition: none; }
 }
 
 /* No grain layer, deliberately: a full-viewport blend re-reads and re-blends the
@@ -2052,6 +2011,7 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
 .masthead,
 .feed,
 .week-cards,
+.tip-host,
 .friends-list,
 .composer,
 .account,
@@ -5646,8 +5606,8 @@ button.poll-option:disabled { cursor: default; }
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.9rem;
-  font-size: 0.78rem;
+  gap: 1rem;
+  font-size: 0.86rem;
   color: var(--muted);
 }
 .account-stat {
@@ -5958,13 +5918,93 @@ button.poll-option:disabled { cursor: default; }
 }
 .np-add svg { width: 14px; height: 14px; stroke-width: 2.4; }
 
-/* The one-time tip under the rail (dismissMomentHint): a week card, quiet. Its
-   title is a sentence in the page's weight, not a plan's bold, so it may wrap.
-   Cards here keep Discover's one gap (0.95rem): rail to tip, tip to a plan. */
-.week-card.np-hint { margin-top: 0.95rem; transition: opacity var(--dur-quick) var(--ease); }
-.np-host:has(.np-hint):has(+ .week-cards:not([hidden])) .nowplaying { margin-bottom: 0.95rem; }
-.np-hint .week-card-title { font-size: 0.95rem; font-weight: 400; line-height: 1.35; white-space: normal; }
-.np-hint.is-leaving { opacity: 0; }
+/* The Moments tip under the rail (a .tip, below). Cards here keep Discover's
+   one gap (0.95rem): rail to tip, tip to a plan. */
+.nowplaying > .tip { margin-top: 0.95rem; }
+.np-host:has(.tip):has(+ .week-cards:not([hidden])) .nowplaying { margin-bottom: 0.95rem; }
+
+/* ── TIPS (tipHtml, 2026-11-08) ──────────────────────────────────────────────
+   The tutorial card, Zoe's: "the users color preference (color itself not
+   bg) and the dotted line soft cta stuff". The dashed edge an empty slot is
+   drawn with, in the reader's --heart (a pick's mark, Tria's green, grey for
+   None), and nothing filled: the page's own paper shows through, so on the
+   coloured paper it reads as the same colour, deeper. The glyph is the
+   heart too, a mark at mark weight; the kicker's WORDS take --mention-ink,
+   the accent deepened for small text (the --going-ink note in tokens.css is
+   why a word never wears the bare heart). The words are the page's ink.
+   One per page, a visit apart (firstTip), so this never stacks. */
+.tip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.85rem 1rem 0.95rem;
+  border: 1.5px dashed color-mix(in srgb, var(--heart) 72%, transparent);
+  border-radius: var(--radius-soft);
+  animation: rise var(--dur-slow) var(--ease) both;
+  transition: opacity var(--dur-quick) var(--ease), transform var(--dur-quick) var(--ease);
+}
+.tip.is-leaving { opacity: 0; transform: scale(0.98); }
+.tip-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 1.9rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--mention-ink);
+}
+.tip-kicker svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--heart); }
+.tip-text { margin: 0 1.25rem 0 0; font-size: 0.95rem; line-height: 1.42; color: var(--text); }
+/* Its one way on, THE BUTTON's quiet weight, sized to the words. */
+.tip-act {
+  align-self: flex-start;
+  margin-top: 0.5rem;
+  min-height: 38px;
+  padding: 0 1.05rem;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.tip-x {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.2rem;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: 50%;
+}
+.tip-x svg { width: 16px; height: 16px; }
+.tip-host { display: block; margin-bottom: 1.4rem; }
+.tip-host[hidden] { display: none; }
+/* A profile's sits between the pins and the tabs, on the identity's gap. */
+.profile-tip { margin-bottom: var(--account-gap, 1.5rem); }
+/* A circle's, under its head, on the same gap the head keeps. */
+.community-tip { margin-bottom: var(--account-gap, 1.5rem); }
+/* Explore circles' floats at the field's foot, over the discs, so it takes
+   the sheet's solid paper under its dashed edge. */
+.cx-tip {
+  position: fixed;
+  z-index: 40;
+  left: calc(var(--sidebar-w, 0px) + var(--gutter, 14px));
+  right: var(--gutter, 14px);
+  bottom: calc(env(safe-area-inset-bottom) + 14px);
+  max-width: var(--feed-width);
+  margin: 0 auto;
+  transition: opacity var(--dur-quick) var(--ease);
+}
+.cx-tip .tip { background: var(--surface); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12); }
+.cx-tip.is-leaving { opacity: 0; }
+@media (max-width: 680px) { .cx-tip { left: var(--gutter, 14px); } }
 
 /* ── The Moments viewer (openMoments) ────────────────────────────────────────
    Tria's paper, not a black player, with the poster's wash blooming off the
@@ -11850,44 +11890,40 @@ body[data-ambient="none"] .pf-row-swatch {
   .about-fold-panel, .about-fold-chev, .about-fold-chev::before { transition: none; }
 }
 
-/* The one link out of a fold, and the link off the bottom of #/business. Reads
-   as a sentence continuing rather than a button, because everything around it
-   is prose. */
-.about-more {
-  font-weight: 600;
-  color: var(--text);
+/* The one way out of a fold, and off the bottom of #/business: THE BUTTON,
+   sized to its words (2026-11-08, the CTA sweep; they were underlined
+   sentences ending in an arrow, which read as prose and hid the act). */
+.about-go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 0.4rem;
+  padding: 0 1.3rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.95rem;
   text-decoration: none;
-  border-bottom: 1px solid var(--rule);
-  padding-bottom: 1px;
-}
-@media (hover: hover) {
-  .about-more:hover { border-bottom-color: currentColor; }
 }
 
 /* ── The public site (signed out, web) ───────────────────────────────────────
    The pitch pages (My Circle, Chats, Profile, Post) reuse About's column and
-   the gate's banded submit, as a link. So does About's App Store button. */
+   the gate's banded submit, as a link, then Log in and the App Store as two
+   even quiet pills. So does About's App Store button. */
 a.guest-join { display: block; text-align: center; text-decoration: none; }
 .guest-acts { margin-top: 1.8rem; }
-.guest-acts .auth-alt { margin-top: 1rem; }
-.guest-acts .auth-alt a {
-  color: var(--accent);
-  font-weight: 700;
-  text-underline-offset: 2px;
+.guest-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-top: 0.7rem; }
+.guest-alt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 0.8rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.95rem;
+  text-align: center;
+  text-decoration: none;
 }
-.about-body .guest-more { margin: 0.9rem 0 0; text-align: center; font-size: 0.92rem; color: var(--muted); }
 .about-body .about-appstore { margin: 1.4rem 0 1.8rem; }
-.guest-note {
-  max-width: var(--feed-width);
-  margin: 0 auto 1.2rem;
-  font-size: 0.92rem;
-  color: var(--muted);
-}
-/* The type axis's inset on a wide screen only; a phone's .view already carries
-   it (stated here, below the mobile block, so it can't win there by order). */
-@media (min-width: 681px) {
-  .guest-note { padding-inline: var(--inset); }
-}
 
 /* ── Tria for business (#/business) ─────────────────────────────────────────
    A pricing page in an app that has spent every other screen avoiding the look
@@ -12381,6 +12417,11 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
   flex: none;
 }
 .circles-card .daily-foot { margin-top: 1rem; }
+/* Signed out, the card under it (guestCard) keeps the same gap and the same
+   two even doors. */
+.discover-body > .guest-card:not(:last-child) { margin-bottom: 0.95rem; }
+.guest-card .circles-card-acts .daily-answer { z-index: 1; width: auto; min-width: 0; flex: none; }
+.guest-card .daily-foot { margin-top: 1rem; }
 .circles-card-art {
   position: relative;
   flex: none;
@@ -12693,23 +12734,9 @@ body.circles-live .topbar--bare::before { opacity: 1; }
 .community-card-pic { width: 90px; height: 90px; }
 .community-card-info { flex: 1; min-width: 0; }
 
-/* The card that starts one: the same card with its fill taken out and a dashed
-   edge, the way an empty slot is drawn. An invitation, not a room. */
-.community-card--start {
-  background: none;
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--text) 24%, transparent);
-}
+/* A dashed card is a tip now (.tip): the circle's dashed Start card and an
+   empty room's dashed first post both went (2026-11-08). */
 a.daily-answer { text-decoration: none; }
-/* On a circle's own page, an empty room's first post (renderCommunity):
-   the same dashed card, in the feed's column. #feed is a flex column, where
-   the card's auto margins would shrink-wrap it (the .pgrid--frames trap), so
-   it stretches across the column instead. On a phone #feed bleeds to the
-   screen's edges for photos, and the card takes the view's inset back. */
-/* The daily card's own side padding (1.15rem), not Discover's tighter 0.8rem:
-   at 0.8rem the words and the pill read as touching the dashed edge (Zoe). */
-.community-first { align-self: stretch; margin: 0; }
-@media (max-width: 680px) { .community-first { margin-inline: var(--gutter); } }
 
 /* A circle is born, or a face is new (celebrateFace): Tria's own ramp in
    stars (your own photo's are your --heart, set inline), the start and end of
