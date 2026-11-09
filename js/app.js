@@ -9084,7 +9084,10 @@
     if (post.song) rememberSong(post.song);
     songReply = { chatId: id, post, pic };
     chatPopsTo = id;
-    go(`#/chat/${encodeURIComponent(id)}`);
+    // Through the app: a pull up's let-go or a hold's timer is no user
+    // activation, and WebKit's back swipe off an entry made without one
+    // skips the page under it too (goKept).
+    goKept(`#/chat/${encodeURIComponent(id)}`);
   }
 
   function renderFeed() {
@@ -21845,7 +21848,9 @@
   async function messageUser(username) {
     const res = await Store.startDirectChat(username).catch(() => null);
     if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t start that chat, try again.'); return; }
-    go(`#/chat/${encodeURIComponent(res.id)}`);
+    // Through the app: the round trip can outlast the tap's activation, and
+    // the back swipe off an unactivated entry skips the page under it.
+    goKept(`#/chat/${encodeURIComponent(res.id)}`);
   }
 
   /* A CIRCLE'S LINK IN A MESSAGE IS THE CIRCLE. An invite (openCommunityInvite)
@@ -22179,7 +22184,11 @@
       const li = hit.closest('.msg');
       if (press) clearTimeout(press.timer);
       if (press && press.swipe) swipeEnd(press, false);
-      const mine = { x: e.clientX, y: e.clientY, fired: false, timer: 0, li, touch: e.pointerType === 'touch', swipe: null };
+      // A drag from the left 24px is the back swipe's, never a reply: an
+      // incoming bubble starts at the gutter, so a back swipe begun on one
+      // also armed it (and a cancelled back left a reply on the bar).
+      const mine = { x: e.clientX, y: e.clientY, fired: false, timer: 0, li, touch: e.pointerType === 'touch', swipe: null,
+        edge: e.clientX < 24 };
       mine.timer = setTimeout(() => {
         mine.fired = true;
         hapticTap('LIGHT');
@@ -22198,7 +22207,7 @@
       if (press.fired) return;
       // Sideways first is a swipe; touch-action leaves up and down to the page.
       const dx = e.clientX - press.x;
-      if (e.type === 'pointermove' && press.touch && Math.abs(dx) >= 10 &&
+      if (e.type === 'pointermove' && press.touch && !press.edge && Math.abs(dx) >= 10 &&
           Math.abs(dx) > Math.abs(e.clientY - press.y) * 1.5 && canSwipe() && press.li.isConnected) {
         clearTimeout(press.timer);
         const mark = document.createElement('span');
@@ -22557,6 +22566,17 @@
     });
   }
 
+  // Out of a chat that's gone (deleted, left, blocked, a request refused):
+  // back onto the Chats entry when one is under it, else Chats takes the
+  // chat's place, so no back swipe lands on "This chat isn't here any more."
+  // A refused request steps back onto Requests when that's what's under it.
+  function outOfChat() {
+    if ((navTrail[1] || '').startsWith('#/chats')) { history.back(); return; }
+    const n = backStepsTo('#/chats');
+    if (n) history.go(-n);
+    else replaceHash('#/chats');
+  }
+
   function openChatMenu(c) {
     const items = [];
     if (c.kind === 'direct' && c.other)
@@ -22580,7 +22600,7 @@
       },
     });
     if (c.kind === 'direct' && c.other) {
-      items.push({ label: 'Block', icon: 'block', danger: true, run: () => confirmBlock(c.other, () => go('#/chats')) });
+      items.push({ label: 'Block', icon: 'block', danger: true, run: () => confirmBlock(c.other, outOfChat) });
       items.push({ label: 'Report', icon: 'flag', danger: true, run: () => reportUser(c.other) });
     }
     const leave = c.kind === 'direct'
@@ -22595,7 +22615,7 @@
         title: leave.title,
         items: [{ label: leave.label, icon: c.kind === 'direct' ? 'trash' : 'signout', danger: true, run: async () => {
           const res = await leave.act().catch(() => null);
-          if (res && res.ok) go('#/chats');
+          if (res && res.ok) outOfChat();
           else toast((res && res.error) || 'Couldn’t do that just now, try again.');
         } }],
       }),
@@ -22662,7 +22682,7 @@
     const repaint = (stick) => {
       if (holdRepaint(() => repaint(stick))) return;
       const now = Store.chat(c.id);
-      if (!now) { go('#/chats'); return; }
+      if (!now) { outOfChat(); return; }
       if (now.status !== c.status) { renderChat(id); return; }   // a request answered elsewhere
       const follow = stick || nearBottom();
       patchThread(list, threadHtml(now));
@@ -22691,7 +22711,7 @@
           if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t save that, try again.'); return; }
           hapticTap('LIGHT');
           if (yes) renderChat(id);
-          else go('#/chats');
+          else outOfChat();
         } finally {
           accept.disabled = deny.disabled = false;
         }
@@ -29338,10 +29358,16 @@
   // there is one (Zoe, 2026-11-08: "make sure swiping back from circles page
   // always goes back to discover"): a chevron that pushed a fresh #/circles
   // left the circle under it, and a back swipe from the field walked into it.
+  // The same for a chat's "Back to Chats" (and New chat's): Chats, a chat,
+  // its chevron pushing a second Chats left the chat under it, so a back
+  // swipe from Chats walked into the chat it had just left.
+  const STEP_BACK = new Set(['#/circles', '#/chats']);
   document.addEventListener('click', (e) => {
-    const a = e.target.closest && e.target.closest('a.toolbar-back[href="#/circles"]');
+    const a = e.target.closest && e.target.closest('a.toolbar-back[href]');
     if (!a || e.defaultPrevented) return;
-    const n = backStepsTo('#/circles');
+    const to = a.getAttribute('href');
+    if (!STEP_BACK.has(to)) return;
+    const n = backStepsTo(to);
     if (!n) return;
     e.preventDefault();
     e.stopPropagation();
@@ -30788,7 +30814,10 @@
     const cold = !booted;
     let armed = true;      // this arrival still counts in catchingUp
     catchingUp++;
-    go(target);
+    // Through the app: a notification's tap was never the page's, so an entry
+    // script made here is unactivated and the back swipe off it skipped the
+    // page the reader was on (or found nothing to go back to at all).
+    goKept(target);
     const id = path.startsWith('#/p/') ? decodeURIComponent(path.slice(4)) : null;
     const chat = path.startsWith('#/chat/');
     const stayed = () => herePath() === path;

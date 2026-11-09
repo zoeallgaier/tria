@@ -93,6 +93,23 @@ on WebKit 26.5). The only reliable tell is whether `navStamp` **minted** the
 history key (a push) or **found** it (a return), which is the same stamp the
 scroll memory runs on.
 
+**The back swipe skips entries script made without a user activation**
+(2026-11-08). WebKit marks an entry pushed with no tap or key in the last 10s,
+and a back swipe off a marked entry passes over the page under it too, or finds
+nothing to go back to. A drag's let-go, a hold's timer, a notification's
+arrival and a push after a slow round trip all count as no activation. So any
+navigation that can come from one goes through the app (`goKept`,
+`TriaSettings.goTo`, a native `load` of the hash, which is never marked): a
+circle opened off the field, a chat opened by a Moment's Reply, a song's hold
+or a Message row (`replyToSong`, `messageUser`), and every notification or
+universal link (`arriveAt`). Playwright's goBack ignores the rule, so only a
+phone shows it. **A back chevron whose place is already under you steps back
+to it rather than pushing a copy** (`STEP_BACK`, `backStepsTo`: Circles and
+Chats), since a pushed copy left the page you just left under it for the next
+back swipe; a chat that's gone (deleted, left, blocked, refused) steps back
+the same way or replaces itself with Chats (`outOfChat`). And in a chat, a
+drag starting in the left 24px is the back swipe's, never a swipe to reply.
+
 **`settleScroll` stays a callback, and nothing may move the scroll after
 `renderPage` returns.** Two destinations now — the top, and a remembered position
 from `restoreScroll` — and only the caller knows which. It stays a callback
