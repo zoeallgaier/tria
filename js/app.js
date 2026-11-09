@@ -12217,6 +12217,7 @@
     const at = bar.querySelector('.postbar-at');
     const autoGrow = () => {
       form.classList.remove('is-tall');
+      input.style.minHeight = '';
       input.style.height = 'auto';
       const line = parseFloat(getComputedStyle(input).lineHeight) || 22.4;
       const padY = parseFloat(getComputedStyle(input).paddingTop) + parseFloat(getComputedStyle(input).paddingBottom);
@@ -12226,6 +12227,9 @@
       input.style.height = 'auto';
       const tools = tall ? (pick.offsetHeight + at.offsetHeight + send.offsetHeight
         + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--postbar-stack-gap')) || 0) * 16) : 0;
+      // MIN-height, because the field's max-height (four lines) is shorter
+      // than the column, and a capped field left the photo past the bar's top.
+      input.style.minHeight = tools ? tools + 'px' : '';
       input.style.height = Math.max(input.scrollHeight, tools) + 'px';
     };
     at.addEventListener('mousedown', (e) => e.preventDefault());
