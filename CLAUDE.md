@@ -26,9 +26,13 @@ The same files also serve a website; that is a byproduct, not a target. See
 **Any circle you can open can be a favorite** (Zoe: "Favorite circles for
 the menu, circles view, etc use bookmark icon"), joined or not, signed in.
 `ICONS.bookmark`/`bookmarkOn` (solid in `--heart` while on, as a pinned
-post's pin). Kept **per device and reader** (`tria:fav-circles:<me>`, ids;
-`favCircles`, `isFavCircle`, `toggleFavCircle`, which toasts and taps LIGHT),
-no column: give it one if favorites should follow a reader across devices.
+post's pin). **Kept on the account so they sync across devices** (Zoe,
+2026-11-09): `community_favorites`, readable and writable by its owner only
+(`supabase/circle-favorites.sql`, **NOT run** as of 2026-11-09;
+`Store.favCirclesReady`, `favCircleIds`, `setFavCircle`). Until it runs they
+stay per device and reader (`tria:fav-circles:<me>`); the first time the table
+answers, a device's list is carried up and the key dropped (`carryFavsUp`).
+`favCircles`, `isFavCircle`, `toggleFavCircle` (toasts, taps LIGHT).
 Where it shows: **the end of the circle page's bar, after the •••** (Zoe:
 "swap save icon and glyph placement"; `#community-fav`, swapped in place by
 `syncFavBtn`, the bar's observer carries it native); **the end of every

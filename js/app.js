@@ -7021,27 +7021,52 @@
     ? Store.communityPosts(activeFilter.slice(2))
     : Store.feed();
   const byLabel = (a, b) => a.label.localeCompare(b.label);
-  /* FAVOURITE CIRCLES (Zoe, 2026-11-09), a bookmark: kept per device and
-     reader (`tria:fav-circles:<me>`, ids), like the paper and the tips. A
+  /* FAVOURITE CIRCLES (Zoe, 2026-11-09), a bookmark, kept on the ACCOUNT so it
+     follows the reader to every device (community_favorites,
+     supabase/circle-favorites.sql; Zoe: "make sure favorite circles sync across
+     devices"). Until that runs they stay per device and reader
+     (`tria:fav-circles:<me>`, ids), and the first time the table answers on a
+     device, that device's list is carried up into it and the key let go. A
      favourite leads the sidebar under its own name, wears a solid bookmark on
-     its page's bar and its sheet on Explore circles, and its disc there wears
-     a small one. Any circle you can open can be one, joined or not; one that
-     has closed simply drops out of every list. */
+     its page's bar, and its disc on Explore circles wears a small one. Any
+     circle you can open can be one, joined or not; one that has closed simply
+     drops out of every list. */
   const favKey = () => `tria:fav-circles:${Store.session()}`;
-  function favCircles() {
-    if (!Store.session()) return new Set();
+  function localFavs() {
     try {
       const ids = JSON.parse(localStorage.getItem(favKey()) || '[]');
-      return new Set(Array.isArray(ids) ? ids.map(String) : []);
-    } catch { return new Set(); }
+      return Array.isArray(ids) ? ids.map(String) : [];
+    } catch { return []; }
+  }
+  // The device's list goes up once, then the account is the only list.
+  function carryFavsUp() {
+    const ids = localFavs();
+    try { localStorage.removeItem(favKey()); } catch { /* private window */ }
+    const have = new Set(Store.favCircleIds());
+    ids.filter(id => !have.has(id)).forEach(id => Store.setFavCircle(id, true));
+  }
+  function favCircles() {
+    if (!Store.session()) return new Set();
+    if (Store.favCirclesReady()) {
+      if (localFavs().length) carryFavsUp();
+      return new Set(Store.favCircleIds());
+    }
+    return new Set(localFavs());
   }
   const isFavCircle = (c) => !!c && favCircles().has(String(c.id));
-  // Flips it, says so, and answers the new state.
+  // Flips it, says so, and answers the new state (the cache flips at once; a
+  // refused write flips it back and says so).
   function toggleFavCircle(c) {
     const ids = favCircles();
     const on = !ids.has(String(c.id));
-    if (on) ids.add(String(c.id)); else ids.delete(String(c.id));
-    try { localStorage.setItem(favKey(), JSON.stringify([...ids])); } catch { /* private window */ }
+    if (Store.favCirclesReady()) {
+      Store.setFavCircle(c.id, on).then(r => {
+        if (!r.ok) toast('Couldn\u2019t save that, try again.');
+      });
+    } else {
+      if (on) ids.add(String(c.id)); else ids.delete(String(c.id));
+      try { localStorage.setItem(favKey(), JSON.stringify([...ids])); } catch { /* private window */ }
+    }
     hapticTap('LIGHT');
     toast(on ? `${communityHandle(c)} is a favorite.` : `${communityHandle(c)} is out of your favorites.`);
     return on;

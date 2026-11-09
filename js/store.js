@@ -84,7 +84,7 @@ const Store = (() => {
                          chats: [], chatMembers: [], messages: [], messageHearts: [], chatsReady: false, activityChats: [],
                          communities: [], communityMembers: [], communitiesReady: false,
                          communityToolsReady: false, communityInvites: [], communityPrivacyReady: false,
-                         communityAccentReady: false });
+                         communityAccentReady: false, favCircles: [], favCirclesReady: false });
   let state = empty();
 
   /* ── A write that lands mid-load ────────────────────────────────────────────
@@ -650,11 +650,16 @@ const Store = (() => {
       readAll('community_invites', ['community_id', 'user_id']),
       // Whether a circle can wear a theme yet (circle-accent.sql). The same latch.
       state.communityAccentReady ? { data: [], error: null } : sb.from('communities').select('accent').limit(1),
+      // My favorite circles (circle-favorites.sql), mine alone by RLS. A
+      // missing table leaves the device's own list in charge.
+      sb.auth.getSession().then(({ data }) => data && data.session
+        ? readAll('community_favorites', ['community_id', 'user_id'])
+        : null),
     ]);
     // Signed out while this was in the air: the world it answers no longer has
     // an owner, so none of it may be written anywhere.
     if (gen !== worldGen) return;
-    const [u, p, c, l, cl, sg, mo, tk, h, pv, f, fd, pa, bl, ch, cc, cm, ct, cs, ci, ca] = read;
+    const [u, p, c, l, cl, sg, mo, tk, h, pv, f, fd, pa, bl, ch, cc, cm, ct, cs, ci, ca, cf] = read;
     // A read that FAILED must not read as "there's nothing there". This whole
     // load is a full replace, so one erroring table used to blank that table's
     // content everywhere — a live comment thread turning into an empty box, with
@@ -787,6 +792,10 @@ const Store = (() => {
     else if (ct.error.code === '42703' || isMissing(ct.error)) state.communityToolsReady = false;
     if (!ca.error) state.communityAccentReady = true;
     else if (ca.error.code === '42703' || isMissing(ca.error)) state.communityAccentReady = false;
+    if (cf && !cf.error) {
+      state.favCirclesReady = true;
+      state.favCircles = (cf.data || []).map(row => String(row.community_id));
+    } else if (cf && isMissing(cf.error)) state.favCirclesReady = false;
     // A missing function reads as no counts, and the page draws none.
     state.communitySizes = new Map((cs && !cs.error && cs.data || [])
       .map(r => [r.community_id, Number(r.members) || 0]));
@@ -3358,6 +3367,23 @@ const Store = (() => {
   const communityToolsReady = () => !!state.communityToolsReady;
   const communityPrivacyReady = () => !!state.communityPrivacyReady;
   const communityAccentReady = () => !!state.communityAccentReady;
+  // Favorite circles, kept on the account so they follow the reader
+  // (circle-favorites.sql). Until it runs, app.js keeps them on the device.
+  const favCirclesReady = () => !!state.favCirclesReady && !!state.session;
+  const favCircleIds = () => (state.favCircles || []).slice();
+  async function setFavCircle(id, on) {
+    const me = idOf(state.session);
+    if (!me) return { ok: false };
+    id = String(id);
+    const flip = (want) => write('favCircles', xs => want
+      ? (xs.includes(id) ? xs : xs.concat([id])) : xs.filter(x => x !== id));
+    flip(on);
+    const { error } = on
+      ? await sb.from('community_favorites').upsert({ user_id: me, community_id: id }, { ignoreDuplicates: true })
+      : await sb.from('community_favorites').delete().eq('user_id', me).eq('community_id', id);
+    if (error) { flip(!on); return { ok: false }; }
+    return { ok: true };
+  }
   // Holds an invite to this circle: me by default, or one of my friends (the
   // Invite sheet's question, answerable for the circles I am in).
   const invitedTo = (id, username) => {
@@ -4450,7 +4476,7 @@ const Store = (() => {
     createCommunity, updateCommunity, joinCommunity, leaveCommunity, removeCommunityMember,
     communityToolsReady, setCommunityPhoto, deleteCommunity,
     communityAccentReady, setCommunityAccent,
-    communityPrivacyReady, invitedTo, canJoinCommunity, setCommunityPrivacy, inviteToCommunity,
+    communityPrivacyReady, favCirclesReady, favCircleIds, setFavCircle, invitedTo, canJoinCommunity, setCommunityPrivacy, inviteToCommunity,
     // Push
     pushSupported, pushPermission, pushArmed, pushSubscribed, pushResume, enablePush, disablePush,
     clearDelivered, openAppSettings,
