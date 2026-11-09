@@ -7064,12 +7064,12 @@
       // Favourites first, joined or not.
       ...[...favs].map(id => Store.communities().find(c => String(c.id) === id)).filter(Boolean)
         .filter(c => !(c.owner && Blocks.has(c.owner)) && (!c.inviteOnly || mine.has(String(c.id))))
-        .map(c => ({ key: `c:${c.id}`, fav: true, label: c.name, art: () => communityPicHtml(c, 'feed-side-pic', 36) }))
+        .map(c => ({ key: `c:${c.id}`, fav: true, circle: c, label: c.name, art: () => communityPicHtml(c, 'feed-side-pic', 36) }))
         .sort(byLabel),
       ...Store.myCommunities()
         .filter(c => !favs.has(String(c.id)))
         .filter(c => !(c.owner && Blocks.has(c.owner)))
-        .map(c => ({ key: `c:${c.id}`, label: c.name, art: () => communityPicHtml(c, 'feed-side-pic', 36) }))
+        .map(c => ({ key: `c:${c.id}`, circle: c, label: c.name, art: () => communityPicHtml(c, 'feed-side-pic', 36) }))
         .sort(byLabel),
       ...[...people]
         .filter(name => !Blocks.has(name))
@@ -7078,14 +7078,24 @@
         .sort(byLabel),
     ];
   }
-  function feedSideRowHtml({ key, label, art }) {
+  function feedSideRowHtml({ key, label, art, circle }) {
     const on = key === activeFilter;
-    return `<button class="feed-side-row${on ? ' is-on' : ''}" type="button" data-filter="${esc(key)}"` +
+    const row = `<button class="feed-side-row${on ? ' is-on' : ''}" type="button" data-filter="${esc(key)}"` +
         `${on ? ' aria-current="true"' : ''}>` +
         art() +
         `<span class="feed-side-name">${esc(label)}</span>` +
         (on ? svgIcon('check', 'feed-side-check') : '') +
       `</button>`;
+    if (!circle) return row;
+    // A circle's row wears its bookmark at its end (Zoe, 2026-11-09: "put
+    // save icons on the menu itself"), its own button beside the pick, so a
+    // tap on it saves and never picks. The row stays in its list until the
+    // sidebar is opened again, so nothing jumps under the finger.
+    const fav = isFavCircle(circle);
+    return `<div class="feed-side-line">${row}` +
+        `<button class="feed-side-fav${fav ? ' is-fav' : ''}" type="button" data-circle="${esc(String(circle.id))}" ` +
+          `aria-pressed="${fav}" aria-label="${favLabel(fav)}">${favBtnInner(fav)}</button>` +
+      `</div>`;
   }
   // The left edge's swipe, from TriaViewController, on My Circle and Discover.
   // Not while Discover's mark is a back chevron (a search is open).
@@ -7125,6 +7135,13 @@
         scrim.querySelector('.sheet-items').addEventListener('click', (e) => {
           if (e.target.closest('.feed-side-find')) return close(() => go('#/discover'));
           if (e.target.closest('.feed-side-explore')) return close(() => goKept('#/circles'));
+          const fav = e.target.closest('.feed-side-fav');
+          if (fav) {
+            const c = Store.community(fav.dataset.circle) ||
+              Store.communities().find(x => String(x.id) === fav.dataset.circle);
+            if (c) syncFavBtn(fav, toggleFavCircle(c));
+            return;
+          }
           const head = e.target.closest('.feed-side-head');
           if (head) {
             const open = head.parentElement.classList.toggle('is-open');
@@ -18479,16 +18496,10 @@
        at half the finger's pace and
        stiffens past OPEN_AT, where "Open c/slug" inks, its chevron rises and
        a LIGHT haptic arms it; let go armed and it carries on up and away. */
-    // The bookmark rides the sheet's top right corner, signed in, where the
-    // page has it on its bar; the copy carried up to the page leaves it here.
+    // No bookmark here (Zoe, 2026-11-09: "save does not need to be on the
+    // circles sheets"): it is the page's bar and the sidebar's.
     const peekHtml = (nd) =>
-      `<div class="account community-head cx-peek">${communityHeadHtml(nd.c, true)}` +
-        (Store.session()
-          ? `<button class="cx-fav${isFavCircle(nd.c) ? ' is-fav' : ''}" type="button" ` +
-              `aria-pressed="${isFavCircle(nd.c)}" aria-label="${favLabel(isFavCircle(nd.c))}">` +
-              `${favBtnInner(isFavCircle(nd.c))}</button>`
-          : '') +
-      `</div>`;
+      `<div class="account community-head cx-peek">${communityHeadHtml(nd.c, true)}</div>`;
     function openPeek(i, kept) {
       const nd = nodes[i], c = nd.c;
       let scrimEl = null, panel = null;
@@ -18594,14 +18605,6 @@
           // the roster waits for this one to go). A link leaves the field.
           const q = (sel) => scrim.querySelector(sel);
           q('#community-join')?.addEventListener('click', () => { close(); joinHere(i); });
-          const fav = q('.cx-fav');
-          fav?.addEventListener('click', () => {
-            syncFavBtn(fav, toggleFavCircle(c));
-            if (!world.isConnected) return;
-            els[i].innerHTML = bubbleHtml(nd);
-            measureFace(i);
-            els[i].setAttribute('aria-label', labelOf(nd));
-          });
           // A member's pills, the page's own (Zoe, 2026-11-08): Post and Edit
           // leave the field in the tap; Invite waits for this sheet to go,
           // since sheets don't stack.
@@ -19511,7 +19514,6 @@
     if (!box.width) return;
     const clone = src.cloneNode(true);
     clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
-    clone.querySelector('.cx-fav')?.remove();   // the page has it on its bar
     clone.classList.add('head-morph');
     clone.setAttribute('aria-hidden', 'true');
     Object.assign(clone.style, {
@@ -19591,14 +19593,15 @@
       // already says the name in big serif.
       title: communityHandle(first),
       lock: !!first.inviteOnly,
-      // The bookmark, then the ••• (signed in: a favourite is a reader's).
-      actions: (Store.session()
+      // The •••, then the bookmark at the bar's end (Zoe, 2026-11-09: "swap
+      // save icon and glyph placement"; signed in, a favourite is a reader's).
+      actions: `<button class="toolbar-btn" type="button" id="community-more" aria-label="Circle options">` +
+        `${svgIcon('dots')}</button>` +
+        (Store.session()
           ? `<button class="toolbar-btn toolbar-fav${isFavCircle(first) ? ' is-fav' : ''}" type="button" id="community-fav" ` +
               `aria-pressed="${isFavCircle(first)}" aria-label="${favLabel(isFavCircle(first))}">` +
               `${favBtnInner(isFavCircle(first))}</button>`
-          : '') +
-        `<button class="toolbar-btn" type="button" id="community-more" aria-label="Circle options">` +
-        `${svgIcon('dots')}</button>`,
+          : ''),
     });
     view.innerHTML =
       `<section class="view view--community">` +

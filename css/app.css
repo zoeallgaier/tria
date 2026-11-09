@@ -12654,15 +12654,17 @@ body.circles-live .topbar--bare::before { opacity: 1; }
   user-select: none;
 }
 @media (min-width: 681px) { .cx-peek { padding-inline: 1.3rem; } }
-/* FAVOURITE CIRCLES: the bookmark on the sheet's top right corner (the page
-   has it on its bar), solid in --heart while it is one, as a pinned post's
-   pin is. The name keeps clear of it, on the page too, so its lines break
-   alike and the head carried up lands with no snap. */
-.cx-peek { position: relative; }
-.cx-fav {
+/* FAVOURITE CIRCLES: the bookmark at the end of a circle page's bar and of
+   every circle's row in the sidebar, solid in --heart while it is one, as a
+   pinned post's pin is. In the sidebar it is its own button over the row's
+   end; the row keeps clear of it, its check standing just before it. */
+.toolbar-fav.is-fav { color: var(--heart); }
+.feed-side-line { position: relative; }
+.feed-side-line > .feed-side-row { padding-right: 52px; }
+.feed-side-fav {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: 50%;
+  right: 12px;
   display: grid;
   place-items: center;
   width: 44px;
@@ -12671,12 +12673,12 @@ body.circles-live .topbar--bare::before { opacity: 1; }
   border: 0;
   background: none;
   color: var(--muted);
+  transform: translateY(-50%);
   -webkit-tap-highlight-color: transparent;
 }
-.cx-fav svg { width: 24px; height: 24px; }
-.cx-fav.is-fav, .toolbar-fav.is-fav { color: var(--heart); }
-.cx-fav:active svg { transform: scale(0.88); }
-.community-head .account-id { padding-right: 30px; }
+.feed-side-fav svg { width: 18px; height: 18px; transition: transform 0.12s var(--ease-soft); }
+.feed-side-fav.is-fav { color: var(--heart); }
+.feed-side-fav:active svg { transform: scale(0.86); }
 .cx-peek img { -webkit-user-drag: none; }
 /* The copy that flies from the sheet to the page (handHeadOver): fixed over
    everything, its corner its origin, and never in the way of a finger. */
