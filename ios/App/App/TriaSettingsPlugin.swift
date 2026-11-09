@@ -35,6 +35,7 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "musicApps", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "appIcon", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setAppIcon", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setPaper", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pageHead", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "playClip", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "prepareClip", returnType: CAPPluginReturnPromise),
@@ -339,6 +340,26 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
                 "name": UIApplication.shared.alternateIconName ?? "",
                 "supported": UIApplication.shared.supportsAlternateIcons
             ])
+        }
+    }
+
+    /// The page's paper (`stampPaper` in app.js): `lt` and `dk` hexes, or
+    /// neither for the neutral. Laid on the surfaces under the web view at
+    /// once, so an overscroll or a tab swipe never shows a seam, and kept for
+    /// the next launch only when it is the reader's OWN (`keep`): a friend's
+    /// profile wears their paper, and the app must not open on it tomorrow.
+    @objc func setPaper(_ call: CAPPluginCall) {
+        let lt = call.getString("lt") ?? "", dk = call.getString("dk") ?? ""
+        let keep = call.getBool("keep") ?? true
+        DispatchQueue.main.async {
+            let paper: [String: String]? = lt.isEmpty || dk.isEmpty ? nil : ["lt": lt, "dk": dk]
+            TriaViewController.paperHex = paper
+            if keep {
+                if let paper { UserDefaults.standard.set(paper, forKey: TriaViewController.paperKey) }
+                else { UserDefaults.standard.removeObject(forKey: TriaViewController.paperKey) }
+            }
+            (self.bridge?.viewController as? TriaViewController)?.repaper()
+            call.resolve()
         }
     }
 

@@ -66,10 +66,39 @@ class TriaViewController: CAPBridgeViewController {
     /// `traitCollectionDidChange` and can't drift out of step with the
     /// stylesheet's `prefers-color-scheme`. If the token ever changes, change it
     /// here too — these two literals are the copy.
-    static let paper = UIColor { traits in
+    ///
+    /// THE PAPER WEARS A COLOUR (2026-11-08): app.js tints `--bg` toward the
+    /// reader's colour (or the profile's on screen) and sends the two hexes
+    /// here (`TriaSettings.setPaper`); the reader's own is kept in
+    /// UserDefaults so the next launch opens on it before the page paints.
+    /// Nil is the neutral below. Read when a view takes its colour, so
+    /// `repaper()` reassigns every surface that holds it.
+    static let neutralPaper = UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.055, green: 0.063, blue: 0.071, alpha: 1)  // #0e1012
             : UIColor(red: 0.929, green: 0.933, blue: 0.941, alpha: 1)  // #edeef0
+    }
+    static let paperKey = "tria.paper"
+    static var paperHex: [String: String]? =
+        UserDefaults.standard.dictionary(forKey: paperKey) as? [String: String]
+    static var paper: UIColor {
+        guard let hex = paperHex,
+              let lt = hex["lt"].flatMap(colour), let dk = hex["dk"].flatMap(colour) else { return neutralPaper }
+        return UIColor { $0.userInterfaceStyle == .dark ? dk : lt }
+    }
+    private static func colour(_ raw: String) -> UIColor? {
+        let hex = raw.hasPrefix("#") ? String(raw.dropFirst()) : raw
+        guard hex.count == 6, let v = UInt32(hex, radix: 16) else { return nil }
+        return UIColor(red: CGFloat((v >> 16) & 0xff) / 255, green: CGFloat((v >> 8) & 0xff) / 255,
+                       blue: CGFloat(v & 0xff) / 255, alpha: 1)
+    }
+
+    /// Lay the current paper on the three surfaces that show it (see viewDidLoad).
+    func repaper() {
+        let paper = Self.paper
+        view.backgroundColor = paper
+        webView?.backgroundColor = paper
+        webView?.scrollView.backgroundColor = paper
     }
 
     override func viewDidLoad() {
@@ -148,9 +177,7 @@ class TriaViewController: CAPBridgeViewController {
         // overscroll gap, the web view shows through wherever the document
         // isn't opaque, and the controller's own view is what's on screen
         // before the first paint and during a rotation.
-        view.backgroundColor = Self.paper
-        webView?.backgroundColor = Self.paper
-        webView?.scrollView.backgroundColor = Self.paper
+        repaper()
     }
 
     fileprivate let sideEdge = UIScreenEdgePanGestureRecognizer()

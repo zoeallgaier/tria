@@ -6214,7 +6214,10 @@ button.poll-option:disabled { cursor: default; }
    go with a regular opacity layer"), FEATHERED on its open edge over
    --mv-feather (Zoe: "feather edges to smooth"), the feather added beyond
    what it covers so the words always sit on the full 82%. */
-.mv { --mv-veil: color-mix(in srgb, var(--bg) 82%, transparent); --mv-feather: 64px; }
+.mv { --mv-feather: 64px; }
+/* On the page, not the viewer: a page wears its poster's paper (.has-paper),
+   and the layer is that paper. */
+.mv-page { --mv-veil: color-mix(in srgb, var(--bg) 82%, transparent); }
 /* Under the face, on a picture 9:16 or taller only (`is-tall`, Zoe: "the top
    contrast doesn't need to be there unless the post is 9:16 or taller"):
    anything shorter never reaches the head. */

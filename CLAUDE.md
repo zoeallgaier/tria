@@ -21,6 +21,37 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## The paper wears a colour (2026-11-08)
+
+**`--bg`, `--surface`, `--surface-2` and `--rule` are a light or dark version
+of a colour** (Zoe: "users feeds and everything should be a light/dark
+version of their color choice"), the corner wash kept as it was. The maths
+is ONE file, **`js/paper.js`** (`TriaPaper.papers`), loaded by the page and
+required by `gen-alt-icons.js`: each neutral turned to the colour's OKLCH hue
+at a small fixed chroma (`SURFACES`) **and solved to the neutral's own WCAG
+luminance**, so every contrast measured on paper is unchanged. Chroma is even
+across hues (cards at 0.010, all that red, blue and violet reach near white)
+and reds and pinks give up to 12% back (`evenOut`), after an audit sheet of
+all ten in both schemes. The ink stays neutral. **Whose:** yours on every
+page; **someone else's profile, a circle's page (and its editor's live
+theme, `previewPaper`) and a Moment's page wear THEIRS** (Zoe: "adopt THEIR
+colors", "same for circles"; `paperSubject`; a Moment's page wears the tone
+of its own wash through `.has-paper`, `wearPaper`). The four tokens are
+`@property` colours on `:root, .has-paper`, so the page, cards and sheets
+ease together (`--dur-move`). **Background color** in Edit profile sits with
+App icon color at the top of the settings, both through `colourSheet` (the
+Theme sheet's grid, see-through); per device, `tria:paper`, My theme by
+default; None is the opt out and keeps every page neutral, others' included.
+Your own paper is kept for index.html's first paint (`tria:paper-css`) and,
+natively, in UserDefaults for the next launch (`TriaSettings.setPaper`,
+`keep`; a friend's paper is laid live but never kept). **The alternate app
+icons:** light is the colour itself as the ground (a 15 degree ramp) under a
+WHITE wordmark and rings (Zoe: "the full color punch and the logo white on
+top"), each colour deepened in OKLCH until white on it reaches 3:1
+(`TriaPaper.forWhite`, also the App icon picker's discs); dark is the
+colour's dark paper under the coloured wordmark (`fill-specializations`).
+Tria's own primary icon is still white.
+
 ## Explore circles is a field of discs (2026-11-07)
 
 **Discover leads with the Explore circles card** (Zoe: "a new card akin to

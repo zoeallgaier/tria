@@ -8410,6 +8410,11 @@
       tone.then((tone) => {
         if (mine !== pg.tint) return;
         const el = pg.el;
+        // The page's paper is the same colour as its wash, so a page is one
+        // colour story and never your paper under their glow; your None
+        // keeps it the page's own (neutral).
+        if (paperPick() === 'none') wearPaper(el, null, true);
+        else wearPaper(el, paperOfTone(tone));
         el.classList.remove('mv--wash', 'mv--tria');
         for (const k of 'abc') el.style.removeProperty('--wash-' + k);
         if (tone === 'none') return;
@@ -11363,27 +11368,13 @@
           // The first run keeps them all in the DOM, hidden, so every wire
           // below still finds its element and privacy saves as it stands.
           `<div class="pf-settings"${welcome ? ' hidden' : ''}>` +
-          `<div class="push-toggle-row">` +
-            `<span class="push-toggle-label" id="music-label">Open songs in</span>` +
-            `<button type="button" class="music-pick" id="music-pick" ` +
-              `aria-labelledby="music-label" aria-haspopup="menu">` +
-              `<span id="music-value">${esc(musicLabel())}</span>` +
-              svgIcon('chevron') +
-            `</button>` +
-          `</div>` +
-          // The home screen icon in any accent (Zoe, 2026-10-27), the app only:
-          // iOS can switch between icons built into the binary and nothing
-          // else (gen-alt-icons.js). Hidden until the plugin says it can.
-          (nativeShell()
-            ? `<div class="push-toggle-row" id="icon-row" hidden>` +
-                `<span class="push-toggle-label" id="icon-label">App icon color</span>` +
-                `<button type="button" class="music-pick" id="icon-pick" ` +
-                  `aria-labelledby="icon-label" aria-haspopup="menu">` +
-                  `<span id="icon-value">Tria</span>` +
-                  svgIcon('chevron') +
-                `</button>` +
-              `</div>`
-            : '') +
+          // Your colour, twice more, together under the Theme it follows
+          // (paintPaper, the APP ICON note): the background in every shell,
+          // the home screen icon in the app only, hidden until the plugin
+          // says it can (iOS switches only between icons in the binary).
+          settingRowHtml('paper', 'Background color', colourLabel(paperPick())) +
+          (nativeShell() ? settingRowHtml('icon', 'App icon color', 'My theme', true) : '') +
+          settingRowHtml('music', 'Open songs in', musicLabel()) +
           pushToggleHtml() +
           `<div class="push-toggle-row">` +
             `<span class="push-toggle-label" id="privacy-label">Private account</span>` +
@@ -11452,65 +11443,55 @@
       });
     });
 
-    // Tria's own, then the nine accents, each built as TriaAppIcon-<key>, and
-    // My theme, which follows the profile's (see APP ICON below). It commits
-    // on the tap like the songs row, and iOS says so in its own alert.
+    // Background color commits on the tap, under a see-through scrim, so the
+    // page is already wearing it as the sheet goes.
+    const paperValEl = view.querySelector('#paper-value');
+    view.querySelector('#paper-pick').addEventListener('click', () => colourSheet({
+      title: 'Background color',
+      now: paperPick(),
+      pick: (k) => {
+        setPaperPick(k);
+        paintPaper();
+        paperValEl.textContent = colourLabel(k);
+        hapticEvent('SELECT');
+      },
+    }));
+
+    // App icon color: Tria's own, the nine (each built as TriaAppIcon-<key>),
+    // None, and My theme, which follows the profile's (see APP ICON below).
+    // iOS says so in its own alert, so the switch waits for the sheet to go.
     const iconRow = view.querySelector('#icon-row');
     if (iconRow) {
       const iconValEl = view.querySelector('#icon-value');
-      const ICON_CHOICES = [{ key: '', label: 'Tria' }, { key: 'none', label: 'None' }]
-        .concat(ACCENTS.map(a => ({ key: a.key, label: a.label })));
-      const iconLabel = (key) => iconFollows() ? 'My theme'
-        : (ICON_CHOICES.find(c => c.key === key) || ICON_CHOICES[0]).label;
       let iconNow = '';
+      const iconKey = () => iconFollows() ? 'theme' : (iconNow || 'tria');
       window.Capacitor.nativePromise('TriaSettings', 'appIcon', {}).then((res) => {
         if (!res || !res.supported) return;
         iconNow = (res.name || '').replace(/^TriaAppIcon-/, '');
-        iconValEl.textContent = iconLabel(iconNow);
+        iconValEl.textContent = colourLabel(iconKey());
         iconRow.hidden = false;
       }, () => {});
-      const pickIcon = (key, follow) => {
+      const pickIcon = (key) => {
         const was = iconFollows();
+        const follow = key === 'theme';
         setIconFollows(follow);
-        (follow ? themeIconKey(Store.currentUser()).then(k => k || '') : Promise.resolve(key)).then(k =>
-          (k === iconNow ? Promise.resolve() : setAppIcon(k)).then(() => {
+        (follow ? themeIconKey(Store.currentUser()).then(k => k || '') : Promise.resolve(key === 'tria' ? '' : key))
+          .then(k => (k === iconNow ? Promise.resolve() : setAppIcon(k)).then(() => {
             iconNow = k;
-            iconValEl.textContent = iconLabel(k);
+            iconValEl.textContent = colourLabel(iconKey());
             hapticEvent('SELECT');
           }, () => { setIconFollows(was); toast('Couldn’t change the icon.'); }));
       };
-      // The Theme sheet's shape (Zoe: "use the same menu as the profile
-      // colors"): three sources over the nine, Tria, My theme (the early
-      // quartet in four blooms, since it is whichever you wear, themeWheel)
-      // and None, the
-      // black and white icon, struck through like the Theme sheet's None. A
-      // colour's disc is the icon's own band, deeper than the palette's for
-      // the light four (ICON_DEEPER).
-      view.querySelector('#icon-pick').addEventListener('click', () => {
-        const now = iconFollows() ? 'theme' : (iconNow || 'tria');
-        const head =
-          `<div class="swatches swatches--source" role="group" aria-label="Icon source">` +
-            swatchHtml({ key: 'tria', label: 'Tria', css: 'var(--brand-band)' }, now) +
-            swatchHtml({ key: 'theme', label: 'My theme', css: themeWheel() }, now) +
-            swatchHtml({ key: 'none', label: 'None' }, now) +
-          `</div>` +
-          `<div class="swatches" role="group" aria-label="Colors">` +
-            ICON_CHOICES.slice(2).map(c => swatchHtml({ key: c.key, label: c.label,
-              css: bandAround(cssToRgb(ICON_DEEPER[c.key] || accentCss(c.key))) }, now)).join('') +
-          `</div>`;
-        openSheet({
-          title: 'App icon color',
-          head,
-          wire: (scrim, close) => {
-            scrim.querySelectorAll('.swatch').forEach(btn =>
-              btn.addEventListener('click', () => {
-                const k = btn.dataset.accent;
-                if (k === now) { close(); return; }
-                close(() => pickIcon(k === 'tria' || k === 'theme' ? '' : k, k === 'theme'));
-              }));
-          },
-        });
-      });
+      // A colour's disc is the light icon's own ground: the palette hex
+      // deepened until its white wordmark reads (TriaPaper.forWhite, the
+      // generator's own call), so the disc is the icon.
+      view.querySelector('#icon-pick').addEventListener('click', () => colourSheet({
+        title: 'App icon color',
+        now: iconKey(),
+        disc: (k) => bandAround(cssToRgb(TriaPaper.forWhite(accentCss(k)))),
+        afterClose: true,
+        pick: pickIcon,
+      }));
     }
 
     // A plain UI switch — it holds its state until Save commits it alongside the
@@ -11673,6 +11654,7 @@
         Store.updateAvatar(shot).then(r => {
           if (!r.ok) { toast(r.error); return; }
           syncThemeIcon();
+          paintBrandBand();   // the band and the paper, off the photo now stored
           if (view.contains(face)) paintWash(Store.currentUser(), 'profile');
         });
         paintWash(Store.currentUser(), 'profile');
@@ -11759,6 +11741,7 @@
         leave();
         if (pendingAvatar) pendingAvatar.then(r => {
           if (!r.ok) { revertedAvatar(); toast(r.error); } else syncThemeIcon();
+          paintBrandBand();   // a photo theme's band and paper follow the face, or its revert
         });
       } finally {
         pfSave.disabled = false;
@@ -13567,6 +13550,48 @@
     });
   }
 
+  /* THE COLOUR SETTINGS, one shape. Background color and App icon color
+     are both "which colour, or follow my Theme", so they share the Theme
+     sheet's grid (Zoe: "use the same menu as the profile colors"): three
+     sources, Tria, My theme (whichever you wear, so the early quartet in four
+     blooms, themeWheel) and None, struck through, over the nine, each disc
+     the band it stands for. A tap commits and closes; `afterClose` waits for
+     the sheet to go (the icon, whose iOS alert would land on it). */
+  const COLOUR_SOURCES = { tria: 'Tria', theme: 'My theme', none: 'None' };
+  const colourLabel = (k) => COLOUR_SOURCES[k] || (accentOf(k) || {}).label || 'My theme';
+  function colourSheet({ title, now, pick, disc = accentBand, afterClose = false }) {
+    const swatch = (key, css) => swatchHtml({ key, label: colourLabel(key), css }, now);
+    openSheet({
+      title,
+      scrimClass: 'sheet-scrim--see-through',
+      head:
+        `<div class="swatches swatches--source" role="group" aria-label="${esc(title)} source">` +
+          swatch('tria', 'var(--brand-band)') + swatch('theme', themeWheel()) + swatch('none') +
+        `</div>` +
+        `<div class="swatches" role="group" aria-label="Colors">` +
+          ACCENTS.map(a => swatch(a.key, disc(a.key))).join('') +
+        `</div>`,
+      wire: (scrim, close) => scrim.querySelectorAll('.swatch').forEach(btn =>
+        btn.addEventListener('click', () => {
+          const k = btn.dataset.accent;
+          if (k === now) return close();
+          if (afterClose) return close(() => pick(k));
+          pick(k);
+          close();
+        })),
+    });
+  }
+  // A settings row that opens a picker: its label, the value, a chevron.
+  const settingRowHtml = (id, label, value, hidden = false) =>
+    `<div class="push-toggle-row" id="${id}-row"${hidden ? ' hidden' : ''}>` +
+      `<span class="push-toggle-label" id="${id}-label">${esc(label)}</span>` +
+      `<button type="button" class="music-pick" id="${id}-pick" ` +
+        `aria-labelledby="${id}-label ${id}-value" aria-haspopup="dialog">` +
+        `<span id="${id}-value">${esc(value)}</span>` +
+        svgIcon('chevron') +
+      `</button>` +
+    `</div>`;
+
   // One swatch of the colour picker; the App icon color sheet draws the same.
   const swatchHtml = (src, current) =>
     `<button class="swatch${src.key === current ? ' is-on' : ''}" type="button" ` +
@@ -13584,8 +13609,8 @@
      syncThemeIcon runs once the real world lands, after a theme change and
      after a new photo. iOS's "You have changed the icon" alert comes with any
      switch, the launch's too, and no public API holds it back. The nine icons are
-     gen-alt-icons.js's; the light four are deeper there, and ICON_DEEPER
-     is its DEEPER by hand so the picker's discs match. */
+     gen-alt-icons.js's: on the light icon the colour is the ground under a
+     white wordmark, on the dark its paper under the coloured one. */
   const ICON_FOLLOW_KEY = 'tria:icon-theme';
   // My theme's disc: the early days' quartet (Zoe, 2026-10-27), 1.3's
   // brand band before 2.0's rebrand, its four stops as they were painted
@@ -13603,7 +13628,6 @@
       `radial-gradient(circle at 10% 88%, ${o} 0%, transparent 80%), ` +
       `conic-gradient(${oklch ? 'in oklch ' : ''}from 315deg, ${l}, ${b} 25%, ${g} 50%, ${o} 75%, ${l})`;
   };
-  const ICON_DEEPER = { amber: '#e5a000', lime: '#7fbf1f', jade: '#2bc77a', cyan: '#14c3d4' };
   const iconFollows = () => {
     try { return localStorage.getItem(ICON_FOLLOW_KEY) !== '0'; } catch { return false; }
   };
@@ -20204,7 +20228,10 @@
 
     // The page behind the form wears the theme as it is picked, and the Theme
     // pill's dot is the colour (it reads the wash's --glow-photo).
-    const syncTheme = () => paintWash({ accent: themePick, avatar: faceNow() }, 'profile');
+    const syncTheme = () => {
+      paintWash({ accent: themePick, avatar: faceNow() }, 'profile');
+      previewPaper({ accent: themePick || (faceNow() ? null : 'default'), avatar: faceNow() });
+    };
     themeBtn?.addEventListener('click', () => openAccentSheet({ accent: themePick, avatar: faceNow() }, (key) => {
       themePick = key === 'auto' ? null : key;
       syncTheme();
@@ -28303,6 +28330,7 @@
   let bandSeq = 0;
   const SPLASH_KEY = 'tria:splash';   // read by the inline script under #splash in index.html
   function paintBrandBand() {
+    paintPaper();   // the same reader's colour on the paper, memoised on its own key
     const me = Store.isAuthed() ? Store.currentUser() : null;
     // A pin of this same photo is the same answer as 'auto', so pinning never
     // repaints (a stale pin, another photo's, still keys apart).
@@ -28429,6 +28457,128 @@
     photoTone(me).then(rgb => set(rgb || null));
   }
 
+  /* ── THE PAPER WEARS A COLOUR (Zoe, 2026-11-08) ────────────────────────────
+     "users feeds and everything should be a light/dark version of their color
+     choice", the wash's punch in a profile's corner kept. The paper, the
+     raised surfaces and the hairlines (--bg, --surface, --surface-2, --rule)
+     are the neutrals turned toward a colour's hue, by js/paper.js (which says
+     why every contrast holds and no hue shouts).
+
+     WHOSE: yours, on every page, as the buttons' band is; but someone else's
+     profile, a circle's page and a Moment wear THEIRS (Zoe: "If I go to
+     someone elses profile, it should adopt THEIR colors", "same for
+     circles"), read as their wash reads it (personTone).
+
+     Background color, in Edit profile, is the reader's say, per device like
+     the icon: My theme (the default), Tria, None, or one of the nine. None is
+     the opt out, so it keeps every page neutral, theirs included. Your own
+     paper is kept for index.html's first paint (PAPER_KEEP) and for native's
+     next launch; native also lays the live one under the web view
+     (TriaSettings.setPaper), so an overscroll or a tab swipe shows no seam. */
+  const PAPER_PICK = 'tria:paper';
+  const PAPER_KEEP = 'tria:paper-css';
+  const paperPick = () => {
+    try { return localStorage.getItem(PAPER_PICK) || 'theme'; } catch { return 'theme'; }
+  };
+  const setPaperPick = (k) => {
+    try { if (k === 'theme') localStorage.removeItem(PAPER_PICK); else localStorage.setItem(PAPER_PICK, k); } catch {}
+  };
+  // Every custom property a paper is carried in, --user-<surface>-<lt|dk>.
+  const PAPER_PROPS = window.TriaPaper
+    ? ['lt', 'dk'].flatMap(s => Object.keys(TriaPaper.SURFACES[s]).map(k => `--user-${k}-${s}`)) : [];
+  // A tone (personTone's answer, or a hex) to those properties, or null for
+  // the neutral (None, or a colour with no hue to lend).
+  function paperOfTone(tone) {
+    const rgb = tone === 'tria' ? TriaPaper.TRIA : tone === 'none' ? null : cssToRgb(tone);
+    const p = rgb && window.TriaPaper && TriaPaper.papers(rgb);
+    if (!p) return null;
+    const out = {};
+    for (const s of ['lt', 'dk']) for (const k in p[s]) out[`--user-${k}-${s}`] = p[s][k];
+    return out;
+  }
+  /* Wear a paper on an element: <html> for the page, or a subtree (a
+     Moment's page) that re-declares the four tokens off its own copies
+     (.has-paper in tokens.css). null is the neutral, which on a subtree has
+     to be said (`initial`, the token's fallback), or it would inherit the
+     page's; `inherit` takes the subtree back to the page's own. */
+  function wearPaper(el, paper, inherit = false) {
+    const root = el === document.documentElement;
+    for (const k of PAPER_PROPS) {
+      if (paper) el.style.setProperty(k, paper[k]);
+      else if (root || inherit) el.style.removeProperty(k);
+      else el.style.setProperty(k, 'initial');
+    }
+    if (!root) el.classList.toggle('has-paper', !inherit);
+  }
+  // The tone the PAGE's paper takes: your pick, or `who`'s own colour.
+  function paperTone(pick, who) {
+    if (!who || pick === 'none') return Promise.resolve('none');
+    if (pick === 'tria') return Promise.resolve('tria');
+    if (accentOf(pick)) return Promise.resolve(accentOf(pick).hex);
+    return personTone(who).catch(() => 'tria');
+  }
+  // Whose paper the page is in: someone else's profile, a circle, or (null)
+  // yours. A circle's editor holds the theme being picked for its own route
+  // (previewPaper), so leaving lets it go.
+  let paperHeld = null;
+  function previewPaper(look) {
+    paperHeld = { path: routePath(), look: { id: 'c:edit', ...look } };
+    paintPaper();
+  }
+  function paperSubject() {
+    const path = routePath();
+    if (paperHeld && paperHeld.path === path) return paperHeld.look;
+    paperHeld = null;
+    if (path.startsWith('#/c/')) {
+      const slug = decodeURIComponent(path.slice(4).split('/')[0]);
+      if (slug === 'new') return { id: 'c:new', accent: 'default' };   // Tria's, as its wash
+      const c = Store.community(slug);
+      return c ? { id: 'c' + c.id, accent: c.accent, avatar: c.avatar } : null;
+    }
+    if (!path.startsWith('#/u/')) return null;
+    const u = Store.user(decodeURIComponent(path.slice(4)));
+    return u && u.id !== Store.currentUser()?.id ? u : null;
+  }
+  const routePath = () => (location.hash || '#/').split('?')[0];
+  // Memoised on everything that decides the answer, so route() and
+  // applyAmbient can both call it for free.
+  let paperKey = null;
+  let paperSeq = 0;
+  function paintPaper() {
+    const me = Store.isAuthed() ? Store.currentUser() : null;
+    const pick = paperPick();
+    const them = me && pick !== 'none' ? paperSubject() : null;
+    const who = them || me;
+    const key = who ? [me.id, pick, who.id, who.accent, who.avatar].join(':') : 'out';
+    if (key === paperKey) return;
+    paperKey = key;
+    const seq = ++paperSeq;
+    paperTone(them ? 'theme' : pick, who).then((tone) => {
+      if (seq === paperSeq) stampPaper(paperOfTone(tone), !them);
+    });
+  }
+  function stampPaper(paper, mine) {
+    wearPaper(document.documentElement, paper);
+    if (mine) {
+      try {
+        if (paper) localStorage.setItem(PAPER_KEEP, JSON.stringify(paper));
+        else localStorage.removeItem(PAPER_KEEP);
+      } catch {}
+    }
+    // The browser's own chrome (Safari's bars, an installed web app's status bar).
+    const lt = paper ? paper['--user-bg-lt'] : '';
+    const dk = paper ? paper['--user-bg-dk'] : '';
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+      const dark = /dark/.test(m.getAttribute('media') || '');
+      m.setAttribute('content', (dark ? dk : lt) || (dark ? '#0e1012' : '#edeef0'));
+    });
+    // An older binary has no setPaper; its overscroll stays neutral.
+    if (nativeShell()) {
+      Promise.resolve(window.Capacitor.nativePromise('TriaSettings', 'setPaper', { lt, dk, keep: mine }))
+        .catch(() => {});
+    }
+  }
+
   // A person's colour: a palette pick if they made one, otherwise sampled from
   // their photo. It lights the full-screen .ambient wash on their profile and on
   // Edit profile, and rides along as --glow-photo because the colour ring badge
@@ -28515,6 +28665,7 @@
 
   function applyAmbient(path) {
     const body = document.body;
+    paintPaper();   // a profile's paper is its owner's (memoised, so free on a repaint)
     if (path === '#/profile/edit' || path === '#/welcome') { paintWash(Store.currentUser(), 'profile'); return; }
     let user = null;
     if (path.startsWith('#/u/')) user = Store.user(decodeURIComponent(path.slice(4)));

@@ -1390,6 +1390,7 @@ final class TriaPager: NSObject, TriaPagerControl, UIGestureRecognizerDelegate {
         let index = routes.firstIndex(of: route) ?? 0
         let style = host.traitCollection.userInterfaceStyle
         curtain.frame = host.bounds
+        curtain.backgroundColor = TriaViewController.paper   // the reader's, as it is now
         host.insertSubview(curtain, aboveSubview: web.scrollView)
         // A page that opens at its top only ever has a picture of its top, so one
         // picked up halfway down is carried but not kept.

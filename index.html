@@ -103,9 +103,17 @@
        first paint is already on-brand paper/ink. Keep these hexes in sync with
        --bg in css/tokens.css. -->
   <meta name="color-scheme" content="light dark" />
+  <!-- The reader's tinted paper, as paintPaper last stamped it (tria:paper-css,
+       PAPER_KEEP in app.js), so a returning reader opens on their own colour. -->
+  <script>
+    try {
+      var pp = JSON.parse(localStorage.getItem('tria:paper-css') || 'null');
+      if (pp) for (var pk in pp) document.documentElement.style.setProperty(pk, pp[pk]);
+    } catch (e) {}
+  </script>
   <style>
-    html { background: #edeef0; }
-    @media (prefers-color-scheme: dark) { html { background: #0e1012; } }
+    html { background: var(--user-bg-lt, #edeef0); }
+    @media (prefers-color-scheme: dark) { html { background: var(--user-bg-dk, #0e1012); } }
   </style>
 
   <!-- Installable web app (bookmark / add-to-home-screen), and the tab's
@@ -126,9 +134,9 @@
        and the maskable narrower (66%) because a wordmark's DIAGONAL is what has
        to clear Android's 80% safe circle. -->
   <link rel="manifest" href="site.webmanifest" />
-  <link rel="icon" href="icons/icon-32.png?v=1204" sizes="32x32" type="image/png" />
-  <link rel="icon" href="icons/icon-192.png?v=1204" sizes="192x192" type="image/png" />
-  <link rel="apple-touch-icon" href="icons/icon-180.png?v=1204" />
+  <link rel="icon" href="icons/icon-32.png?v=1209" sizes="32x32" type="image/png" />
+  <link rel="icon" href="icons/icon-192.png?v=1209" sizes="192x192" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png?v=1209" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tria" />
@@ -157,8 +165,8 @@
   <!-- The ?v= stamp busts HTTP caches on deploy AND drives the self-updater in
        app.js (it refetches this file and reloads when the stamp changes).
        BUMP THE SAME NUMBER ON EVERY LINE whenever any css/js file changes. -->
-  <link rel="stylesheet" href="css/tokens.css?v=1204" />
-  <link rel="stylesheet" href="css/app.css?v=1204" />
+  <link rel="stylesheet" href="css/tokens.css?v=1209" />
+  <link rel="stylesheet" href="css/app.css?v=1209" />
 </head>
 
 <body>
@@ -251,14 +259,15 @@
        Local also PINS the version: the old src said `@2`, so any minor release
        shipped itself into production without a deploy. Update deliberately —
        drop a new file in, change this line, bump. -->
-  <script src="js/vendor/supabase-js-2.110.9.min.js?v=1204"></script>
-  <script src="js/vendor/qr.js?v=1204"></script>
+  <script src="js/vendor/supabase-js-2.110.9.min.js?v=1209"></script>
+  <script src="js/vendor/qr.js?v=1209"></script>
   <!-- Ahead of app.js, which reads `window.StoryCard` to decide whether to
        offer the card row at all. -->
-  <script src="js/storycard.js?v=1204"></script>
-  <script src="js/config.js?v=1204"></script>
-  <script src="js/store.js?v=1204"></script>
-  <script src="js/app.js?v=1204"></script>
+  <script src="js/storycard.js?v=1209"></script>
+  <script src="js/config.js?v=1209"></script>
+  <script src="js/paper.js?v=1209"></script>
+  <script src="js/store.js?v=1209"></script>
+  <script src="js/app.js?v=1209"></script>
 </body>
 
 </html>

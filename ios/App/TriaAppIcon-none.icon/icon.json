@@ -1,8 +1,5 @@
 {
   "color-space-for-untagged-svg-colors": "display-p3",
-  "fill": {
-    "solid": "gray:1.00000,1.00000"
-  },
   "groups": [
     {
       "layers": [
@@ -21,7 +18,7 @@
           "fill-specializations": [
             {
               "value": {
-                "solid": "srgb:0.10588,0.12157,0.14118,1.00000"
+                "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
               }
             },
             {
@@ -45,10 +42,7 @@
           "fill-specializations": [
             {
               "value": {
-                "linear-gradient": [
-                  "srgb:0.23137,0.25490,0.27843,1.00000",
-                  "srgb:0.10588,0.12157,0.14118,1.00000"
-                ]
+                "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
               }
             },
             {
@@ -57,7 +51,17 @@
                 "linear-gradient": [
                   "srgb:0.96078,0.96471,0.97255,1.00000",
                   "srgb:0.83529,0.84706,0.86667,1.00000"
-                ]
+                ],
+                "orientation": {
+                  "start": {
+                    "x": 0.5000000000000001,
+                    "y": 0
+                  },
+                  "stop": {
+                    "x": 0,
+                    "y": 1
+                  }
+                }
               }
             }
           ]
@@ -75,5 +79,31 @@
   ],
   "supported-platforms": {
     "squares": "shared"
-  }
+  },
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "srgb:0.23137,0.25490,0.27843,1.00000",
+          "srgb:0.10588,0.12157,0.14118,1.00000"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.5,
+            "y": 0
+          },
+          "stop": {
+            "x": 0.5,
+            "y": 1
+          }
+        }
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "solid": "srgb:0.05490,0.06275,0.07059,1.00000"
+      }
+    }
+  ]
 }

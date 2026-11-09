@@ -1,15 +1,9 @@
 {
   "color-space-for-untagged-svg-colors": "display-p3",
-  "fill": {
-    "solid": "gray:1.00000,1.00000"
-  },
   "groups": [
     {
       "layers": [
         {
-          "fill": {
-            "solid": "srgb:0.93725,0.41961,0.74902,1.00000"
-          },
           "glass": false,
           "image-name": "Image 10.png",
           "name": "Image 10",
@@ -20,25 +14,22 @@
               351,
               313
             ]
-          }
-        },
-        {
-          "fill": {
-            "linear-gradient": [
-              "srgb:0.93725,0.41961,0.68431,1.00000",
-              "srgb:0.93725,0.41961,0.81373,1.00000"
-            ],
-            "orientation": {
-              "start": {
-                "x": 0.5000000000000001,
-                "y": 0
-              },
-              "stop": {
-                "x": 0,
-                "y": 1
+          },
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.93725,0.41961,0.74902,1.00000"
               }
             }
-          },
+          ]
+        },
+        {
           "image-name": "Image 5.png",
           "name": "Image 5",
           "position": {
@@ -47,7 +38,33 @@
               10,
               -42
             ]
-          }
+          },
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "linear-gradient": [
+                  "srgb:0.93725,0.41961,0.68431,1.00000",
+                  "srgb:0.93725,0.41961,0.81373,1.00000"
+                ],
+                "orientation": {
+                  "start": {
+                    "x": 0.5000000000000001,
+                    "y": 0
+                  },
+                  "stop": {
+                    "x": 0,
+                    "y": 1
+                  }
+                }
+              }
+            }
+          ]
         }
       ],
       "shadow": {
@@ -62,5 +79,31 @@
   ],
   "supported-platforms": {
     "squares": "shared"
-  }
+  },
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "srgb:0.90980,0.39608,0.66127,1.00000",
+          "srgb:0.90980,0.39608,0.78971,1.00000"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.5,
+            "y": 0
+          },
+          "stop": {
+            "x": 0.5,
+            "y": 1
+          }
+        }
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "solid": "srgb:0.08235,0.05490,0.07059,1.00000"
+      }
+    }
+  ]
 }

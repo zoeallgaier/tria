@@ -12,12 +12,26 @@
 // Everything else, the glass, the shadow, the layout, is the original's, so
 // redraw TriaAppIcon.icon and run this again.
 //
+// LIGHT IS THE COLOUR, DARK IS ITS PAPER (Zoe, 2026-11-08: "the background
+// on light mode the full color punch and the logo white on top"), each an
+// appearance specialization:
+// - LIGHT: the background is the colour itself, as the same 15 degree ramp,
+//   and the wordmark and rings are white. A light colour is deepened in
+//   OKLCH, hue kept, until white on it reaches 3:1, WCAG's floor for a large
+//   mark (`forWhite` in js/paper.js): amber goes gold, lime grass, jade and
+//   cyan a shade deeper; ruby, ocean and indigo are already there and keep
+//   their punch.
+// - DARK: the colour's dark paper, from js/paper.js, the file the app tints
+//   its pages with, under the coloured wordmark and rings.
+// None is the neutral ramp under white on light, and its paper on dark.
+//
 // The keys and hexes are ACCENTS in js/app.js, written out by hand; so is the
 // name each icon is built under (TriaAppIcon-<key>), which app.js sends to
 // TriaSettings.setAppIcon and the project lists under
 // ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES.
 const fs = require('fs');
 const path = require('path');
+const { papers, forWhite, SURFACES } = require('./js/paper.js');
 
 const DIR = path.join(__dirname, 'ios/App');
 const SRC = path.join(DIR, 'TriaAppIcon.icon');
@@ -33,10 +47,9 @@ const ACCENTS = [
   ['ocean',    '#367df8'],
   ['lavender', '#8564e8'],
 ];
-// The light four are deepened ON THE ICON only (Zoe, 2026-10-27: "yellow is
-// pretty tough to read"): on the icon's white the palette's pastel amber and
-// lime washed out, and jade and cyan nearly did. Amber leans gold. The
-// profile colours themselves are untouched.
+// The light four are deepened for the DARK icon's wordmark (Zoe, 2026-10-27:
+// "yellow is pretty tough to read", on what was then a white icon). The
+// light icon's background deepens by contrast instead (forWhite).
 const DEEPER = {
   amber: '#e5a000',
   lime:  '#7fbf1f',
@@ -79,13 +92,22 @@ const turn = (rgb, deg) => {
 };
 const color = (rgb) => 'srgb:' + rgb.map(v => v.toFixed(5)).join(',') + ',1.00000';
 
+const WHITE = color([1, 1, 1]);
+const solid = (hex) => ({ solid: color(hexRgb(hex)) });
+const rampAround = (rgb) => ({ 'linear-gradient': [color(turn(rgb, ARC)), color(turn(rgb, -ARC))] });
+// Light and dark, as one appearance-specialized fill.
+const byLook = (light, dark) => [{ value: light }, { appearance: 'dark', value: dark }];
+const darkPaper = (hex) => solid(hex ? papers(hex).dk.bg : SURFACES.dk.bg[0]);
+// The light ground's ramp runs down the icon, the higher hue at the top.
+const GROUND_ORIENT = { start: { x: 0.5, y: 0 }, stop: { x: 0.5, y: 1 } };
+
 const icon = JSON.parse(fs.readFileSync(path.join(SRC, 'icon.json'), 'utf8'));
 
-// NONE is no colour: the neutral, --mono-band's ends, dark on the light icon
-// and light on the dark one (an appearance specialization), the way the theme
-// None wears the paper's opposite.
+// NONE is no colour: the neutral, --mono-band's ends: the deep one under
+// white on the light icon, and the light one as the wordmark on the dark,
+// the way the theme None wears the paper's opposite.
 const MONO = { light: ['#3b4147', '#1b1f24'], dark: ['#f5f6f8', '#d5d8dd'] };
-const ramp = (pair) => ({ 'linear-gradient': pair.map(h => color(hexRgb(h))) });
+const rampOf = (pair) => ({ 'linear-gradient': pair.map(h => color(hexRgb(h))) });
 const write = (key, out) => {
   const dest = path.join(DIR, `TriaAppIcon-${key}.icon`);
   fs.rmSync(dest, { recursive: true, force: true });
@@ -95,17 +117,19 @@ const write = (key, out) => {
 };
 
 for (const [key, hex] of ACCENTS) {
-  const rgb = hexRgb(DEEPER[key] || hex);
+  const mark = hexRgb(DEEPER[key] || hex);           // the dark icon's wordmark
+  const ground = hexRgb(forWhite(hex));              // the light icon's background
   const out = JSON.parse(JSON.stringify(icon));
   for (const group of out.groups) {
     for (const layer of group.layers) {
-      if (layer.fill && layer.fill['linear-gradient']) {
-        layer.fill['linear-gradient'] = [color(turn(rgb, ARC)), color(turn(rgb, -ARC))];
-      } else if (layer.fill && layer.fill.solid) {
-        layer.fill.solid = color(rgb);
-      }
+      if (!layer.fill) continue;
+      const dark = layer.fill['linear-gradient'] ? { ...layer.fill, ...rampAround(mark) } : { solid: color(mark) };
+      delete layer.fill;
+      layer['fill-specializations'] = byLook({ solid: WHITE }, dark);
     }
   }
+  delete out.fill;
+  out['fill-specializations'] = byLook({ ...rampAround(ground), orientation: GROUND_ORIENT }, darkPaper(hex));
   write(key, out);
 }
 
@@ -115,13 +139,12 @@ for (const [key, hex] of ACCENTS) {
     for (const layer of group.layers) {
       if (!layer.fill) continue;
       const grad = !!layer.fill['linear-gradient'];
-      const tone = (mode) => grad ? ramp(MONO[mode]) : { solid: color(hexRgb(MONO[mode][1])) };
+      const dark = grad ? { ...layer.fill, ...rampOf(MONO.dark) } : { solid: color(hexRgb(MONO.dark[1])) };
       delete layer.fill;
-      layer['fill-specializations'] = [
-        { value: tone('light') },
-        { appearance: 'dark', value: tone('dark') },
-      ];
+      layer['fill-specializations'] = byLook({ solid: WHITE }, dark);
     }
   }
+  delete out.fill;
+  out['fill-specializations'] = byLook({ ...rampOf(MONO.light), orientation: GROUND_ORIENT }, darkPaper(null));
   write('none', out);
 }

@@ -80,13 +80,12 @@
 }
 
 :root {
-  /* Neutrals — cool off-white, deep cool off-black. The whole UI lives here. */
-  --bg:        #edeef0;   /* cool paper */
-  --surface:   #f6f7f8;   /* barely-lifted panels (sidebar, chips) */
-  --surface-2: #e6e8ea;
+  /* Neutrals — cool off-white, deep cool off-black. The whole UI lives here.
+     The four papers (--bg, --surface, --surface-2, --rule) are THE PAPER,
+     below this block. The ink stays neutral on purpose: tinted words are
+     where a theme stops being clean. */
   --text:      #14171a;   /* deep, slightly cool off-black */
   --muted:     #5c636b;
-  --rule:      #dadde1;   /* hairlines */
 
   /* Action accent — kept monochrome (ink). Publish button, active nav, the All
      filter, links. The only chromatic color is the brand, below. */
@@ -495,6 +494,49 @@
   color-scheme: light;
 }
 
+/* ── THE PAPER (2026-11-08) ──────────────────────────────────────────────────
+   The page, its raised panels and its hairlines, in a colour: a light or dark
+   version of the reader's (Zoe: "users feeds and everything should be a
+   light/dark version of their color choice"), or of the person or circle on
+   screen. paintPaper in app.js stamps --user-<paper>-lt / -dk, each the
+   neutral fallback here turned toward a hue at the SAME WCAG luminance
+   (js/paper.js), so every ratio in this file holds unchanged. Nothing
+   stamped (None, the gate) is the neutral.
+
+   `.has-paper` is a subtree in a paper of its own (a Moment's page wears its
+   poster's): it re-declares the four off ITS copies of the stamps.
+
+   REGISTERED, so they ease: going from your paper to a friend's profile, the
+   page, every card and every sheet tween together (an unregistered token
+   would snap the cards while the page's own background eased). Inherited
+   registered colours cost a style pass per frame of the tween, 0.36s, once
+   per change of colour. iOS 15 has no @property and simply cuts. */
+@property --bg        { syntax: '<color>'; inherits: true; initial-value: #edeef0; }
+@property --surface   { syntax: '<color>'; inherits: true; initial-value: #f6f7f8; }
+@property --surface-2 { syntax: '<color>'; inherits: true; initial-value: #e6e8ea; }
+@property --rule      { syntax: '<color>'; inherits: true; initial-value: #dadde1; }
+:root, .has-paper {
+  --bg:        var(--user-bg-lt, #edeef0);          /* cool paper */
+  --surface:   var(--user-surface-lt, #f6f7f8);     /* barely-lifted panels (sidebar, chips) */
+  --surface-2: var(--user-surface-2-lt, #e6e8ea);
+  --rule:      var(--user-rule-lt, #dadde1);        /* hairlines */
+}
+@media (prefers-color-scheme: dark) {
+  :root, .has-paper {
+    --bg:        var(--user-bg-dk, #0e1012);
+    --surface:   var(--user-surface-dk, #171a1d);
+    --surface-2: var(--user-surface-2-dk, #1f2327);
+    --rule:      var(--user-rule-dk, #272c30);
+  }
+}
+:root, .has-paper {
+  transition: --bg var(--dur-move) var(--ease-soft), --surface var(--dur-move) var(--ease-soft),
+    --surface-2 var(--dur-move) var(--ease-soft), --rule var(--dur-move) var(--ease-soft);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root, .has-paper { transition: none; }
+}
+
 /* Where linear() easing exists (Safari 17.2+ / modern engines), --spring becomes
    a sampled underdamped spring: ~10% overshoot, a whisper of settle. A bezier
    can only overshoot once; this is what makes releases feel physical. */
@@ -535,12 +577,8 @@
 /* ── Dark mode — deep cool black, cool off-white ink. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg:        #0e1012;
-    --surface:   #171a1d;
-    --surface-2: #1f2327;
     --text:      #e9ebed;
     --muted:     #969ca3;
-    --rule:      #272c30;
 
     --accent:       var(--text);
     --accent-press: color-mix(in srgb, var(--text) 84%, var(--muted));
