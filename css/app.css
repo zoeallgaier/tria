@@ -1734,7 +1734,7 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
   flex-shrink: 0;
   margin-left: auto;
 }
-.masthead .type-indicator { width: 2.15rem; height: 2.15rem; }
+.masthead .type-indicator { width: 2.6rem; height: 2.6rem; }
 @keyframes type-pop {
   0%   { transform: scale(0.55) rotate(-14deg); opacity: 0; }
   55%  { transform: scale(1.14) rotate(3deg);   opacity: 1; }
