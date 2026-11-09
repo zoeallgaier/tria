@@ -6312,11 +6312,12 @@ button.poll-option:disabled { cursor: default; }
   padding: 14px calc(var(--mv-side) + var(--mv-lane)) 0 var(--mv-side);
 }
 /* At the foot: under a long caption, under any caption on a 9:16 or taller
-   picture, and on one with no words, under Reply alone. It runs on under
-   Reply to the screen's edge, so it never stops in a slab above it, and
-   feathers up from the caption's top. */
-.mv-frame--pic.is-tall:not(.has-words) .mv-media::before,
-.mv-frame--pic.is-tall .mv-caption::before,
+   picture or on any picture drawn down past the caption's top (`is-under`,
+   measured in app.js), and on one with no words, under Reply alone. It runs
+   on under Reply to the screen's edge, so it never stops in a slab above it,
+   and feathers up from the caption's top. */
+.mv-frame--pic:is(.is-tall, .is-under):not(.has-words) .mv-media::before,
+.mv-frame--pic:is(.is-tall, .is-under) .mv-caption::before,
 .mv-caption.is-cut::before {
   content: '';
   position: absolute;
@@ -6327,12 +6328,12 @@ button.poll-option:disabled { cursor: default; }
     color-mix(in srgb, var(--bg) 10%, transparent) calc(100% - var(--mv-feather) * 0.18),
     transparent);
 }
-.mv-frame--pic.is-tall:not(.has-words) .mv-media::before {
+.mv-frame--pic:is(.is-tall, .is-under):not(.has-words) .mv-media::before {
   inset: auto 0 0;
   height: calc(var(--mv-base) + var(--mv-feather));
   z-index: 1;
 }
-.mv-frame--pic.is-tall .mv-caption::before,
+.mv-frame--pic:is(.is-tall, .is-under) .mv-caption::before,
 .mv-caption.is-cut::before {
   inset: calc(-1 * var(--mv-feather)) 0 calc(-1 * var(--mv-base));
   z-index: -1;

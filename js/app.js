@@ -8611,6 +8611,21 @@
           fr.classList.toggle('is-tall', ext || h / w >= 1.77);
           pg.el.classList.toggle('is-ext', ext);
           if (ext) momentExtend(pic);
+          else requestAnimationFrame(() => reachesFoot(w, h));
+        };
+        // A shorter picture can still run down under its caption (a 3:4
+        // selfie with a headline and two lines), so the foot's layer is read
+        // off where the picture is really drawn, not off its shape
+        // (`is-under`): contained in the media box, does its foot pass the
+        // caption's top, or Reply's with no words?
+        const reachesFoot = (w, h) => {
+          if (!pic.isConnected) return;
+          const box = fr.querySelector('.mv-media').getBoundingClientRect();
+          if (!box.height) return;
+          const drawn = Math.min(box.height, box.width * h / w);
+          const foot = box.top + (box.height + drawn) / 2;
+          const over = fr.querySelector('.mv-caption') || pg.el.querySelector('.mv-foot');
+          fr.classList.toggle('is-under', !!over && foot > over.getBoundingClientRect().top);
         };
         // A clip dressed from its name extends at once, on its poster.
         if (pic.tagName === 'VIDEO' && fr.classList.contains('is-ext')) momentExtend(pic);
