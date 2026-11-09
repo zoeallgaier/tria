@@ -15245,6 +15245,9 @@
     celebrateArrival = null;
     return hit;
   };
+  // A circle just joined from a card elsewhere: its page bursts in its own
+  // colours as it paints (celebrateJoin), as a Join on the page itself does.
+  let joinedArrival = null;
   let answeringDaily = null;
 
   // A quote rides into the composer the same way a daily does, and for the same
@@ -17631,12 +17634,15 @@
       const c = Store.community(btn.dataset.join);
       if (!c) return;
       btn.disabled = true;
+      btn.textContent = 'Joining…';
+      hapticTap('LIGHT');
+      joinStars(c);   // warm the colours for the page's burst
       let res = null;
       try { res = await Store.joinCommunity(c.id).catch(() => null); }
-      finally { btn.disabled = false; }
+      finally { if (btn.isConnected) { btn.disabled = false; btn.textContent = 'Join'; } }
       if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t join, try again.'); return; }
-      hapticTap('LIGHT');
       toast(`You’ve joined ${communityHandle(c)}.`);
+      joinedArrival = 'c/' + c.slug;   // the page bursts as it paints
       go(communityRoute(c));
     }));
   }
@@ -18457,17 +18463,16 @@
 
     // The circle's own colours, for its stars: its spectrum, Tria's two ends,
     // or the plain heart for None.
-    const starsOf = (c) => personTone(c).then((tone) => {
-      const rgb = tone !== 'none' && tone !== 'tria' && cssToRgb(tone);
-      const list = tone === 'none' ? ['var(--mono-heart)'] : rgb ? stopsAround(rgb, WASH_ARC) : TRIA_STARS;
-      return CIRCLE_SPARKS.map((_, k) => list[k % list.length]);
-    }, () => null);
     // JOIN, IN PLACE (Zoe, 2026-11-08: "join circle buttons earlier, reducing
     // taps"): the sheet goes, the circle bursts with stars in its own colours
     // and wears its check, and you are still on the field, free to join more.
     const joinHere = async (i) => {
       const nd = nodes[i], c = nd.c;
+      hapticTap('LIGHT');
+      const inks = joinStars(c);
+      els[i]?.classList.add('is-joining');
       const res = await Store.joinCommunity(c.id).catch(() => null);
+      els[i]?.classList.remove('is-joining');
       if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t join, try again.'); return; }
       toast(`You’ve joined ${communityHandle(c)}.`);
       if (!world.isConnected) return;
@@ -18477,10 +18482,7 @@
       measureFace(i);
       els[i].setAttribute('aria-label', labelOf(nd));
       wake();
-      starsOf(c).then((inks) => {
-        const bubble = els[i].querySelector('.cx-bubble');
-        if (bubble) celebrateFace(bubble, false, inks);
-      });
+      celebrateJoin(els[i].querySelector('.cx-bubble'), inks);
     };
 
     /* THE LIFTED CIRCLE'S SHEET is the standard one (Zoe, 2026-11-08: "the
@@ -19743,16 +19745,17 @@
         if (join.disabled) return;
         join.disabled = true;
         join.textContent = 'Joining…';
+        hapticTap('LIGHT');
+        const inks = joinStars(c);
         let res = null;
         try { res = await Store.joinCommunity(c.id).catch(() => null); }
         finally {
           if (join.isConnected) { join.disabled = false; join.textContent = 'Join'; }
         }
         if (!res || !res.ok) { toast((res && res.error) || 'Couldn’t join, try again.'); return; }
-        hapticTap('LIGHT');
         toast(`You’ve joined ${communityHandle(c)}.`);
         if (!tipSeen('circle')) spendTip('circle');   // joining is the lesson
-        if (feedEl.isConnected) paint();
+        if (feedEl.isConnected) { paint(); celebrateJoin(headEl, inks); }
         noticeCharmsSoon(2400);   // after the toast has had its say
       });
     }
@@ -19774,6 +19777,8 @@
     paint();
     landHeadOver(headEl, feedEl, first.slug);
     if (born) celebrateFace(headEl);
+    else if (joinedArrival === 'c/' + first.slug) celebrateJoin(headEl, joinStars(first));
+    joinedArrival = null;
   }
 
   /* A circle is born, or a face is new (your own photo, a circle's): the
@@ -19875,6 +19880,26 @@
         return t[(i >> 1) % t.length];
       }));
     return Promise.race([both, new Promise(r => setTimeout(() => r(null), 300))]);
+  }
+  // A circle's own colours, for its stars: its spectrum, Tria's two ends, or
+  // the plain heart for None. Asked for as Join is TAPPED, so the colours are
+  // ready by the time the network says yes (300ms at most, then Tria's).
+  function joinStars(c) {
+    const tone = personTone(c).then((t) => {
+      const rgb = t !== 'none' && t !== 'tria' && cssToRgb(t);
+      const list = t === 'none' ? ['var(--mono-heart)'] : rgb ? stopsAround(rgb, WASH_ARC) : TRIA_STARS;
+      return CIRCLE_SPARKS.map((_, k) => list[k % list.length]);
+    }, () => null);
+    return Promise.race([tone, new Promise(r => setTimeout(() => r(null), 300))]);
+  }
+  // Join's stars (Zoe, 2026-11-09: "proper sparkle animation treatment that
+  // compensates for load time"): the tap answers at once (a LIGHT haptic and
+  // the pill's press), the colours load alongside the join, and the burst
+  // fires off the face the moment it is painted as yours, waiting only on its
+  // decode, so the wait reads as the stars gathering rather than nothing.
+  function celebrateJoin(face, inks) {
+    if (!face) return;
+    Promise.resolve(inks).then(list => celebrateFace(face, false, list || null));
   }
   const madeFriends = (username, was) => was !== 'friends' && Store.friendStatus(username) === 'friends';
   function celebrateFriend(face, username, fresh) {

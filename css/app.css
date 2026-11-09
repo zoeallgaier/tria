@@ -13540,3 +13540,15 @@ a.card-take:active { transform: scale(0.985); }
   .take-rate-on { transition: none; }
 }
 .about-credit { margin-top: 2rem; font-size: 0.8rem; color: var(--muted); }
+
+/* A circle being joined on Explore circles (joinHere): while the network
+   answers, its disc breathes, so the wait reads as the stars gathering; the
+   burst (celebrateJoin) lands the moment it is yours. */
+.cx-node.is-joining .cx-bubble { animation: cx-joining 0.9s ease-in-out infinite; }
+@keyframes cx-joining {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(0.94); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cx-node.is-joining .cx-bubble { animation: none; }
+}
