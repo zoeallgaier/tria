@@ -8029,7 +8029,7 @@
   const MOMENT_TAP_MS = 200;   // a tap waits this long for a second to make it a like (260 felt slow)
   const REPLY_AT = 70;         // a pull up past this, on a frame you can answer, replies
   const DISMISS_AT = 110;      // a pull down past this closes the viewer
-  const MV_GAP = 12;           // paper between two people's pages as they slide
+  const MV_GAP = 0;            // two people's pages touch as they slide (Zoe, 2026-11-08)
   const MV_SETTLE = 'cubic-bezier(0.3, 1.25, 0.5, 1)';   // a spring home
   const MV_GLIDE = 'cubic-bezier(0.22, 1, 0.36, 1)';     // a page going on
 
