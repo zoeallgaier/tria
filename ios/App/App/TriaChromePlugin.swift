@@ -2992,6 +2992,17 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
     private var pickLeft: CGFloat = 0
     private var pickSide: CGFloat = 0
     private var pickShift: CGFloat = 0
+    /// The @ beside the photo (Zoe, 2026-11-08), `.postbar-at`. It types an @
+    /// at the caret here, where the words are, and the web's mention list
+    /// reads it as it crosses. Past one line both stand over the disc
+    /// (`tall`), each `stackStep` tall, and the field gains `toolsWidth`.
+    private let at = UIButton(type: .custom)
+    private var toolsWidth: CGFloat = 0
+    private var stackStep: CGFloat = 33.6
+    private var toolsStep: CGFloat = 0
+    /// Air between the send disc and the @ over it, `--postbar-stack-gap`.
+    private let stackGap: CGFloat = 6.4
+    private var tall = false
     /// A picture is waiting in the web's tray. It lights the disc on its own,
     /// because a photo with no words is still a comment.
     private var attached = false
@@ -3083,6 +3094,9 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
         send.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
         pick.addTarget(self, action: #selector(pickTapped), for: .touchUpInside)
         pick.isHidden = true
+        at.addTarget(self, action: #selector(atTapped), for: .touchUpInside)
+        at.isHidden = true
+        contentView.addSubview(at)
         // Under the disc: while idle the two share a slot, and the disc is the
         // one that has to win once it is there.
         contentView.addSubview(pick)
@@ -3128,6 +3142,9 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
         pickLeft = TriaToolbar.number(spec["pickLeft"], fallback: 0)
         pickSide = TriaToolbar.number(spec["pickSize"], fallback: 0)
         pickShift = TriaToolbar.number(spec["pickShift"], fallback: 0)
+        toolsWidth = TriaToolbar.number(spec["toolsWidth"], fallback: 0)
+        stackStep = TriaToolbar.number(spec["stackStep"], fallback: 33.6)
+        toolsStep = TriaToolbar.number(spec["toolsStep"], fallback: 0)
         attached = spec["attached"] as? Bool ?? false
         // A PILL AT REST AND THE SAME CORNER AT EVERY HEIGHT. 999 on a growing
         // box is a stadium, and the object would change character as you type;
@@ -3205,6 +3222,7 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
             monogram.isHidden = true
             photo.isHidden = true
             pick.isHidden = true
+            at.isHidden = true
             applyDisc(spec, muted: muted)
             syncIdle()
             setNeedsLayout()
@@ -3255,7 +3273,30 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
             let size = TriaToolbar.number(spec["pickGlyphSize"], fallback: 21)
             pick.setImage(TriaSVG.image(markup: glyph, size: size, ink: ink, template: false),
                           for: .normal)
+            if let mark = spec["atGlyph"] as? String, !mark.isEmpty {
+                at.setImage(TriaSVG.image(markup: mark, size: size, ink: ink, template: false),
+                            for: .normal)
+            }
         }
+        at.isHidden = pickSide <= 0 || (spec["atGlyph"] as? String ?? "").isEmpty
+        at.accessibilityLabel = spec["atLabel"] as? String
+    }
+
+    /// An @ at the caret, a space before it after a word, then the usual
+    /// change path so the web hears it and opens the mention list.
+    @objc private func atTapped() {
+        let text = (field.text ?? "") as NSString
+        let range = field.selectedRange
+        let before = range.location > 0
+            ? text.substring(with: NSRange(location: range.location - 1, length: 1)) : " "
+        let lead = before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "@" : " @"
+        guard text.length - range.length + (lead as NSString).length <= limit else { return }
+        if !field.isFirstResponder { field.becomeFirstResponder() }
+        field.textStorage.replaceCharacters(in: range,
+            with: NSAttributedString(string: lead, attributes: attrs))
+        field.selectedRange = NSRange(location: range.location + (lead as NSString).length, length: 0)
+        field.typingAttributes = attrs
+        textViewDidChange(field)
     }
 
     /// Where the photo button sits: its own box while the disc is live, one
@@ -3264,9 +3305,22 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
     private func layoutPick() {
         guard pickSide > 0 else { return }
         let box = contentView.bounds
-        pick.bounds = CGRect(x: 0, y: 0, width: pickSide, height: pickSide)
-        pick.center = CGPoint(x: pickLeft + pickSide / 2 + (idle ? pickShift : 0),
-                              y: box.height - discBottom - pickSide / 2)
+        if tall {
+            // A column over the disc: the @ just above it, the photo above that.
+            let x = box.width - discRight - discSide / 2
+            let top = box.height - discBottom - discSide - stackGap
+            for (i, b) in [at, pick].enumerated() {
+                b.bounds = CGRect(x: 0, y: 0, width: pickSide, height: stackStep)
+                b.center = CGPoint(x: x, y: top - stackStep * (CGFloat(i) + 0.5))
+            }
+            return
+        }
+        let step = toolsStep > 0 ? toolsStep : pickSide
+        for (i, b) in [pick, at].enumerated() {
+            b.bounds = CGRect(x: 0, y: 0, width: pickSide, height: pickSide)
+            b.center = CGPoint(x: pickLeft + step * CGFloat(i) + pickSide / 2 + (idle ? pickShift : 0),
+                               y: box.height - discBottom - pickSide / 2)
+        }
     }
 
     /* THE TRAILING END, AND IT IS ONE BLOCK FOR BOTH BARS BECAUSE IT MEASURES
@@ -3416,15 +3470,34 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
         if find { return 2 * pad + 2 * fieldPad + line }
         let text = body
         let sample = NSAttributedString(string: text.isEmpty ? " " : text, attributes: attrs)
+        let lines = { (w: CGFloat) -> CGFloat in
+            let b = sample.boundingRect(with: CGSize(width: w, height: .greatestFiniteMagnitude),
+                                        options: [.usesLineFragmentOrigin], context: nil)
+            return (b.height / self.line - 0.01).rounded(.up)
+        }
+        // PAST ONE LINE the photo and the @ go up over the disc. Decided at the
+        // narrow width, so a line that only fits once they've gone can't flip it.
+        let wantsTall = pickSide > 0 && toolsWidth > 0
+            && (text.contains("\n") || lines(textWidth) > 1)
+        if wantsTall != tall {
+            tall = wantsTall
+            setNeedsLayout()
+            UIView.animate(withDuration: UIAccessibility.isReduceMotionEnabled ? 0 : 0.18) {
+                self.layoutPick()
+            }
+        }
+        let width = tall ? textWidth + toolsWidth : textWidth
         let box = sample.boundingRect(
-            with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin], context: nil)
+        _ = lines
         // A trailing newline lays out as nothing, and a reader who just pressed
         // Return is looking at the line they are about to type on. A textarea's
         // scrollHeight counts it; so does this.
         let trailing: CGFloat = text.hasSuffix("\n") ? 1 : 0
-        let lines = max(1, min(maxLines, (box.height / line - 0.01).rounded(.up) + trailing))
-        return 2 * pad + 2 * fieldPad + lines * line
+        let count = max(1, min(maxLines, (box.height / line - 0.01).rounded(.up) + trailing))
+        let stack = tall ? 2 * pad + discBottom - pad + discSide + stackGap + 2 * stackStep : 0
+        return max(stack, 2 * pad + 2 * fieldPad + count * line)
     }
 
     override func layoutSubviews() {
@@ -3456,7 +3529,8 @@ final class TriaPostBarPill: UIVisualEffectView, UITextViewDelegate, UITextField
         // text field is pinned to a single line rather than to the pill's
         // remaining height, which for a find bar are the same number anyway —
         // stating it as `line` is what says the box cannot grow.
-        let textBox = CGRect(x: textLeft, y: pad + fieldPad, width: textWidth,
+        let textBox = CGRect(x: textLeft, y: pad + fieldPad,
+                             width: tall ? textWidth + toolsWidth : textWidth,
                              height: max(line, box.height - 2 * pad - 2 * fieldPad))
         field.frame = textBox
         oneLine.frame = CGRect(x: textLeft, y: pad + fieldPad, width: textWidth, height: line)

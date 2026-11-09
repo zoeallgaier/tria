@@ -2037,6 +2037,19 @@
         pickGlyphSize: pickSvg ? parseFloat(getComputedStyle(pickSvg).width) || 0 : 0,
         pickInk: pick ? toRgb(getComputedStyle(pick).color) || '' : '',
         pickLabel: pick ? pick.getAttribute('aria-label') || '' : '',
+        // The @ beside it, the same mark at the same size. Native types the @
+        // itself, since it holds the words, and stacks both over the disc past
+        // one line; `toolsWidth` is what the field gains when they go up.
+        atGlyph: form.querySelector('.postbar-at svg') ? form.querySelector('.postbar-at svg').outerHTML : '',
+        atLabel: form.querySelector('.postbar-at') ? form.querySelector('.postbar-at').getAttribute('aria-label') || '' : '',
+        toolsWidth: pick && form.querySelector('.postbar-at')
+          ? form.querySelector('.postbar-at').getBoundingClientRect().right - pick.getBoundingClientRect().left
+            + (parseFloat(cs.columnGap) || 0)
+          : 0,
+        toolsStep: pick && form.querySelector('.postbar-at')
+          ? form.querySelector('.postbar-at').getBoundingClientRect().left - pick.getBoundingClientRect().left
+          : 0,
+        stackStep: pick ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--postbar-stack')) * (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) || 33.6 : 0,
         // A picture is waiting in the tray, so the disc is live with no words.
         attached: bar.classList.contains('has-photo'),
         // 3× so the 26pt circle is sharp on every screen this ships to.
@@ -12032,6 +12045,11 @@
         `<button class="postbar-pick" type="button" aria-label="Add a photo or GIF">` +
           svgIcon('image', 'postbar-pick-ico') +
         `</button>` +
+        // A MENTION, the @ beside the photo (Zoe, 2026-11-08). It types an @
+        // at the caret, and the mention list takes it from there.
+        `<button class="postbar-at" type="button" aria-label="Mention someone">` +
+          svgIcon('at', 'postbar-pick-ico') +
+        `</button>` +
         `<input class="postbar-file" type="file" accept="image/*" hidden>` +
         // aria-hidden rides with the idle state (see syncSend) rather than being
         // stamped here: an empty bar has no send, and announcing one is worse
@@ -12192,10 +12210,36 @@
     // replaced), so a long comment wraps into view instead of scrolling off the
     // end. Capped in CSS by max-height, past which the field scrolls — a bar that
     // can grow without limit is a bar that can eat the thread it belongs to.
+    // PAST ONE LINE (wrapped, or a Return) the photo and the @ go up over the
+    // send disc, a column at the bar's end, and the words take their row
+    // (Zoe, 2026-11-08). Read at the narrow width so a line that only fits
+    // once they've gone can't flip it back and forth.
+    const at = bar.querySelector('.postbar-at');
     const autoGrow = () => {
+      form.classList.remove('is-tall');
       input.style.height = 'auto';
-      input.style.height = input.scrollHeight + 'px';
+      const line = parseFloat(getComputedStyle(input).lineHeight) || 22.4;
+      const padY = parseFloat(getComputedStyle(input).paddingTop) + parseFloat(getComputedStyle(input).paddingBottom);
+      // Natively the pill stacks them itself, and this form is what it measures.
+      const tall = document.documentElement.dataset.chrome !== 'native' && (/\n/.test(input.value) || input.scrollHeight - padY > line * 1.5);
+      form.classList.toggle('is-tall', tall);
+      input.style.height = 'auto';
+      const tools = tall ? (pick.offsetHeight + at.offsetHeight + send.offsetHeight
+        + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--postbar-stack-gap')) || 0) * 16) : 0;
+      input.style.height = Math.max(input.scrollHeight, tools) + 'px';
     };
+    at.addEventListener('mousedown', (e) => e.preventDefault());
+    at.addEventListener('click', () => {
+      const a = input.selectionStart ?? input.value.length;
+      const b = input.selectionEnd ?? a;
+      const lead = a > 0 && !/\s/.test(input.value[a - 1]) ? ' @' : '@';
+      if (input.value.length - (b - a) + lead.length > input.maxLength) return;
+      input.value = input.value.slice(0, a) + lead + input.value.slice(b);
+      const c = a + lead.length;
+      input.focus();
+      input.setSelectionRange(c, c);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     // `disabled` blocks the empty submit; `.is-idle` is what takes the disc off
     // the screen. Both flip together so a visible send is always a live one.
     // A picture on its own is something to send, the same as words are.

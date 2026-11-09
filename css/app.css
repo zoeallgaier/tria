@@ -3597,11 +3597,37 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   transition: transform var(--dur-quick) var(--ease), color var(--dur-micro) var(--ease);
 }
 .postbar-pick-ico { width: 21px; height: 21px; }
-.postbar-form.is-empty .postbar-pick { transform: translateX(calc(var(--postbar-disc) + 0.6rem)); }
+.postbar-at {
+  flex-shrink: 0; display: grid; place-items: center;
+  width: var(--postbar-disc); height: var(--postbar-disc);
+  padding: 0; background: none; border: none; border-radius: 50%;
+  color: var(--muted);
+  transition: transform var(--dur-quick) var(--ease), color var(--dur-micro) var(--ease);
+}
+.postbar-form.is-empty .postbar-pick,
+.postbar-form.is-empty .postbar-at { transform: translateX(calc(var(--postbar-disc) + 0.6rem)); }
+@media (hover: hover) { .postbar-at:hover { color: var(--text); } }
+.postbar-at:active { color: var(--text); }
+/* Past one line the two marks stand over the send disc, a column at the
+   bar's end, each --postbar-stack tall (wirePostBar's autoGrow). */
+:root { --postbar-stack: 2.1rem; --postbar-stack-gap: 0.4rem; }
+/* The two marks sit as close as the composer's type tools (.rt-attach, 2.1rem
+   centre to centre), each still a 44px target. */
+.postbar-at { margin-left: calc(2.1rem - var(--postbar-disc) - 0.6rem); }
+.postbar-form.is-tall .postbar-at { margin-left: 0; }
+.postbar-form.is-tall .postbar-pick,
+.postbar-form.is-tall .postbar-at {
+  position: absolute;
+  right: 0.5rem;
+  height: var(--postbar-stack);
+  transform: none;
+}
+.postbar-form.is-tall .postbar-at { bottom: calc(var(--postbar-pad) + var(--postbar-disc) + var(--postbar-stack-gap)); }
+.postbar-form.is-tall .postbar-pick { bottom: calc(var(--postbar-pad) + var(--postbar-disc) + var(--postbar-stack-gap) + var(--postbar-stack)); }
 @media (hover: hover) { .postbar-pick:hover { color: var(--text); } }
 .postbar-pick:active { color: var(--text); }
 @media (prefers-reduced-motion: reduce) {
-  .postbar-pick { transition: color var(--dur-micro) var(--ease); }
+  .postbar-pick, .postbar-at { transition: color var(--dur-micro) var(--ease); }
 }
 
 /* The picture waiting to go, hung above the bar where the mention list hangs.
