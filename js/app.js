@@ -9067,7 +9067,7 @@
     side: { ico: 'sidebar', title: 'One at a time',
       text: () => `Open the menu${nativeShell() ? ', or swipe in from the edge,' : ''} to view one circle or friend.` },
     paper: { ico: 'tint', title: 'Background color',
-      text: 'Your pages wear your color, and friends’ wear theirs.' },
+      text: 'Your color tints your pages. Friends’ pages show theirs.' },
     tabs: { ico: 'grid', title: 'Tabs',
       text: 'Swipe the posts to switch tabs.' },
     circle: { ico: 'circle', title: 'Circles',
