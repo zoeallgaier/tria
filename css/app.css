@@ -8150,8 +8150,12 @@ button.card-song-play:active { transform: scale(0.9); }
    small glass segmented control, centred on the column, glyphs only (their
    names on hover), and where you are is the sidebar's soft neutral capsule,
    sliding. It looks the same stuck or not. Stuck, it floats in the bar's row
-   level with the back disc where the column leaves room (1100px and up), and
-   just under the row where it doesn't. One layer over the desktop bar (101). */
+   level with the back disc, at EVERY desktop width (2026-11-10, Zoe: "make
+   sure the profiles post type filter is in the right place on desktop"): a
+   profile's bar holds a back disc and one trailing disc at most, and the
+   strip's 234px clears both from 681px up. It sat just under the row below
+   1100px, 77px down over the posts, which read as lost. One layer over the
+   desktop bar (101). */
 @media (min-width: 681px) {
   .profile-tabs {
     --tab-w: 56px;
@@ -8162,7 +8166,9 @@ button.card-song-play:active { transform: scale(0.9); }
     margin-inline: auto;
     padding: 4px;
     z-index: 102;
-    top: calc(1rem + var(--topbar-h) + 0.5rem);
+    /* 50px: the capsule's 40, its 4px pad twice, its 1px edge twice, centred in
+       the bar's row so it is level with the back disc. */
+    top: calc(1rem + (var(--topbar-h) - 50px) / 2);
     border-radius: 999px;
     border: var(--glass-edge);
     background: var(--glass-bg);
@@ -8181,10 +8187,6 @@ button.card-song-play:active { transform: scale(0.9); }
     .profile-tab[aria-selected="false"]:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
   }
   .profile-tabs .profile-tab:focus-visible { outline-offset: 0; border-radius: 999px; }
-}
-@media (min-width: 1100px) {
-  /* 50px: the capsule's 40, its 4px pad twice, its 1px edge twice. */
-  .profile-tabs { top: calc(1rem + (var(--topbar-h) - 50px) / 2); }
 }
 @media (prefers-reduced-motion: reduce) {
   body.tabs-live .topbar::before { transition: opacity var(--dur-quick) var(--ease); }
