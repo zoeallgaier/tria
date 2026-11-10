@@ -310,8 +310,10 @@ context; keep it that way. **On a desktop the strip is a small glass
 segmented control** centred on the column (the sidebar's material, glyphs
 only with their names on hover), where you are the sidebar's soft neutral
 capsule sliding; the desktop bar has no band to join, so it looks the same
-stuck or not, docking in the bar's row beside the back disc at 1100px and up
-and just under the row below that. A type picked while stuck opens at its own top under the
+stuck or not, docking in the bar's row level with the back disc at every
+desktop width (2026-11-10, Zoe: "make sure the profiles post type filter is in
+the right place on desktop"; it sat just under the row below 1100px, over the
+posts). A type picked while stuck opens at its own top under the
 strip, a tap on the tab you're on goes back there, and every switch holds the
 pane a screen tall, so the strip never jumps. `profileTabsOff` drops the
 scroll watch in route().
@@ -1236,8 +1238,13 @@ learned `<br>` too, so it needs a redeploy.
 
 **The repost sheet is two rows, Repost (or Undo repost) and Quote** (Zoe: "use
 the quote post menu to add the audience feature"). A **bare repost wears its
-original's audience exactly, circle and all**: a circle's post is reposted
-inside that circle, so it needs you to be a member (`Store.canRepost`). A
+original's audience exactly, EXCEPT a circle's post, which goes OUT to your
+friends** (2026-11-10, Zoe: "circle posts should only be repostable OUT of that
+feed. Otherwise we get duplicate posts in the same feed"; `bareRepostPlace`,
+no membership needed). A quote never goes back into its own circle either (the
+audience sheet's `except`, coerced in `createRepost`). Bare reposts already
+made inside their own circle are hidden everywhere (`repostInPlace`, in
+`posts()` and `myBare`); quotes there have words and stay. A
 **quote** has the composer's audience field, ALL of it, whatever the original
 was (Zoe: "I should be able to choose the audience on quotes"): Anyone, My
 circle, Choose people, any circle you're in. So a quote is how a post goes into
@@ -1245,8 +1252,8 @@ a circle or out of one. The read gate (`can_view_original`) still holds a quote
 to the people who can read its original, so over a friends-only or
 invite-only-circle post a line under the field says who that is
 (`quoteReachHint`: "Only your friends will see it.", "Only people in c/x will
-see it."). A quote starts in its post's circle when you're in it, and with your
-friends over a friends-only post. **Someone else's friends-only post has no
+see it."). A quote starts with your friends over a friends-only post or an
+invite-only circle's, never in the post's own circle. **Someone else's friends-only post has no
 repost glyph** (Zoe, 2026-10-26, `repostable`): it could only reach the author's
 own friends, so a private circle is never widened and the glyph would promise
 what it can't do. Your own still reposts. The Repost to a circle row and its picker

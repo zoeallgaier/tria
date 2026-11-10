@@ -1173,7 +1173,7 @@ const Store = (() => {
       // that carries only a headline is still a quote, and must not be mistaken
       // for the toggle's row or "Undo repost" would offer to delete it.
       for (const p of rows)
-        if (p.repostOf && !p.note && !p.title && p.author === state.session)
+        if (p.repostOf && !p.note && !p.title && p.author === state.session && !repostInPlace(p))
           m.set(p.repostOf, (m.get(p.repostOf) || []).concat(p));
       bareIndex.set(rows, m);
     }
@@ -1184,6 +1184,16 @@ const Store = (() => {
     (post && post.repostOf) ? (byId(state.posts).get(post.repostOf) || null) : null;
   // A repost with no original in the cache is a repost we can't see through.
   const visibleRepost = (p) => !p.repostOf || !!originalOf(p);
+  // A BARE repost sitting in the very circle its original was said in (Zoe,
+  // 2026-11-10: "circle posts should only be repostable OUT of that feed.
+  // Otherwise we get duplicate posts in the same feed"). Until that day a bare
+  // repost wore its original's place, circle and all, so the circle's feed read
+  // the post twice. None are made any more (createRepost sends a circle's post
+  // out to your friends); the ones already made are let go everywhere by
+  // posts(), and myBare leaves them out so the glyph isn't lit for a repost
+  // nobody can see. A quote into its own circle has words of its own and stays.
+  const repostInPlace = (p) => !!(p.repostOf && p.communityId && !p.note && !p.title &&
+    (originalOf(p) || {}).communityId === p.communityId);
 
   // Can I pass this along? Two rules, and there used to be three. Not
   // hand-addressed (that allowlist belongs to its author and isn't mine to
@@ -1242,14 +1252,17 @@ const Store = (() => {
         target.author !== state.session) return false;
     return !target.communityId || repostRulesReady();
   }
-  // Can I pass it along BARE? A bare repost wears its original's place, circle
-  // and all (repost-audience.sql), so a circle's post needs you in that circle:
-  // reading a public circle doesn't make you one of its members.
-  function canRepost(post) {
-    if (!repostable(post)) return false;
-    const target = originalOf(post) || post;
-    return !target.communityId || inCommunity(target.communityId);
-  }
+  // Can I pass it along BARE? A bare repost wears its original's place, EXCEPT
+  // a circle's post, which goes OUT of its circle to your friends (Zoe,
+  // 2026-11-10): the circle is already its feed, so a repost there only read it
+  // twice. Out of the circle it needs no membership, only that you can read it;
+  // the read gate (can_view_original) still holds it to the people who can.
+  const canRepost = (post) => repostable(post);
+  // Where a bare repost of `target` lands: its original's place, or your
+  // friends for a circle's post.
+  const bareRepostPlace = (target) => target.communityId
+    ? { mode: 'circle', community: null }
+    : { mode: target.audience || 'circle', community: null };
   // Where may a QUOTE of this go? null when it can't be quoted at all. `open`
   // says the composer offers every audience (Zoe, 2026-10-26: "I should be able
   // to choose the audience on quotes"), which it does once repost-audience.sql
@@ -1262,7 +1275,9 @@ const Store = (() => {
   function quoteAudience(post) {
     if (!repostable(post)) return null;
     const target = originalOf(post) || post;
-    const place = { mode: target.audience || 'circle', community: target.communityId || null };
+    // A circle's post is quoted OUT of its circle, never back into it, so its
+    // starting place is your friends (bareRepostPlace).
+    const place = bareRepostPlace(target);
     const c = target.communityId && community(target.communityId);
     const narrow = target.communityId ? !(c && !c.inviteOnly) : place.mode !== 'public';
     return { open: repostRulesReady(), place, narrow };
@@ -1385,7 +1400,7 @@ const Store = (() => {
     let list = sorted.get(state.posts);
     if (!list) {
       const now = Date.now();
-      list = state.posts.filter(p => momentLive(p, now)).sort((a, b) => (a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0));
+      list = state.posts.filter(p => momentLive(p, now) && !repostInPlace(p)).sort((a, b) => (a._ts < b._ts ? 1 : a._ts > b._ts ? -1 : 0));
       sorted.set(state.posts, list);
     }
     return list;
@@ -2224,8 +2239,9 @@ const Store = (() => {
   // is a quote.
   //
   // A BARE repost's audience is COPIED from the original and never chosen,
-  // circle included: that is "inherit, never widen", and the insert policy
-  // enforces the same equality server-side. A QUOTE may choose (`audience`,
+  // except a circle's post, which goes OUT to your friends (bareRepostPlace,
+  // Zoe 2026-11-10: in its own circle it was the same post twice in one feed).
+  // Nothing widens: the read gate (can_view_original) still decides who reads it. A QUOTE may choose (`audience`,
   // `audienceUsers`, `communityId`, the composer's own answer) when its
   // original is open to everyone (quoteAudience); otherwise it is copied too.
   // repost-audience.sql holds the same rule, so a hand-rolled request can't
@@ -2248,7 +2264,7 @@ const Store = (() => {
 
     const row = { author: idOf(me), type: 'repost', repost_of: target.id, tags: [] };
     let targetIds = [];
-    let place = q ? q.place : { mode: target.audience || 'circle', community: target.communityId || null };
+    let place = q ? q.place : bareRepostPlace(target);
     if (quote && q.open && audience) {
       // createPost's coercions: "Choose people" with nobody chosen is your
       // circle, and a circle you've left since the composer opened is too.
@@ -2259,6 +2275,10 @@ const Store = (() => {
           ? { mode: 'community', community: communityId }
           : { mode: 'circle' };
     }
+    // Never back into the circle it was said in (Zoe, 2026-11-10): that is
+    // the same feed twice. The composer doesn't offer it; this is the rule.
+    if (place.mode === 'community' && place.community === target.communityId)
+      place = { mode: 'circle' };
     if (place.mode === 'community' && !inCommunity(place.community))
       return { ok: false, error: 'Join the circle to post in it.' };
     row.audience = place.mode;
