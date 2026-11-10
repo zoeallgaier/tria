@@ -10093,7 +10093,12 @@ button.card-song-play:active { transform: scale(0.9); }
   transition: grid-template-rows 0.32s var(--ease), opacity var(--dur-quick) ease;
 }
 .aud-list-wrap.is-open { grid-template-rows: 1fr; opacity: 1; }
-.aud-list-wrap > .aud-list { min-height: 0; }
+.aud-list-wrap > .aud-list,
+.aud-list-wrap > .aud-list-fold { min-height: 0; }
+/* The audience sheet's search rides the fold over its checklist (2026-11-10):
+   Discover's field, its sides on the rows' own 8px inset. */
+.aud-search { margin: 0.35rem 8px 0.5rem; }
+.aud-pick[hidden], .aud-empty[hidden] { display: none; }
 /* Clipped, as .about-fold-inner is. Without it a folded checklist is a 0-tall
    row with the whole of your circle overflowing it at opacity 0, and the
    panel's scroller counts that overflow: an endless scroll through nobody. */
@@ -10105,7 +10110,8 @@ button.card-song-play:active { transform: scale(0.9); }
    is a share of the screen rather than a row count, floored in px so it doesn't
    collapse to a slot on a short one, and `contain` so reaching the end of the
    list doesn't start dragging the page behind the scrim. */
-.aud-list-wrap.is-open > .aud-list {
+.aud-list-wrap.is-open > .aud-list,
+.aud-list-wrap.is-open > .aud-list-fold > .aud-list {
   max-height: min(44dvh, 360px);
   overflow-y: auto;
   overscroll-behavior: contain;

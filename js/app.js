@@ -7600,7 +7600,7 @@
       // In a scrolling list a pull belongs to the list unless it is at its top,
       // and the audience sheet's checklist is a list that scrolls on its own.
       if (!side && list && list.style.touchAction === 'pan-y' && list.contains(e.target) && list.scrollTop > 0) return;
-      if (e.target.closest && e.target.closest('.aud-list')) return;
+      if (e.target.closest && e.target.closest('.aud-list, .aud-search')) return;
       down = true; dragging = false; startX = e.clientX; startY = e.clientY; dy = 0;
     });
     panel.addEventListener('pointermove', (e) => {
@@ -14330,7 +14330,8 @@
   //
   // Two rows, Repost and Quote (Zoe, 2026-10-26), and the first one changes. A
   // bare repost is a toggle you can take back, and it goes where the post was
-  // said, circle and all (Store.canRepost). A quote is a post of yours, so it is
+  // said, except a circle's post, which goes out to your friends, never back
+  // into its own circle (Store.canRepost, Zoe 2026-11-10). A quote is a post of yours, so it is
   // where you choose who reads it: the composer's audience field
   // (Store.quoteAudience). It comes out through its own ••• like anything else
   // you wrote, so it is never listed here as something to undo.
@@ -24107,8 +24108,22 @@
         // Inert while folded: its rows are still in the DOM, and without this
         // Tab and VoiceOver walk a list nobody can see.
         `<div class="aud-list-wrap${mode === 'list' ? ' is-open' : ''}"${mode === 'list' ? '' : ' inert'}>` +
-          `<div class="aud-list">` +
-            (pickRows || `<p class="aud-empty">Add some friends first.</p>`) +
+          `<div class="aud-list-fold">` +
+            // A search over your friends (Zoe, 2026-11-10), Discover's field
+            // in small, over the checklist and folding with it. Its ticks
+            // survive a search: filtering only hides rows.
+            (friends.length
+              ? `<div class="discover-search aud-search" role="search">` +
+                  `<span class="discover-search-ico" aria-hidden="true">${svgIcon('search')}</span>` +
+                  `<input type="search" class="discover-search-field aud-search-field" enterkeyhint="search" ` +
+                    `autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" ` +
+                    `placeholder="Search friends" aria-label="Search friends">` +
+                `</div>`
+              : '') +
+            `<div class="aud-list">` +
+              (pickRows || `<p class="aud-empty">Add some friends first.</p>`) +
+              (friends.length ? `<p class="aud-empty aud-none" hidden>No friends by that name.</p>` : '') +
+            `</div>` +
           `</div>` +
         `</div>` +
         // Your circles, under the people picker so its checklist still opens
@@ -24121,6 +24136,31 @@
           : ''),
       wire: (scrim) => {
         const listWrap = scrim.querySelector('.aud-list-wrap');
+        const find = scrim.querySelector('.aud-search-field');
+        if (find) {
+          const fold = (s) => String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
+          const rows = [...scrim.querySelectorAll('.aud-pick')]
+            .map(el => ({ el, hay: fold(`${el.querySelector('.friend-name')?.textContent} ${el.dataset.user}`) }));
+          const none = scrim.querySelector('.aud-none');
+          find.addEventListener('input', () => {
+            const q = fold(find.value.trim().replace(/^@/, ''));
+            let shown = 0;
+            rows.forEach(({ el, hay }) => {
+              const on = !q || hay.includes(q);
+              el.hidden = !on;
+              if (on) shown++;
+            });
+            if (none) none.hidden = shown > 0;
+            const list = scrim.querySelector('.aud-list');
+            if (list) list.scrollTop = 0;
+          });
+          // Return keeps the sheet up and only lowers the keys.
+          find.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); find.blur(); } });
+          // A drag through the names puts the keys down, as Discover's does.
+          scrim.querySelector('.aud-list')?.addEventListener('touchstart', () => {
+            if (document.activeElement === find) find.blur();
+          }, { passive: true });
+        }
         const modes = [...scrim.querySelectorAll('.aud-mode')];
         modes.forEach(b =>
           b.addEventListener('click', () => {
@@ -24134,6 +24174,8 @@
             // time it opens.
             listWrap.classList.toggle('is-open', mode === 'list');
             listWrap.inert = mode !== 'list';
+            // Folding the list puts the keys down with it.
+            if (mode !== 'list' && find && document.activeElement === find) find.blur();
             if (mode === 'list') {
               scrim.querySelectorAll('.aud-pick').forEach((row, i) => {
                 row.style.animation = 'none';
@@ -24488,16 +24530,21 @@
         pubAudience = { mode: 'community', users: [], community: room };
         pubAudienceTouched = true;
       }
-      // A quote STARTS where its post was said: in its circle when you're in
-      // it (the talk is there), with your friends over a friends-only post
-      // (who it can reach anyway), and wherever it must go before
-      // repost-audience.sql. Every one is a start, not a rule: the sheet
-      // moves it. Over a public post it takes your own default like any post.
+      // A quote STARTS with your friends over a friends-only post or an
+      // invite-only circle's (who it can reach anyway), and wherever it must
+      // go before repost-audience.sql. Never in the circle its post was said
+      // in (Zoe, 2026-11-10: a circle's post goes OUT of its feed, or the feed
+      // reads it twice; quoteAudience's place is your friends for one). Every
+      // one is a start, not a rule: the sheet moves it. Over a public post or
+      // a public circle's it takes your own default like any post.
       const qa = quote && Store.quoteAudience(quote);
-      if (qa && (qa.place.community ? Store.inCommunity(qa.place.community) : (!qa.open || qa.narrow))) {
-        pubAudience = qa.place.community
-          ? { mode: 'community', users: [], community: qa.place.community }
-          : { mode: qa.place.mode, users: [] };
+      if (qa && (!qa.open || qa.narrow)) {
+        pubAudience = { mode: qa.place.mode, users: [] };
+        pubAudienceTouched = true;
+      }
+      // Your own default may be the very circle the quoted post lives in.
+      if (quote && quote.communityId && pubAudience.community === quote.communityId) {
+        pubAudience = { mode: 'circle', users: [] };
         pubAudienceTouched = true;
       }
       const submitBtn = view.querySelector('.composer-submit');
@@ -24565,9 +24612,10 @@
         });
         onCaptureChange = () => syncType();   // a frame landing/clearing re-infers the type
       } else if (qa && qa.open) {
-        // Every circle you're in, the one the post was said in included: a quote
-        // there is the post talked about where it lives.
-        wireAudienceLock(formEl, null, { rooms: true });
+        // Every circle you're in but the one the post was said in (Zoe,
+        // 2026-11-10): there it is already in the feed, so a quote only
+        // repeats it. A circle's post is passed OUT of its circle.
+        wireAudienceLock(formEl, null, { rooms: true, except: quote.communityId || null });
       }
       applyBaseSurface();
     }
