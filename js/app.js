@@ -17153,7 +17153,7 @@
     const metaEl = (words) => words ? `<span class="pin-meta"><span>${esc(words)}</span></span>` : '';
     // Your own card's ••• sits in its top right corner (Zoe, 2026-11-04), and
     // its headline keeps clear of it (pin--own).
-    const card = ({ cls, type, pic, say, gist, rich, meta, open, glow = '' }) =>
+    const card = ({ cls, type, pic, say, gist, rich, meta, open, glow = '', tags = [] }) =>
       `<article class="pin ${pic ? 'pin--pic' : 'pin--words'}${wide ? ' pin--wide' : ''}${more ? ' pin--own' : ''}${cls || ''}" ` +
           `data-i="${at}" data-key="${esc(pinKey(e))}" data-type="${esc(type)}">` +
         glow + (pic || '') +
@@ -17163,6 +17163,10 @@
             (rich ? `<div class="pin-gist pin-rich">${rich}</div>`
               : gist ? `<span class="pin-gist">${esc(gist)}</span>` : '') +
           `</span>` +
+          // Its tags, the feed's own outlined pills (Zoe, 2026-11-11: "Show tags
+          // in pinned notes"), one line of whole pills between the words and
+          // the foot. Labels, not filters: the whole card opens the post.
+          (tags.length ? `<span class="pin-tags">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</span>` : '') +
           `<span class="pin-foot">${meta}</span>` +
         `</span>` +
         open + more +
@@ -17240,7 +17244,7 @@
     const rich = (!pic || wide) && said ? cardNoteHtml(p, true) : '';
     return card({
       cls: link.unread ? ' pin--unread' : '', type: p.type, pic,
-      say: rich ? p.title || '' : head, gist, rich, meta,
+      say: rich ? p.title || '' : head, gist, rich, meta, tags: shownTags(p),
       open: `<a class="pin-open" href="${postRoute(p)}" aria-label="${esc(head || 'Open this post')}"></a>`,
     });
   }
@@ -17546,7 +17550,13 @@
       // second link.
       const foot = face.parentElement.querySelector('.pin-foot');
       const more = foot && foot.querySelector('.pin-readmore');
-      const cut = fit();
+      // Words come before tags (Zoe, 2026-11-11: "let read more take priority
+      // and remove tags for the longer posts"): a card whose words don't fit
+      // drops its tags first and gives their line to the words.
+      const tags = face.parentElement.querySelector('.pin-tags');
+      if (tags) tags.hidden = false;
+      let cut = fit();
+      if (cut && tags) { tags.hidden = true; cut = fit(); }
       if (cut && foot && !more) {
         foot.insertAdjacentHTML('beforeend', '<span class="pin-readmore" aria-hidden="true">Read more</span>');
         fit();

@@ -8356,6 +8356,28 @@ button.card-song-play:active { transform: scale(0.9); }
 .pin-rich :is(.card-h1, .card-h2) + :is(.card-note, .card-list) { margin-top: 0.25rem; }
 .pin-rich > :first-child { margin-top: 0; }
 
+/* A pin's tags: the feed's pills, a touch smaller, one line of whole pills
+   (it wraps, and the rows past the first are cut off, so no pill is halved). */
+.pin-tags {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  max-height: 1.45rem;
+  overflow: hidden;
+}
+.pin-tags[hidden] { display: none; }
+.pin-tags .tag {
+  font-size: 0.72rem;
+  line-height: 1.2;
+  padding: 0.12rem 0.5rem;
+  white-space: nowrap;
+}
+.pin--pic:not(.pin--wide) .pin-tags .tag {
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.42);
+}
+
 .pin-foot {
   flex: 0 0 auto;
   display: flex;
@@ -8436,7 +8458,7 @@ button.card-song-play:active { transform: scale(0.9); }
 }
 :is(.pin--pic:not(.pin--wide), .pin--bare) .pin-more svg { position: relative; width: 18px; height: 18px; }
 /* A picture with nothing to say over it is only the picture. */
-.pin--pic .pin-body:not(:has(.pin-say, .pin-meta)) { display: none; }
+.pin--pic .pin-body:not(:has(.pin-say, .pin-meta, .take-stars, .pin-tags)) { display: none; }
 
 /* The wide card's picture is one square on its leading side, on the grid's
    line, and its words take the rest on the card's own paper. */
