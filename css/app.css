@@ -11764,7 +11764,17 @@ body[data-ambient="none"] .pf-row-swatch {
      put post photos screen-edge-to-edge. A masonry grid doesn't want that: it's
      already on Discover's axis and the card above it is on the view's, so the
      bleed is taken straight back. */
-  .pgrid--frames { padding-inline: var(--gutter); }
+  /* On a phone the Frames tab's two columns run edge to edge (Zoe, 2026-11-11:
+     "make 2column images edge to edge"), a profile's and a circle's alike: the
+     feed's own bleed is kept, the tiles lose their corner and hairline, and a
+     2px seam stands between them, across and down. A desktop keeps the
+     rounded cards above. */
+  .pgrid--frames { padding-inline: 0; gap: 2px; }
+  .pgrid--frames .ptile {
+    margin-bottom: 2px;                /* dealMasonry reads this as the gap */
+    border: 0;
+    border-radius: 0;
+  }
   .masthead { margin-bottom: 1.8rem; padding-bottom: 0.5rem; }
   .masthead-kicker { margin-bottom: 0.7rem; }
   /* Entries break out of the view's side padding to sit screen-edge-to-edge;
