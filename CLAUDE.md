@@ -97,7 +97,8 @@ after the outgoing composer flushed) fills the fresh fields before they are
 wired (`fillFromDraft`), so every surface wakes holding it; `editorPrefill`
 takes the quill explicitly. **Where they are:** the New sheet's last row,
 **Drafts**, only while one waits, never a number (`openDrafts`, `ICONS.drafts`,
-a page with its last line short): its mark, its headline or first line, and
+"sleep on it", a crescent moon and a small star, Zoe's pick of eight in
+https://claude.ai/artifact/GRkJ7mKndfmRKv2Ed8gSw5): its mark, its headline or first line, and
 "Poll · 3h ago". The x is two taps (Delete pill, then gone, a WARNING tap),
 as iOS's swipe to delete. **Kept on the device first** (`tria:drafts:<me>`,
 `Store.saveDraft`), **then the account** (`supabase/drafts.sql`, owner only,

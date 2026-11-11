@@ -385,9 +385,11 @@
     // so it sits with the solid tab marks beside it. Never lit, so no `On`.
     newTab:  '<path d="M12 5v14" stroke-width="2.3"/><path d="M5 12h14" stroke-width="2.3"/>',
     compose: '<path d="M11 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V13"/><path d="M18.3 3.7a2 2 0 0 1 2.9 2.9L13 14.8l-3.7.9.9-3.7z"/>',
-    // Drafts (2026-11-11): a page with its corner turned, its last line
-    // left short, a thought not finished yet.
-    drafts:  '<path d="M7 3.5h6.8l4.7 4.7V19a1.5 1.5 0 0 1-1.5 1.5H7A1.5 1.5 0 0 1 5.5 19V5A1.5 1.5 0 0 1 7 3.5z"/><path d="M13.5 3.5v5h5"/><path d="M8.75 12.75h6.5"/><path d="M8.75 16.25h3.25"/>',
+    // Drafts (2026-11-11): sleep on it (Zoe picked it from eight,
+    // https://claude.ai/artifact/GRkJ7mKndfmRKv2Ed8gSw5), a crescent moon and
+    // a small star: leave a thought overnight and come back to it. It was a
+    // page with its last line short for its first hour.
+    drafts:  '<path d="M18.5 14.6A7 7 0 1 1 9.4 5.5a5.5 5.5 0 0 0 9.1 9.1z"/><path d="M17.5 3.5v3M16 5h3"/>',
     trash:   '<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l.85 12.5h9.3L17.5 7"/><path d="M10 10.5v6"/><path d="M14 10.5v6"/>',
     pencil:  '<path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/>',
     // Edit profile's row (Zoe, 2026-10-22: "use gear icon for edit profile").
