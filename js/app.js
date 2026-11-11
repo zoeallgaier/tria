@@ -3647,7 +3647,7 @@
   // The like heart is deliberately two-faced. A friend sees a bare heart they can
   // fill — no count, because a like is a private nod to the author, not a public
   // tally. The author can't like their own post; for them the heart carries the
-  // count and opens the list of who liked (see likersPanelHtml / wireLikes).
+  // count and opens the list of who liked (openLikesSheet, see wireLikes).
   function likeButtonHtml(post, full) {
     if (!canSocial(post)) return '';
     const owns = post.author === Store.session();
@@ -3659,12 +3659,13 @@
       // is a LINK to that page — an anchor rather than a scripted navigation, so
       // it gets the long-press preview, the middle-click and the keyboard for
       // free, and wireLikes can tell the two hearts apart by tag name.
-      // On the page it is a SWITCH again: it swaps the section under the card to
-      // the list of who liked, and swaps back. In a feed it is a link to that
-      // page. Same glyph, same count, two different jobs one route apart.
+      // On the page it raises the Likes sheet, the feed's own (Zoe, 2026-11-11:
+      // "Use the menu sheet for viewing likes in an individual post's page"; it
+      // swapped the section under the card to the list until then). In a feed
+      // it is a link to that page, which a phone also raises as the sheet.
       if (full) {
         return `<button class="card-like card-like--owner" type="button" ` +
-            `aria-expanded="${postPane === 'likers'}" ` +
+            `aria-haspopup="dialog" ` +
             `aria-label="${n ? n + ' like' + (n === 1 ? '' : 's') + ', see who' : 'Likes'}" ` +
             `title="Who liked this">${inner}</button>`;
       }
@@ -3808,7 +3809,7 @@
     return post.type === 'activity' && post.eventDate && !isPastActivity(post) && canJoin(post);
   }
 
-  // Page only, like likersPanelHtml. The answer lives down here rather than on
+  // Page only. The answer lives down here rather than on
   // the headcount glyph, which only shows (see goingControlHtml).
   // Sort key for a name list: the display name if we have the row, the handle if
   // the cache hasn't caught up. Never undefined, because localeCompare throws.
@@ -4312,7 +4313,6 @@
           linkTilesHtml(post) +
           actions +
         `</div>` +
-        likersPanelHtml(post, full) +
         commentsPanelHtml(post, full);
       el.dataset.sig = cardSig(el);
       wireLinkTiles(el);
@@ -4373,7 +4373,6 @@
         actions +
       `</div>` +
       goingPanelHtml(post, full) +
-      likersPanelHtml(post, full) +
       commentsPanelHtml(post, full);
     el.dataset.sig = cardSig(el);
     wireLinkTiles(el);
@@ -5016,7 +5015,6 @@
         cardActionsHtml(post, { ...opts, goingPost: orig }) +
       `</div>` +
       goingPanelHtml(orig, full) +
-      likersPanelHtml(post, full) +
       commentsPanelHtml(post, full);
     el.dataset.sig = cardSig(el);
     wireLinkTiles(el);
@@ -5478,52 +5476,6 @@
       `</li>`;
   }
 
-  // Page only. A private count belongs to its author and always has; what moved
-  // in 1.3 is only WHERE they read it — the heart in the feed walks them here
-  // instead of unfolding a list under a card.
-  function likersPanelHtml(post, full) {
-    if (!full) return '';
-    if (post.author !== Store.session()) return '';    // only the author sees who liked
-    const list = Store.likesFor(post.id).filter(l => !Blocks.has(l.user));
-    /* NO LABEL over the list, and the argument that put one here is worth
-       keeping because it was right about the disclosure and wrong about the
-       page. It said: under a disclosure the BUTTON was the label, you tapped a
-       heart carrying a count so the names could only be the people who liked it,
-       whereas on a page nothing has been tapped and a bare name between the
-       action row and the composer could be a liker or an attendee.
-
-       The second half doesn't hold, because the action row on this page is the
-       SECTION SWITCHER. Comments is the resting state, so a reader who has
-       tapped nothing is looking at the pane that needs no naming; the only way
-       to reach this list is the heart, which lights on `aria-expanded` the
-       moment it is showing. The button is still the label — it just stays lit
-       instead of folding away. A `?pane=likers` deep link arrives the same way,
-       since setPostPane writes the attribute on the way in.
-
-       So the label was naming a list the lit glyph above it had already named,
-       which is the fact-told-twice this app keeps removing (the post-type icons,
-       the profile shelf's caption). `.panel-label` is deleted, not merely
-       unused. */
-    return `<div class="likers-panel likers-panel--full post-pane${paneOpen('likers')}" data-pane="likers">` +
-        `<div class="comments-inner">` +
-          `<div class="comments-content">` +
-            (list.length
-              /* `l => likerItemHtml(l)`, never a bare `likerItemHtml` reference.
-                 map passes (item, INDEX, array), so a point-free pass handed the
-                 index in as `tag` — and `tag` is the word that rides beside the
-                 name in the activity ink. Index 0 is falsy, so the first liker
-                 looked right and every one after it wore a green pill counting
-                 1, 2, 3 down the list: a tally nobody asked for, in the colour
-                 this app reserves for who is coming to a plan. Any future call
-                 site that means "no tag" has to say so with an arrow. */
-              ? `<ul class="likers-list" style="--burst:var(--heart)">` +
-                  `${list.map(l => likerItemHtml(l)).join('')}</ul>`
-              : `<p class="likers-empty">No likes yet, and that’s just fine.</p>`) +
-          `</div>` +
-        `</div>` +
-      `</div>`;
-  }
-
   /* The three-panel mutual exclusion is GONE — `collapsePanel`, its three
      wrappers, and `wireCardCollapse`'s double-tap-to-fold. A feed card has ONE
      disclosure left (the comment box), so there is no second panel for it to
@@ -5852,7 +5804,7 @@
     // switches the section under the card to who liked; in a feed it is a plain
     // anchor to that page and needs no listener at all.
     if (post.author === Store.session()) {
-      if (btn.tagName === 'BUTTON') btn.addEventListener('click', () => setPostPane('likers', el));
+      if (btn.tagName === 'BUTTON') btn.addEventListener('click', () => openLikesSheet(post));
       // In a feed the anchor stays the way there on a desktop (and keeps its
       // preview and middle click); on a phone it raises the list as a sheet.
       if (btn.tagName === 'A') asSheet(btn, () => openLikesSheet(post));
@@ -6060,7 +6012,8 @@
       `</li>`;
   }
 
-  /* WHICH SECTION THE POST PAGE IS SHOWING: 'comments' | 'likers' | 'going'.
+  /* WHICH SECTION THE POST PAGE IS SHOWING: 'comments' | 'going'. (Who liked
+     was a third until 2026-11-11 and is the Likes sheet now.)
 
      The disclosure came back, and it came back where it belongs. On a card these
      three were mutually exclusive because a card must never grow two threads at
@@ -6075,6 +6028,7 @@
      that. `renderPost` resets it, so arriving at any post always opens on the
      conversation. */
   let postPane = 'comments';
+  let likesAskedOn = null;   // the entry a `?pane=likers` link last raised Likes on
   const paneOpen = (name) => (postPane === name ? ' open' : '');
 
   function setPostPane(next, el) {
@@ -6099,7 +6053,6 @@
       if (n && n.hasAttribute('aria-expanded')) n.setAttribute('aria-expanded', String(on));
     };
     say('.card-comment', postPane === 'comments');
-    say('.card-like--owner', postPane === 'likers');
     say('.card-attendees', postPane === 'going');
   }
 
@@ -13306,7 +13259,7 @@
        author's heart and the headcount hand over the question they were tapped
        to ask. Set before the card is built, so the pane is simply open on the
        first paint rather than opened a frame later. */
-    postPane = (pane === 'likers' || pane === 'going') ? pane : 'comments';
+    postPane = pane === 'going' ? pane : 'comments';
     view.innerHTML =
       `<section class="view view--post" id="post-page">` +
         `<div class="feed"></div>` +
@@ -13321,6 +13274,14 @@
        than re-deriving those two rules here, and fall back to the floor. */
     if (postPane !== 'comments' && !card.querySelector(`.post-pane[data-pane="${postPane}"]`))
       setPostPane('comments', card);
+    /* Who liked is a sheet now, so `?pane=likers` (an Updates row for a like)
+       raises it over the page, for the author alone, once per FRESH entry: a
+       back onto it, or a repaint of it, leaves it down (armSeek's rule). */
+    if (pane === 'likers' && post.author === Store.session() && navHere &&
+        likesAskedOn !== navHere && !scrollMemory.has(navHere)) {
+      likesAskedOn = navHere;
+      requestAnimationFrame(() => { if (card.isConnected) openLikesSheet(post); });
+    }
     /* Tag chips belong to the home feed's filter, same as any card built outside
        renderFeed — tapping one goes home with that tag live.
 
