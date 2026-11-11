@@ -398,11 +398,12 @@
        used to be two hand-kept tallies and they drifted by one gap, which is the sort of bug that only shows up as "the mark
        sits a bit low". */
     const blocks = [];
-    const markH = Math.round(m.mark * 1028 / 1650);   /* the file's viewBox */
     const authorH = m.avatar;
     const bandTop = Math.max(m.safeTop, m.margin);
     const band = m.h - bandTop - Math.max(m.safeBottom, m.margin);
-    const fixed = m.pad + authorH + m.rowGap + m.gap + markH + m.padBottom;
+    /* No foot row since 2026-11-11: the wordmark rides the byline, so the
+       card ends where the post does. */
+    const fixed = m.pad + authorH + m.rowGap + m.padBottom;
     const budget = band - fixed;
     const spent = function () {
       return blocks.reduce(function (n, b) { return n + b.height + b.after; }, 0);
@@ -476,7 +477,7 @@
     const top = Math.max(bandTop, Math.round(bandTop + (band - height) / 2));
     return { blocks: blocks, cardW: cardW, textW: textW,
              height: height, top: top, left: m.margin,
-             authorH: authorH, markH: markH };
+             authorH: authorH };
   }
 
   async function render(spec) {
@@ -515,7 +516,21 @@
     /* WHO. The attribution leads, on every card — a card that opens with the
        writing and names its writer underneath reads as a quote graphic, which
        is exactly the thing Tria is not. */
-    drawAuthor(ctx, tx, y, m, author, avatar, paper, L.authorH);
+    drawAuthor(ctx, tx, y, m, author, avatar, paper, L.authorH, spec.when, L.textW);
+
+    /* WHERE. The wordmark, quietly, at the byline's right end, the place a
+       feed card's type glyph used to sit (Zoe, 2026-11-11: "more akin to a
+       post in the real life feed. Tria wordmark QUIETLY where the glyph icon
+       would be"). Not the brand's cyan to green: the page's muted ink, held
+       back further, so it signs the post and never competes with it. It
+       replaced the foot row of the coloured mark and triaonline.com. */
+    if (mark) {
+      const mw = m.mark, mh = Math.round(mw * 1028 / 1650);   /* the file's viewBox */
+      ctx.save();
+      ctx.globalAlpha = 0.55;
+      ctx.drawImage(quiet(mark, mw, mh, paper.muted), tx + L.textW - mw, y + (L.authorH - mh) / 2, mw, mh);
+      ctx.restore();
+    }
     y += L.authorH + m.rowGap;
 
     /* WHAT. Each block draws at y and then advances by its own measured height
@@ -538,22 +553,23 @@
       y += b.height + b.after;
     });
 
-    /* WHERE. The wordmark and the address, on their own row at the foot. The
-       mark is the real file (icons/wordmark.svg, the brand's cyan to green
-       baked into it) and it is small on purpose: the reader's post is the
-       content, and this is a signature, not a banner. */
-    const markH = L.markH;
-    const fy = L.top + L.height - m.padBottom - markH;
-    if (mark) ctx.drawImage(mark, tx, fy, m.mark, markH);
-    ctx.fillStyle = paper.muted;
-    ctx.font = sans(m.address);
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(spec.address || 'triaonline.com', tx + L.textW, fy + markH / 2);
-    ctx.textAlign = 'left';
-
     ctx.restore();
     return canvas;
+  }
+
+  /* The wordmark in one flat colour: the file drawn on its own layer at the
+     size it will land (so the vector stays crisp), then filled over with
+     source-in, which keeps its shape and drops its gradients. */
+  function quiet(img, w, h, colour) {
+    const layer = document.createElement('canvas');
+    const k = 2;
+    layer.width = w * k; layer.height = h * k;
+    const c = layer.getContext('2d');
+    c.drawImage(img, 0, 0, layer.width, layer.height);
+    c.globalCompositeOperation = 'source-in';
+    c.fillStyle = colour;
+    c.fillRect(0, 0, layer.width, layer.height);
+    return layer;
   }
 
   /* THE DISC: the author's photo, or their initial the way the app sets it
@@ -578,28 +594,33 @@
     ctx.restore();
   }
 
-  /* Name over @handle. Somebody with no name gets the handle alone, on the
-     disc's midline, rather than their handle printed twice. */
-  function drawAuthor(ctx, x, y, m, author, avatar, paper, d) {
+  /* The feed's byline (.byline): name over the post's date, as a card in My
+     Circle reads (2026-11-11; it was name over @handle). The date is the
+     post's day, never "3h ago", because a saved picture outlives the hour.
+     With no date it falls back to the @handle, and somebody with no name
+     gets their one line alone on the disc's midline. */
+  function drawAuthor(ctx, x, y, m, author, avatar, paper, d, when, room) {
     disc(ctx, x, y, d, author, avatar, paper);
 
     const handle = '@' + (author.username || '');
+    const top = author.name || handle;
+    const sub = when || (author.name ? handle : '');
     const nx = x + d + Math.round(m.rowGap / 2);
+    /* A long name is narrowed rather than run under the wordmark. */
+    const fit = Math.max(1, room - (nx - x) - m.mark - Math.round(m.rowGap / 2));
     ctx.textBaseline = 'alphabetic';
-    if (!author.name) {
-      ctx.fillStyle = paper.ink;
-      ctx.font = sans(m.name, 700);
+    ctx.fillStyle = paper.ink;
+    ctx.font = sans(m.name, 700);
+    if (!sub) {
       ctx.textBaseline = 'middle';
-      ctx.fillText(handle, nx, y + d / 2);
+      ctx.fillText(top, nx, y + d / 2, fit);
       ctx.textBaseline = 'alphabetic';
       return;
     }
-    ctx.fillStyle = paper.ink;
-    ctx.font = sans(m.name, 700);
-    ctx.fillText(author.name, nx, y + d / 2 - Math.round(m.handle * 0.2));
+    ctx.fillText(top, nx, y + d / 2 - Math.round(m.handle * 0.2), fit);
     ctx.fillStyle = paper.muted;
     ctx.font = sans(m.handle);
-    ctx.fillText(handle, nx, y + d / 2 + m.handle);
+    ctx.fillText(sub, nx, y + d / 2 + m.handle);
   }
 
   /* Both families are subsetted by unicode-range and declared `font-display:
@@ -615,7 +636,7 @@
   }
 
   function fonts(spec, m) {
-    const text = [spec.title, spec.text, spec.prompt,
+    const text = [spec.title, spec.text, spec.prompt, spec.when,
                   (spec.blocks || []).map(function (b) { return b.text; }).join(' '), (spec.author || {}).name,
                   (spec.author || {}).username, spec.address].filter(Boolean).join(' ')
                  + ' triaonline.com@…';

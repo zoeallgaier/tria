@@ -14254,8 +14254,17 @@
       blocks: cardBlocks(noteWithoutTail(post.note, postLinks(post))),
       prompt: daily ? daily.prompt : null,
       photo: still || null,
-      address: 'triaonline.com',
+      /* The byline's date, as the feed's (2026-11-11), but the day itself:
+         "3h ago" would be wrong by tomorrow on a saved picture. */
+      when: storyDay(post.date),
     };
+  }
+  function storyDay(iso) {
+    if (!iso) return '';
+    const d = new Date(iso + 'T12:00:00');
+    if (isNaN(d)) return '';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric',
+      ...(iso.slice(0, 4) !== TODAY.slice(0, 4) ? { year: 'numeric' } : {}) });
   }
 
   /* Can this shell put a picture in the camera roll? Native only — a browser
