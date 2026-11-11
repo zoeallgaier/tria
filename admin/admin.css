@@ -262,6 +262,9 @@ h2 { font-size: 1.5rem; line-height: 1.15; }
 .grid--two { grid-template-columns: minmax(0, 1fr); gap: 36px var(--gap); }
 @media (min-width: 760px) { .grid--two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 .grid--two.section-tight { gap: 28px var(--gap); margin-top: 28px; }
+.grid--three { grid-template-columns: minmax(0, 1fr); gap: 36px var(--gap); }
+@media (min-width: 760px) { .grid--three { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (min-width: 1180px) { .grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
 .tile { padding: 16px 18px 15px; min-width: 0; }
 .tile-label { font-size: 0.82rem; color: var(--muted); }
@@ -392,6 +395,10 @@ h2 { font-size: 1.5rem; line-height: 1.15; }
   font-size: 0.92rem;
 }
 .callout b { font-weight: 700; }
+/* A callout that is itself the way to its page: the whole card is the target. */
+a.callout--go { color: var(--text); text-decoration: none; min-height: 44px; }
+a.callout--go .i--go { transform: scaleX(-1); color: var(--muted); width: 18px; height: 18px; }
+@media (hover: hover) { a.callout--go:hover .i--go { color: var(--heart); } }
 .callout a { flex: none; font-weight: 700; color: var(--heart); text-decoration: none; min-height: 32px; display: inline-flex; align-items: center; }
 
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: -6px -18px; padding: 0 18px; }

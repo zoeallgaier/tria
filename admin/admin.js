@@ -28,9 +28,11 @@
 
   const ICON = {
     overview: '<path d="M5 20v-6M12 20V5M19 20v-10"/>',
-    funnel: '<path d="M3.5 5h17l-6.5 7.5V19l-4 2v-8.5z"/>',
+    // Settling in: steps up to a door.
+    funnel: '<path d="M3.5 20h5v-5h5v-5h5V4.5"/><path d="M15.5 7.5 18.5 4.5l3 3"/>',
     retention: '<rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/>',
-    community: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.6 14.6c2.6.2 4.3 1.9 4.9 4.9"/>',
+    // The app's own friends mark (ICONS.friends in app.js).
+    community: '<circle cx="8.3" cy="9" r="2.7"/><circle cx="15.7" cy="9" r="2.7"/><path d="M3.5 19.5a4.8 4.8 0 0 1 9.6 0"/><path d="M10.9 19.5a4.8 4.8 0 0 1 9.6 0"/>',
     dictionary: '<path d="M5 19.5v-15A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5 1.5 1.5 0 0 0 6.5 21H19"/>',
     refresh: '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/>',
     chevron: '<path d="M15 5.5 8 12l7 6.5"/>',
@@ -41,13 +43,14 @@
 
   const TABS = [
     { key: 'overview', label: 'Overview' },
-    { key: 'funnel', label: 'Funnel' },
+    { key: 'funnel', label: 'Settling in' },   // the funnel, in Tria's words
     { key: 'retention', label: 'Retention' },
     { key: 'community', label: 'Community' },
     { key: 'dictionary', label: 'Dictionary' },
   ];
   let dataOk = false;          // an admin and the SQL is run (or demo)
-  let extrasOk = true;         // admin-extras.sql is run
+  let extrasOk = true;         // admin-extras.sql answers
+  let extrasWhy = '';          // and, when it doesn't, what to run
   const cache = {};
 
   // ── Small things ──────────────────────────────────────────────────────────
@@ -119,14 +122,22 @@
     asof.textContent = 'Updated ' + clock(new Date());
     return (cache[id] = data);
   }
-  // admin-extras.sql may not be run yet: null, never a throw.
+  // admin-extras.sql may not be run yet, or run before admin-dashboard.sql's
+  // newer half (it reads metrics.people, 42P01 without it): null and a line
+  // saying which file to run, never a throw, so the Overview still draws.
   async function extras() {
     if (!extrasOk) return null;
     try { return await call('admin_extras'); } catch (err) {
-      if (missing(err)) { extrasOk = false; return null; }
-      throw err;
+      extrasOk = false;
+      extrasWhy = missing(err) ? 'Run <b>supabase/admin-extras.sql</b>.'
+        : err?.code === '42P01' ? 'Re-run <b>supabase/admin-dashboard.sql</b>, then this fills in.'
+        : 'Couldn\'t load these. ' + esc(err?.message || '');
+      return null;
     }
   }
+  // One section's numbers failing never blanks the page: each call settles
+  // on its own, a failure is null.
+  const settle = (ps) => Promise.allSettled(ps).then((rs) => rs.map((r) => (r.status === 'fulfilled' ? r.value : null)));
 
   // ── Shell ─────────────────────────────────────────────────────────────────
   function currentTab() {
@@ -162,6 +173,7 @@
   refreshBtn.addEventListener('click', async () => {
     for (const k in cache) delete cache[k];
     extrasOk = true;
+    extrasWhy = '';
     refreshBtn.classList.add('is-spinning');
     const y = window.scrollY;
     await render(false);
@@ -419,82 +431,87 @@
 
   // ── Overview: the pulse of a word of mouth beta ───────────────────────────
   async function renderOverview() {
-    const [o, f30, src30, ret, x] = await Promise.all([
+    // admin_overview is the page; the rest are sections that draw when they
+    // answer and say so when they don't (Zoe, 2026-11-11: "what happened to
+    // the overview?", one 42P01 in admin_extras had blanked all of it).
+    const [o, f30, src30, ret, x] = await settle([
       call('admin_overview'),
       call('admin_funnel', { p_days: 30, p_basis: 'account', p_by: 'none' }),
       call('admin_funnel', { p_days: 30, p_basis: 'account', p_by: 'source' }),
       call('admin_retention'),
       extras(),
     ]);
-    const s = o.series || [];
+    if (!o) throw new Error('admin_overview didn\'t answer.');
+    const s = (o.series || []).map((w) => ({ ...w, active: w.active || 0, opened: w.opened || 0, joined: w.joined || 0 }));
     const cur = s[s.length - 1], prev = s[s.length - 2];
-    const g = f30.groups?.[0] || { seq: [0, 0, 0, 0, 0, 0], activated: 0 };
-    const accounts30 = g.seq[1];
+    const g = f30?.groups?.[0];
+    const accounts30 = g?.seq?.[1] || 0;
 
     // Week 1 retention: the last four cohorts old enough to say.
-    const ripe = (ret.cohorts || []).filter((c) => c.weeks?.[0]?.eligible > 0).slice(-4);
-    const w1 = pct(ripe.reduce((a, c) => a + c.weeks[0].alive, 0), ripe.reduce((a, c) => a + c.weeks[0].eligible, 0));
+    const ripe = (ret?.cohorts || []).filter((c) => c.weeks?.[0]?.eligible > 0).slice(-4);
+    const w1 = ripe.length ? pct(ripe.reduce((a, c) => a + c.weeks[0].alive, 0), ripe.reduce((a, c) => a + c.weeks[0].eligible, 0)) : null;
 
     // Word of mouth: the share of last month's accounts that came by invite.
-    const srcGroups = src30.groups || [];
-    const invited = srcGroups.find((x) => x.key === 'invite')?.seq[1] || 0;
-    const srcTotal = srcGroups.reduce((a, x) => a + (x.seq[1] || 0), 0);
+    const srcGroups = src30?.groups || [];
+    const invited = srcGroups.find((r) => r.key === 'invite')?.seq?.[1] || 0;
+    const srcTotal = srcGroups.reduce((a, r) => a + (r.seq?.[1] || 0), 0);
 
-    const worst = worstDrop(g.seq, 1);
+    const worst = g ? worstDrop(g.seq, 1) : -1;
     const dropLine = worst > 0
-      ? `<div class="callout"><span>Biggest drop: <b>${esc(STAGES[worst - 1].name)} → ${esc(STAGES[worst].name)}</b>, ` +
-        `${pctTxt(100 - pct(g.seq[worst], g.seq[worst - 1]))} stop there.</span><a href="#funnel">Funnel</a></div>`
+      ? `<a class="callout callout--go" href="#funnel"><span>Biggest drop: <b>${pctTxt(100 - pct(g.seq[worst], g.seq[worst - 1]))}</b> ` +
+        `stop between ${esc(STAGES[worst - 1].name)} and ${esc(STAGES[worst].name)}.</span>${svg('chevron', 'i i--go')}</a>`
       : '';
 
     const plats = Object.entries(o.platforms7 || {}).sort((a, b) => b[1] - a[1]);
     const platTotal = plats.reduce((a, p) => a + p[1], 0);
+    const who = (p) => `<a class="who" href="../#/u/${encodeURIComponent(p.handle)}">${esc(p.name)}</a>`;
 
-    const newest = (x?.newest || []).map((p) => row({
-      title: `<a class="who" href="../#/u/${encodeURIComponent(p.handle)}">${esc(p.name)}</a>`,
+    // Who to nudge first: the newest who are stuck, then the settled.
+    const newest = (x?.newest || []).slice().sort((a, b) => (nextStep(a) === 'Settled in') - (nextStep(b) === 'Settled in')).map((p) => row({
+      title: who(p),
       sub: `${esc(ago(p.joined))} · ${esc(SOURCE[p.source] || p.source)} · ${esc(PLATFORM[p.platform] || p.platform)}`,
       val: `<span class="next${p.returned ? ' is-done' : ''}">${esc(nextStep(p))}</span>${stepDots(p)}`,
       tipText: `<b>${esc(p.name)}</b><br>Profile ${p.profile ? '✓' : '·'}  Connected ${p.connected ? '✓' : '·'}<br>Posted ${p.acted ? '✓' : '·'}  Came back ${p.returned ? '✓' : '·'}`,
     }));
+    const extrasNote = x ? '' : `<div class="callout">${extrasWhy}</div>`;
 
     main.innerHTML =
       headHtml('Overview') +
       '<div class="grid grid--kpi">' +
         tile('Weekly active', fmt(o.wau), delta(cur?.active, prev?.active), 'Created or connected in the last 7 days. Likes don\'t count.') +
-        tile('New accounts', fmt(o.new7), delta(cur?.joined, prev?.joined), 'Accounts made in the last 7 days') +
-        tile('Activated', pctTxt(pct(g.activated, accounts30)), `${fmt(g.activated)} of ${fmt(accounts30)}, 30 days`, 'Connected and posted within a week of joining. New accounts, last 30 days.') +
-        tile('Back in week 1', pctTxt(w1), 'last 4 signup weeks', 'Active again 7 to 13 days after joining') +
+        tile('New this week', fmt(o.new7), delta(cur?.joined, prev?.joined), 'Accounts made in the last 7 days') +
+        tile('Activated', g ? pctTxt(pct(g.activated, accounts30)) : '–', g ? `${fmt(g.activated)} of ${fmt(accounts30)} new, 30 days` : '', 'Connected and posted within a week of joining. New accounts, last 30 days.') +
+        tile('Back in week 1', pctTxt(w1), ripe.length ? 'last 4 signup weeks' : 'too new to say', 'Active again 7 to 13 days after joining') +
       '</div>' +
       dropLine +
+      `<div class="section">${sectionHead('Weekly active', '12 weeks')}<div class="card" id="c-active"></div>` +
       strip([
-        ['Total users', fmt(o.users)],
-        ['Monthly active', fmt(o.mau), 'Created or connected in the last 30 days'],
-        ['Today', fmt(o.dau), 'Active today'],
-        ['Stickiness', pctTxt(o.mau28 ? pct(o.avgDau28, o.mau28) : null), 'Average daily active ÷ monthly active, 28 days'],
-        ['Opened this week', fmt(o.openedWau), 'Opened Tria at all'],
-      ]) +
-      '<div class="section grid grid--two">' +
-        `<div>${sectionHead('Weekly active')}<div class="card" id="c-active"></div></div>` +
-        `<div>${sectionHead('New accounts')}<div class="card" id="c-joined"></div></div>` +
-      '</div>' +
-      `<div class="section">${sectionHead('Word of mouth')}<div class="grid grid--tiles">` +
-        tile('From an invite', pctTxt(pct(invited, srcTotal)), `${fmt(invited)} of ${fmt(srcTotal)}, 30 days`, 'New accounts that redeemed an invite link') +
+        ['Everyone', fmt(o.users), 'Every account, yours left out'],
+        ['This month', fmt(o.mau), 'Created or connected in the last 30 days'],
+        ['Today', fmt(o.dau), 'Created or connected today'],
+        ['Stickiness', pctTxt(o.mau28 ? pct(o.avgDau28, o.mau28) : null), 'Average day ÷ month, 28 days. 20% is healthy for a social app.'],
+        ['Opened', fmt(o.openedWau), 'Opened Tria this week, doing something or not'],
+      ]) + '</div>' +
+      `<div class="section">${sectionHead('New people', 'Who to nudge')}` +
+        (x ? list(newest.length ? newest : [row({ title: 'Nobody yet' })]) : extrasNote) + '</div>' +
+      `<div class="section">${sectionHead('Word of mouth')}<div class="grid ${x ? 'grid--kpi' : 'grid--tiles'}">` +
+        tile('From an invite', src30 ? pctTxt(pct(invited, srcTotal)) : '–', src30 ? `${fmt(invited)} of ${fmt(srcTotal)}, 30 days` : '', 'New accounts that came through an invite link') +
         (x ? tile('Invites redeemed', fmt(x.invites?.last30), `${fmt(x.invites?.total)} all time`, 'Last 30 days') +
           tile('On their own', fmt(x.friends?.alone), pctTxt(pct(x.friends?.alone, x.users)) + ' of everyone', 'No friend and no circle, so nobody sees their posts') +
           tile('Median friends', fmt(Math.round((x.friends?.median ?? 0) * 10) / 10), 'mutual, each') : '') +
       '</div>' +
-      (x ? '<div class="grid grid--two section-tight">' +
-          `<div>${sectionHead('Top inviters')}` + list((x.invites?.top || []).length
-            ? x.invites.top.map((p) => row({ title: `<a class="who" href="../#/u/${encodeURIComponent(p.handle)}">${esc(p.name)}</a>`, sub: '@' + esc(p.handle), val: `<b>${fmt(p.n)}</b>` }))
-            : [row({ title: 'None yet' })]) + '</div>' +
-          `<div>${sectionHead('Opened on', 'This week')}` + list(plats.length
-            ? plats.map(([k, v]) => row({ title: esc(PLATFORM[k] || k), meter: pct(v, platTotal), val: `<b>${fmt(v)}</b>` }))
-            : [row({ title: 'Nobody yet' })]) + '</div>' +
-        '</div>' : '<div class="callout">Run <b>supabase/admin-extras.sql</b> for invites and new people.</div>') +
-      '</div>' +
-      (x ? `<div class="section">${sectionHead('New people', 'Who to nudge')}${list(newest.length ? newest : [row({ title: 'Nobody yet' })])}</div>` : '') +
-      '<div class="section grid grid--two">' +
+      '<div class="grid grid--two section-tight">' +
+        `<div>${sectionHead('New accounts', 'A week')}<div class="card" id="c-joined"></div></div>` +
+        (x ? `<div>${sectionHead('Top inviters')}` + list((x.invites?.top || []).length
+            ? x.invites.top.map((p) => row({ title: who(p), sub: '@' + esc(p.handle), val: `<b>${fmt(p.n)}</b>` }))
+            : [row({ title: 'None yet' })]) + '</div>' : '') +
+      '</div></div>' +
+      '<div class="section grid grid--three">' +
         `<div>${sectionHead('Made this week')}<div class="card">${barsHtml(o.types7, TYPE_NAMES)}</div></div>` +
         `<div>${sectionHead('Done this week')}<div class="card">${barsHtml(o.kinds7, KIND_NAMES)}</div></div>` +
+        `<div>${sectionHead('Opened on', 'This week')}` + list(plats.length
+          ? plats.map(([k, v]) => row({ title: esc(PLATFORM[k] || k), meter: pct(v, platTotal), val: `<b>${fmt(v)}</b>` }))
+          : [row({ title: 'Nobody yet' })]) + '</div>' +
       '</div>' +
       foot();
 
@@ -568,7 +585,7 @@
     }
 
     main.innerHTML =
-      headHtml('Funnel') +
+      headHtml('Settling in') +
       '<div class="controls">' +
         segmented('basis', [['account', 'Account'], ['install', 'Install']], fstate.basis, 'From') +
         segmented('days', [[30, '30 days'], [90, '90 days'], [0, 'All']], fstate.days, 'Joined in') +
@@ -592,7 +609,7 @@
         if (b.dataset.by) fstate.by = b.dataset.by;
         const y = window.scrollY;
         await renderFunnel();
-        watchTitle('Funnel');
+        watchTitle('Settling in');
         window.scrollTo(0, y);
       });
     });
@@ -652,8 +669,7 @@
   async function renderCommunity() {
     const x = await extras();
     if (!x) {
-      main.innerHTML = headHtml('Community') +
-        '<div class="callout">Run <b>supabase/admin-extras.sql</b>. It adds no tracking.</div>';
+      main.innerHTML = headHtml('Community') + `<div class="callout">${extrasWhy}</div>`;
       return;
     }
     const u = x.users || 0;
