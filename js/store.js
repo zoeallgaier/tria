@@ -1781,9 +1781,13 @@ const Store = (() => {
   /* Whether this account is on Tria's team (supabase/admin-dashboard.sql's
      public.admins), so Edit profile can offer the admin page. Anyone else, or a
      database without the file, answers false; asked once a session. */
-  let adminAsked = null;
+  // Kept per account, so a sign out and in as someone else asks again.
+  let adminAsked = null, adminFor = null;
   function isAdmin() {
-    if (!adminAsked) {
+    const who = state.session || null;
+    if (!who) return Promise.resolve(false);
+    if (!adminAsked || adminFor !== who) {
+      adminFor = who;
       adminAsked = sb.rpc('is_admin').then(({ data, error }) => !error && data === true, () => false);
     }
     return adminAsked;
