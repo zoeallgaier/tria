@@ -1354,8 +1354,10 @@ address and therefore a different person, and there is no way around that.
   one-way edge is a follow or a request (see above).
 - Post photos are stored at native aspect ratio (not cropped); only avatars crop
   (circular).
-- **A CAROUSEL is a Frame with 2 to 6 photos** (`posts.images text[]` + `tints
-  text[]`, added by `supabase/add-carousels.sql`). `image` is still the FIRST
+- **A CAROUSEL is a Frame with 2 to 10 photos** (`posts.images text[]` + `tints
+  text[]`, added by `supabase/add-carousels.sql`; ten since 2026-11-11, Zoe:
+  "Allow up to 10 carousel slides", through `supabase/carousels-ten.sql`, and
+  six until it runs: `Store.carouselMax` asks `carousel_max()` once a session). `image` is still the FIRST
   photo, so the masonry, pins, quoted tiles and the image warmers need nothing
   and show the cover; `images` is the whole ordered set, cover included, and is
   only written for a real set (`posts_images_shape` holds `images[1] = image`).

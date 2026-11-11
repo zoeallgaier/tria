@@ -574,7 +574,7 @@ the thumbnails and checks are Apple's.
 count's material). Under the roll there is no dropzone, no Add more, no Choose
 another and no + or x in the tray, which only picks which photo the preview
 shows. Picks are ordinary stills (`rollId` is the asset id, none for a camera
-photo), so the carousel and its six are unchanged; a still taken out is
+photo), so the carousel and its cap are unchanged (**ten photos since 2026-11-11**, Zoe: "Allow up to 10 carousel slides"; `supabase/carousels-ten.sql`, **NOT run** as of 2026-11-11: until `carousel_max()` answers, `Store.carouselMax` keeps the composer to six, and the order strip shrinks its thumbs to fit ten in one row); a still taken out is
 unticked in the row (`rollDeselect`), the first thing in opens the photo
 surface and the last out folds it. A photo added from All photos is not ticked
 in the row (a picker can be unticked from outside, never ticked); tapped there,

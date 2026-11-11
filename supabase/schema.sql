@@ -119,11 +119,12 @@ create table public.posts (
                 and (take->>'rating')::numeric in (1,2,3,4,5,6,7,8,9,10))))
     or (type <> 'take' and take is null)
   ),
-  -- A carousel is a photo post whose cover is also its `image` (add-carousels.sql).
+  -- A carousel is a photo post whose cover is also its `image` (add-carousels.sql,
+  -- ten at most since carousels-ten.sql).
   constraint posts_images_shape check (
     images is null
     or (type = 'photo' and image is not null
-        and cardinality(images) between 2 and 6
+        and cardinality(images) between 2 and 10
         and images[1] = image)
   )
 );

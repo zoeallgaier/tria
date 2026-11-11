@@ -441,6 +441,7 @@ const Store = (() => {
     // reader got the "Stay in the loop" pre-prompt on Updates every single cold
     // launch, and nothing re-rendered when the real answer arrived behind it.
     const primed = pushPrime();
+    probeCarouselMax();
     try {
       const { data: { session } } = await sb.auth.getSession();
       // A recovery session getSession picked up from the reset link isn't a login —
@@ -1308,6 +1309,24 @@ const Store = (() => {
   }
   const repostRulesReady = () => repostRules === true;
 
+  // A carousel's most photos: six, or ten once carousels-ten.sql has run
+  // (Zoe, 2026-11-11). Asked once of carousel_max(), which answers PGRST202
+  // before the file, so the composer never offers a seventh photo the
+  // database would refuse at Share. A question about the server, not the world.
+  let carouselCap = null, carouselAsking = false;
+  function probeCarouselMax() {
+    if (carouselCap !== null || carouselAsking) return;
+    carouselAsking = true;
+    sb.rpc('carousel_max')
+      .then(({ data, error }) => {
+        if (!error && Number.isInteger(data) && data >= 6) carouselCap = data;
+        else if (error && isMissing(error)) carouselCap = 6;
+      })
+      .catch(() => {})
+      .finally(() => { carouselAsking = false; });
+  }
+  const carouselMax = () => carouselCap || 6;
+
   // Discover: everything on Tria you're allowed to see that isn't yours, newest
   // first. This used to mean "public posts only", which was the right shape
   // while Discover was strictly a stranger-meeting page. It's now the whole room
@@ -2162,7 +2181,7 @@ const Store = (() => {
       // A carousel: `data.images` is [{ src, dims, tint }], in the order they deal.
       // One at a time, so a slow connection shows honest progress across the set
       // and a failure part-way leaves the fewest files behind to clean up.
-      const set = data.images.slice(0, 6);
+      const set = data.images.slice(0, carouselMax());
       const urls = [];
       try {
         for (let i = 0; i < set.length; i++) {
@@ -4499,7 +4518,7 @@ const Store = (() => {
     createPost, deletePost, updatePost, uploadPhoto, dropUploads,
     // Reposts
     createRepost, undoRepost, originalOf, repostable, repostedByMe, myRepostOf,
-    canRepost, quoteAudience, repostRulesReady,
+    canRepost, quoteAudience, repostRulesReady, probeCarouselMax, carouselMax,
     probeCommentEdit, commentEditReady, editComment,
     // Comments
     commentsFor, addComment, deleteComment,

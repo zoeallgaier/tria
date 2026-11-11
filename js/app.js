@@ -25260,7 +25260,7 @@
        access: both pickers run outside the app.
 
        Whatever comes in is the same still the photo button made, so the
-       carousel and its six are unchanged, and the PREVIEW'S x is how one comes
+       carousel and its ten are unchanged, and the PREVIEW'S x is how one comes
        out (rollMode in wireFrameCapture), which unticks it in the row too.
        The row's last photo or the clip going folds the surface away.
 
@@ -25300,11 +25300,11 @@
         if (!r.width || !r.height) return;
         // Document coordinates: the picker lives in the web view's scroll view.
         const rect = { x: r.left + window.scrollX, y: r.top + window.scrollY, w: r.width, h: r.height };
-        const sig = JSON.stringify(rect);
+        const sig = JSON.stringify(rect) + maxStills();
         if (sig === told) return;
         told = sig;
         call('roll', {
-          show: true, rect, limit: MAX_STILLS,
+          show: true, rect, limit: maxStills(),
           radius: parseFloat(getComputedStyle(strip).borderTopLeftRadius) || 24,
         }).catch(() => {});
       }
@@ -25325,7 +25325,7 @@
         if (!stills.length && !videoCapture && wantPhoto) fold();
       };
       frame.cleared = fold;
-      const full = () => frame.error('That’s six photos, which is as many as one post holds.');
+      const full = () => frame.error(`That’s ${stillsWord()} photos, which is as many as one post holds.`);
 
       // A tick lands as `rollLoading` at once and `rollPick` once its files
       // are made, which is a moment for a photo on the phone and as long as
@@ -25337,7 +25337,7 @@
           if (gone || !ev || !ev.id || frame.has(ev.id) || waiting.has(ev.id)) return;
           waiting.set(ev.id, setTimeout(() => {
             waiting.delete(ev.id);
-            if (gone || frame.has(ev.id) || stills.length >= MAX_STILLS) return;
+            if (gone || frame.has(ev.id) || stills.length >= maxStills()) return;
             open();
             ticked.add(ev.id);
             frame.pend(ev.id);
@@ -25393,7 +25393,7 @@
       // In the app the camera is native (TriaPhotos.camera), its photo made
       // into the post's files there; an older binary has the capture input.
       const takePhoto = async () => {
-        if (stills.length >= MAX_STILLS) { full(); return; }
+        if (stills.length >= maxStills()) { full(); return; }
         if (asking) return;
         asking = true;
         let r;
@@ -25445,7 +25445,7 @@
       let asking = false;
       const allPhotos = async () => {
         if (asking) return;
-        const room = MAX_STILLS - frame.loose();
+        const room = maxStills() - frame.loose();
         if (room < 1) { full(); return; }
         asking = true;
         let res = null, release = null;
@@ -25549,7 +25549,11 @@
   // those this is the real gate, caught at pick time and before the upload with
   // copy that says what to do rather than a generic server error.
   const MAX_UPLOAD_BYTES = 150 * 1024 * 1024;
-  const MAX_STILLS = 6;                                 // a carousel's most photos (posts_images_shape agrees)
+  // A carousel's most photos: ten since 2026-11-11 (Zoe: "Allow up to 10
+  // carousel slides"), six until carousels-ten.sql runs (posts_images_shape
+  // agrees either way). Read live, so the probe landing late still counts.
+  const maxStills = () => Store.carouselMax();
+  const stillsWord = () => (maxStills() === 10 ? 'ten' : 'six');
 
   function wireFrameCapture(root) {
     const file     = root.querySelector('#c-file');
@@ -25585,7 +25589,7 @@
       // A place for a photo still loading (the roll's rollLoading), then
       // its picture once it lands.
       pend(id) {
-        if (videoCapture || stills.length >= MAX_STILLS) return false;
+        if (videoCapture || stills.length >= maxStills()) return false;
         const err = errEl();
         if (err) err.textContent = '';
         finishStills([{ rollId: id, pending: true }], stills.length > 0);
@@ -25598,7 +25602,7 @@
       ids: () => stills.filter(s => s.rollId).map(s => s.rollId),
       loose: () => stills.filter(s => !s.rollId).length,
       add(id, it) {
-        if (videoCapture || stills.length >= MAX_STILLS) return false;
+        if (videoCapture || stills.length >= maxStills()) return false;
         const err = errEl();
         if (err) err.textContent = '';
         finishStills([{ ...it, rollId: id }], stills.length > 0);
@@ -25619,7 +25623,7 @@
         const want = new Set(items.map(i => i.id));
         stills = stills.filter(s => !s.rollId || want.has(s.rollId));
         const fresh = items.filter(i => (i.data || i.full) && !stills.some(s => s.rollId === i.id))
-          .slice(0, Math.max(0, MAX_STILLS - stills.length));
+          .slice(0, Math.max(0, maxStills() - stills.length));
         if (fresh.length) {
           finishStills(fresh.map(i => ({ ...stillFromNative(i), rollId: i.id })), true);
         } else {
@@ -25751,7 +25755,7 @@
     });
 
     // ── Photo → the carousel preview ─────────────────────────────────────────
-    // One photo is a Frame, as it always was; two to six are a carousel, and the
+    // One photo is a Frame, as it always was; two to ten are a carousel, and the
     // model is the same list either way. Each still keeps its own <img> for
     // export() to draw from, and that same <img> is the one its slide shows. The
     // first is the cover, and `cropper` always points at it, which is what the
@@ -25993,7 +25997,7 @@
     });
 
     /* ── The order (Zoe, 2026-11-06: "change the order of my images") ─────────
-       A thumb per photo under the preview, sized so all six fit the column
+       A thumb per photo under the preview, sized so all ten fit the column
        with no scroll of their own, which is what lets a sideways drag BE the
        reorder with no hold first: the strip is `touch-action: pan-y`, so a
        finger going down the page still scrolls it, and one going sideways
@@ -26001,7 +26005,7 @@
        per place), and on the lift every thumb glides to where it now is (a
        FLIP) and the preview glides to the photo you moved. The first is the
        cover. Arrow keys move a focused thumb. Thumbs are a small JPEG drawn
-       once from the still, so six of them never decode six more photos. */
+       once from the still, so ten of them never decode ten more photos. */
     const ORDER_TAUGHT = 'tria:carousel-order-taught';
     const orderTaught = () => { try { return localStorage.getItem(ORDER_TAUGHT) === '1'; } catch { return false; } };
     const teachOrder = () => {
@@ -26049,7 +26053,7 @@
       if (hintEl) hintEl.hidden = n < 2 || orderTaught();
       if (n < 2) { pre?.(); stillsEl.replaceChildren(); return; }
       const want = stills.map(thumbFor);
-      if (!rollMode && n < MAX_STILLS) {
+      if (!rollMode && n < maxStills()) {
         if (!addTile) {
           addTile = document.createElement('div');
           addTile.className = 'cc-thumb cc-add';
@@ -26064,6 +26068,7 @@
       if (wasShown) for (const el of stillsEl.children) before.set(el, el.getBoundingClientRect().left);
       pre?.();
       stillsEl.style.setProperty('--cc-n', String(Math.max(4, want.length)));
+      stillsEl.style.setProperty('--cc-gap', want.length > 6 ? '5px' : '8px');
       stillsEl.replaceChildren(...want);
       stills.forEach((s, k) => {
         s.thumb.dataset.i = String(k);
@@ -26178,25 +26183,25 @@
       t.focus();
     });
     // Several files at once, or anything from "Add more". A carousel is photos
-    // only, and six at most: whatever doesn't fit is left out and said so, and
+    // only, and ten at most: whatever doesn't fit is left out and said so, and
     // what does fit still lands.
     async function pickStills(files, adding) {
       const photos = files.filter(f => f.type.startsWith('image/')
         && !(f.type === 'image/gif' && f.size > MAX_UPLOAD_BYTES));
-      const room = MAX_STILLS - (adding ? stills.length : 0);
+      const room = maxStills() - (adding ? stills.length : 0);
       const take = photos.slice(0, Math.max(0, room));
       const err = errEl();
       if (err) err.textContent = '';
       if (!take.length) {
         showPickError(photos.length
-          ? 'That’s six photos, which is as many as one post holds.'
+          ? `That’s ${stillsWord()} photos, which is as many as one post holds.`
           : 'A carousel is photos only. Share a clip as its own post.');
         return;
       }
       if (!file.isConnected) return;   // the composer went away
       finishStills(take.map(stillFromFile), adding);
       if (photos.length < files.length) showPickError('A carousel is photos only, so the clip was left out.');
-      else if (take.length < photos.length) showPickError('One post holds six photos, so the rest were left out.');
+      else if (take.length < photos.length) showPickError(`One post holds ${stillsWord()} photos, so the rest were left out.`);
     }
 
     return api;

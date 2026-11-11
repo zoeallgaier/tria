@@ -11233,13 +11233,13 @@ body.thread-live .lightbox { z-index: 320; }
 .frame-field--moment .cc-slide:first-child { margin-left: auto; }
 .frame-field--moment .cc-slide:last-child { margin-right: auto; }
 
-/* THE ORDER: a thumb per photo, all six fitting the column, so a sideways
+/* THE ORDER: a thumb per photo, all ten fitting the column, so a sideways
    drag is the reorder and needs no hold (`touch-action: pan-y` leaves the
    page its vertical scroll). The one on screen is ringed in ink; a lifted one
    rises a little and the rest make room on the signature ease. */
 .cc-order {
   display: flex;
-  gap: 8px;
+  gap: var(--cc-gap, 8px);
   margin-top: -4px;          /* the frame's 12px gap, less the ring's room */
   padding: 3px;
   touch-action: pan-y;
@@ -11251,10 +11251,12 @@ body.thread-live .lightbox { z-index: 320; }
 .cc-thumb {
   position: relative;
   /* Sized by how many there are (--cc-n, set in paintOrder, at least 4):
-     about 80px for up to four, shrinking only so six still fit one row. */
-  flex: 0 0 min(84px, calc((100% - (var(--cc-n, 4) - 1) * 8px) / var(--cc-n, 4)));
+     about 80px for up to four, shrinking only so ten still fit one row (about
+     30px on a phone, the gap closing to 5px past six, --cc-gap), the corner
+     shrinking with it. */
+  flex: 0 0 min(84px, calc((100% - (var(--cc-n, 4) - 1) * var(--cc-gap, 8px)) / var(--cc-n, 4)));
   aspect-ratio: 1;
-  border-radius: 16px;
+  border-radius: min(16px, 26%);
   overflow: hidden;
   cursor: grab;
   background: var(--surface-2);

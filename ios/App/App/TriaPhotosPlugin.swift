@@ -86,7 +86,7 @@ public class TriaPhotosPlugin: CAPPlugin, CAPBridgedPlugin {
     /// (see `TriaLibrarySheet`) or `{ cancelled: true }`: backing out is an
     /// answer. `videos` shows clips alone, for the clip editor's Add clip.
     @objc func pick(_ call: CAPPluginCall) {
-        let limit = call.getInt("limit") ?? 6
+        let limit = call.getInt("limit") ?? 10
         let selected = (call.getArray("selected") ?? []).compactMap { $0 as? String }
         let videos = call.getBool("videos") ?? false
         DispatchQueue.main.async { [weak self] in
@@ -133,7 +133,7 @@ public class TriaPhotosPlugin: CAPPlugin, CAPBridgedPlugin {
                 self.dropping?.cancel()
                 self.dropping = nil
                 TriaPhotoSizes.clear()
-                r.reset(limit: call.getInt("limit") ?? 6)
+                r.reset(limit: call.getInt("limit") ?? 10)
             }
             if roll == nil {
                 guard show,
@@ -144,7 +144,7 @@ public class TriaPhotosPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
                 // A new composer: the last one's photo files are spent.
                 TriaPhotoSizes.clear()
-                let made = TriaRoll(limit: call.getInt("limit") ?? 6) { [weak self] name, data in
+                let made = TriaRoll(limit: call.getInt("limit") ?? 10) { [weak self] name, data in
                     self?.notifyListeners(name, data: data)
                 }
                 made.attach(host: host, scroller: scroller)
@@ -276,7 +276,7 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
 
     /// A composer came back before the old one's roll was taken down: nothing
     /// ticked, the disc's flip to play again. The limit is fixed when the picker
-    /// is made, so it is left as it was (it is always the post's six).
+    /// is made, so it is left as it was (it is always the post's most).
     func reset(limit: Int) {
         if !picked.isEmpty {
             picker.deselectAssets(withIdentifiers: picked)
