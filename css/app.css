@@ -1440,6 +1440,18 @@ body.toolbar-live .view { padding-top: 1rem; }
 }
 .publish-fill:disabled,
 .pill-quiet:disabled { opacity: 0.6; }
+/* NONE IS BLACK AND WHITE (Zoe, 2026-11-11: "white/black instead of grey ...
+   the grey is so blegh"). A 30% wash of a neutral under page ink is only ever
+   grey, so on None a commit, and a chosen quiet pill, is the ink itself: solid
+   black with white words on paper, solid white with black words on ink. */
+html[data-tone="none"] .publish-fill,
+html[data-tone="none"] .pill-quiet.is-on {
+  background: var(--text);
+  color: var(--bg);
+  border-color: transparent;
+}
+html[data-tone="none"] .publish-fill::before,
+html[data-tone="none"] .pill-quiet.is-on::before { opacity: 0; }
 /* THE FOOT: New, ruled off from the destinations like the site's Contact,
    and pushed to the bottom of the rail. It is THE BUTTON at its commit weight
    and opens the New sheet (openComposeDial), the same one My Circle's

@@ -29484,6 +29484,9 @@
       const el = document.documentElement;
       /* The splash's copy of this answer (Zoe, 2026-10-22: the logo wears your
          colour). It is the one surface that paints before auth, so it can only
+      // None wears solid ink commits in CSS (html[data-tone="none"]).
+      if (band === 'var(--mono-band)') el.dataset.tone = 'none';
+      else delete el.dataset.tone;
          read what this install wore LAST time, which is why it is its own key
          and never --user-band on <html>: the gate must not inherit a past
          reader's colour. Signed out and Tria's own ramp both clear it. */

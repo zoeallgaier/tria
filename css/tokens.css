@@ -183,9 +183,12 @@
 
      A ramp and not a flat fill, because .publish-fill::before's resting ring is
      this same band with a mask over it and a flat one has nothing to show. */
-  --mono-band: linear-gradient(115deg, #3b4147, #2b3036, #1b1f24);
-  --mono-ink:  #f5f6f8;
-  --mono-heart: color-mix(in srgb, var(--muted) 30%, var(--text));
+  /* Black and white, not grey (Zoe, 2026-11-11: "white/black instead of grey
+     for none ... the grey is so blegh"): the ramp runs to true black on paper
+     and true white on ink, and the heart is the page's own ink. */
+  --mono-band: linear-gradient(115deg, #24272b, #0d0e10, #000);
+  --mono-ink:  #fff;
+  --mono-heart: var(--text);
 
   /* How solid that band sits on a primary button. This is a CONTRAST FLOOR
      wearing the clothes of a style knob, so read the note beside the CTA rule
@@ -596,7 +599,7 @@ html.nav-snap .ambient, html.nav-snap .topbar::before { transition: none !import
     /* Monochrome flips: paper-side band on ink paper, near-black glyph on it.
        The chromatic fills do not flip and do not need to — see the note beside
        --mono-band for why a neutral is the exception. */
-    --mono-band: linear-gradient(115deg, #f5f6f8, #e6e8ec, #d5d8dd);
+    --mono-band: linear-gradient(115deg, #fff, #f7f8f9, #eceef0);
     --mono-ink:  var(--on-type);
 
     /* The light mixes toward ink paper's extreme. See THE LIGHT above. */
