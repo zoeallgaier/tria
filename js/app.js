@@ -6510,6 +6510,8 @@
 
   // The author's own heart, in a feed: who liked it, private as ever (only
   // the author is ever handed this). The page's list, at a sheet's size.
+  // A tap anywhere but a face or a name closes it, as the comments sheet's
+  // does (Zoe, 2026-11-11: "tap empty space on like field to close").
   function openLikesSheet(post) {
     const list = Store.likesFor(post.id).filter(l => !Blocks.has(l.user));
     openSheet({
@@ -6518,6 +6520,11 @@
       head: list.length
         ? `<ul class="likers-list">${list.map(l => likerItemHtml(l)).join('')}</ul>`
         : `<p class="thread-empty">No likes yet, and that’s just fine.</p>`,
+      wire: (scrim, close) => {
+        scrim.querySelector('.sheet').addEventListener('click', (e) => {
+          if (!e.target.closest(SHEET_KEEPS)) close();
+        });
+      },
     });
   }
 
