@@ -847,6 +847,17 @@ looking at. See [docs/navigation.md](docs/navigation.md).
 finger, stiffens, a LIGHT haptic and the arrow light up, and the lift springs it
 home and calls `setChatReply` (`wireMessages`, `.msg-swipe-mark`, members only).
 `touch-action: pan-y` is what lets it share a thread with the scroll.
+**The row never leaves the screen** (2026-11-10, Zoe: "replies often go out of
+bounds"): it travels only into the room it has (toward its open side up to the
+arrow, which waits at that end of the row and holds still; toward the closed
+side only into the gutter), and the FINGER's distance arms it, so either way
+still replies. The reply chip is `.postbar-msgreply`: from 2026-10-29 it was
+found by `.postbar-reply`, which the comment edit's hidden chip also wears, so
+no chip ever showed. While a chip waits the thread's foot grows by it
+(`syncAnswering`, `body.chat-answering`). Every chat page holds its header
+(`holdsHeader`, `#/chat*`): none has a tab bar, so a read down the Chats list
+took the only way out. `messageGist` is what a message said, for the list's
+preview, a reply's quote and the chip, never a raw URL.
 
 ## The + is the tab bar's centre; Chats is a bar button (2026-11-05)
 

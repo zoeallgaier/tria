@@ -6897,7 +6897,10 @@
   function holdsHeader() {
     const h = location.hash;
     // The first run's circles too: its way on is the bar's Not now / Continue.
-    return headerHeld || h.startsWith('#/chat/') || h.startsWith('#/u/') || h === '#/profile' || h.startsWith('#/profile?')
+    // EVERY CHAT PAGE, the list, Requests and New chat as well as a thread
+    // (2026-11-10, Zoe: "back button goes missing on chats"): none has a tab
+    // bar, so a read down the list took the chevron, its only way out.
+    return headerHeld || h.startsWith('#/chat') || h.startsWith('#/u/') || h === '#/profile' || h.startsWith('#/profile?')
       || h === '#/welcome/circles' || h === '#/circles';
   }
   function holdHeader(on) {
@@ -22105,6 +22108,18 @@
   let archivedOpen = false;
   // The message the next one answers, on the open chat. Reset on every arrival.
   let chatReply = null;
+  /* WHILE A CHIP WAITS OVER THE BAR (a message or a song being answered), the
+     thread's foot grows by the chip (body.chat-answering, .msg-list in
+     app.css), so the newest message isn't left under it. A reader at the
+     foot stays at the foot. */
+  function syncAnswering() {
+    const on = !!(chatReply || chatSong);
+    if (on === document.body.classList.contains('chat-answering')) return;
+    const root = document.scrollingElement || document.documentElement;
+    const atFoot = window.innerHeight + window.scrollY >= root.scrollHeight - 140;
+    document.body.classList.toggle('chat-answering', on);
+    if (on && atFoot) window.scrollTo({ top: root.scrollHeight });
+  }
 
   // Two names, or two and "others". Never a number: see the rule on counts.
   const listNames = (names) =>
@@ -22138,18 +22153,37 @@
     return niceAgo(ts, dayMT(ts));
   }
 
+  /* WHAT A MESSAGE SAID, in one plain line: the chat list's preview, the quote
+     over a reply and the Replying to chip all read it. The thread draws a link
+     that ends the words as its tile (a song, a circle, a post, a page), so here
+     it is the words before it, or what it carried (`thing`). A raw URL used
+     to be quoted. */
+  function messageGist(m) {
+    const text = (m && m.text) || '';
+    const links = linksIn(text);
+    // A song's link leaves the words wherever it sits, as the thread takes it
+    // out (songInMessage); any other only where it ends them.
+    const words = notePlain(noteWithoutTail(text.replace(SONG_IN_TEXT, ' '), links.map(l => l.href)) || '');
+    if (words) return { said: words, thing: false };
+    const l = links[links.length - 1];
+    const route = l ? triaRoute(l.href) : '';
+    const said = !l ? (m && m.image ? 'a photo' : '')
+      : MUSIC_HOST.test(l.href) ? 'a song'
+      : youTubeOf(l.href) ? 'a video'
+      : route.startsWith('#/c/') ? 'a circle' : route.startsWith('#/p/') ? 'a post'
+      : route.startsWith('#/u/') ? 'a profile' : 'a link';
+    return { said, thing: true };
+  }
+  const clipLine = (s, n) => (s.length > n ? s.slice(0, n).trimEnd() + '…' : s);
+
   function chatPreview(c) {
     const m = c.last;
     if (!m) return c.kind === 'direct' ? 'Say hi.' : 'Nothing said yet.';
-    // A song's link is drawn as the song in the thread, so here it is the words
-    // around it, or the fact of it.
-    const words = m.text ? m.text.replace(SONG_IN_TEXT, '').trim() : '';
-    const said = words ? notePlain(words)
-      : m.text ? 'Sent a song.' : (m.image ? 'Sent a photo.' : '');
+    // What a message only carried reads as the act: "Sent a song."
+    const { said, thing } = messageGist(m);
     const who = m.author === Store.session() ? 'You: '
       : c.kind === 'direct' ? '' : `${displayNameOf(m.author)}: `;
-    const line = who + said;
-    return line.length > 90 ? line.slice(0, 90).trimEnd() + '…' : line;
+    return clipLine(who + (thing && said ? `Sent ${said}.` : said), 90);
   }
 
   function chatRowHtml(c) {
@@ -22409,7 +22443,7 @@
     const name = esc(u ? u.name : m.author);
     const hearts = Store.heartsFor(m.id);
     const reply = m.replyTo ? byId.get(m.replyTo) : null;
-    const replySaid = reply ? (reply.text ? notePlain(reply.text) : 'a photo') : '';
+    const replySaid = reply ? messageGist(reply).said : '';
     const dims = m.image ? imageDimsFromUrl(m.image) : null;
     const href = `#/u/${esc(encodeURIComponent(m.author))}`;
     const room = m.text ? circleInMessage(m.text) : null;
@@ -22429,7 +22463,7 @@
         (reply
           ? `<span class="msg-reply" role="button" tabindex="0" data-to="${esc(reply.id)}" ` +
               `aria-label="Go to ${esc(displayNameOf(reply.author))}’s message">` +
-              `${esc(displayNameOf(reply.author))}: ${esc(replySaid.length > 70 ? replySaid.slice(0, 70).trimEnd() + '…' : replySaid)}</span>`
+              `${esc(displayNameOf(reply.author))}: ${esc(clipLine(replySaid, 70))}</span>`
           : m.replyTo ? `<span class="msg-reply">A message that’s gone</span>` : '') +
         (m.image
           ? `<button class="msg-photo" type="button" data-photo="${esc(m.image)}" aria-label="Open photo"` +
@@ -22591,11 +22625,48 @@
     root.addEventListener('keydown', toQuoted);
 
     const canSwipe = () => { const c = Store.chat(chatId); return !!c && c.status === 'member'; };
+    /* THE ROW NEVER LEAVES THE SCREEN (2026-11-10, Zoe: "replies often go out
+       of bounds"). It used to follow the finger 60px and more either way, so
+       a friend's message dragged left took their face and words off the left
+       edge, and yours dragged right ran off the right. Either way still
+       replies, but the row travels only into the room it has: toward the open
+       side up to the arrow, which waits at that side's end of the row and
+       holds still on screen; toward the closed side only into the gutter. The
+       finger's own distance arms it, as before, so a reply is the same reach
+       in both directions however little the row could move. */
+    const MARK = 32 + 8;       // the arrow and the air before it
+    const soft = (v, room) => {
+      if (room <= 0) return 0;
+      const k = room * 0.6;    // one to one this far, then easing into the end
+      return v <= k ? v : k + (room - k) * (1 - Math.exp(-(v - k) / (room - k)));
+    };
+    const swipeStart = (li, dx) => {
+      const mine = li.classList.contains('msg--mine');
+      const row = li.getBoundingClientRect();
+      const col = (li.querySelector('.msg-col') || li).getBoundingClientRect();
+      const lead = (mine ? li.querySelector('.msg-col') : li.firstElementChild || li).getBoundingClientRect();
+      const vw = document.documentElement.clientWidth;
+      const mark = document.createElement('span');
+      mark.className = `msg-swipe-mark ${mine ? 'is-start' : 'is-end'}`;
+      mark.innerHTML = svgIcon('reply');
+      li.appendChild(mark);
+      li.classList.add('is-swiping');
+      const s = {
+        li, mark, armed: false,
+        open: mine ? -1 : 1,     // the side with room in it
+        openRoom: Math.max(0, (mine ? col.left - row.left : row.right - col.right) - MARK),
+        shutRoom: Math.max(0, (mine ? vw - lead.right : lead.left) - 4),
+      };
+      swipeTo(s, dx);
+      return s;
+    };
     const swipeTo = (s, dx) => {
       const far = Math.abs(dx);
-      const shown = (far <= SWIPE_AT ? far : SWIPE_AT + (far - SWIPE_AT) * SWIPE_STIFF) * Math.sign(dx);
+      const sign = Math.sign(dx);
+      const pull = far <= SWIPE_AT ? far : SWIPE_AT + (far - SWIPE_AT) * SWIPE_STIFF;
+      const shown = sign * (sign === s.open ? soft(pull, s.openRoom) : soft(pull * 0.5, s.shutRoom));
       s.li.style.transform = `translate3d(${shown}px, 0, 0)`;
-      s.mark.classList.toggle('is-left', dx > 0);
+      s.mark.style.translate = `${-shown}px 0`;   // the arrow holds its place
       s.mark.style.opacity = Math.min(1, far / SWIPE_AT);
       const armed = far >= SWIPE_AT;
       s.mark.classList.toggle('is-armed', armed);
@@ -22649,13 +22720,7 @@
       if (e.type === 'pointermove' && press.touch && !press.edge && Math.abs(dx) >= 10 &&
           Math.abs(dx) > Math.abs(e.clientY - press.y) * 1.5 && canSwipe() && press.li.isConnected) {
         clearTimeout(press.timer);
-        const mark = document.createElement('span');
-        mark.className = 'msg-swipe-mark';
-        mark.innerHTML = svgIcon('reply');
-        press.li.appendChild(mark);
-        press.li.classList.add('is-swiping');
-        press.swipe = { li: press.li, mark, armed: false };
-        swipeTo(press.swipe, dx);
+        press.swipe = swipeStart(press.li, dx);
         return;
       }
       if (e.type === 'pointermove' && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 10) return;
@@ -22709,22 +22774,25 @@
     // One thing answered at a time: a message, or a song.
     if (m) setChatSong(null);
     chatReply = m || null;
+    syncAnswering();
     const bar = postBarEl();
     if (!bar) return;
-    let tray = bar.querySelector('.postbar-reply:not(.postbar-song)');
+    // Its own class: the comment edit's chip (.postbar-editing, hidden) and a
+    // song's are .postbar-reply too, and from 2026-10-29 this found the edit
+    // chip first and wrote the reply into it, so no chip ever showed.
+    let tray = bar.querySelector('.postbar-msgreply');
     if (!m) { if (tray) tray.remove(); return; }
     if (!tray) {
       // Worn as the photo tray, so it hangs over the bar by the same rules in
       // every shell, native included. See .postbar-reply for the stacking.
       tray = document.createElement('div');
-      tray.className = 'postbar-attach postbar-reply';
+      tray.className = 'postbar-attach postbar-reply postbar-msgreply';
       bar.appendChild(tray);
     }
-    const said = m.text ? notePlain(m.text) : 'a photo';
     tray.innerHTML =
       `<div class="postbar-reply-chip">` +
         `<span class="postbar-reply-text">Replying to <strong>${esc(displayNameOf(m.author))}</strong>: ` +
-          `${esc(said.length > 60 ? said.slice(0, 60).trimEnd() + '…' : said)}</span>` +
+          `${esc(clipLine(messageGist(m).said, 60))}</span>` +
         `<button class="postbar-reply-x" type="button" aria-label="Cancel reply">${svgIcon('close')}</button>` +
       `</div>`;
     const x = tray.querySelector('.postbar-reply-x');
@@ -22751,6 +22819,7 @@
   let chatSong = null;   // { post } while one waits
   function setChatSong(post, pic) {
     chatSong = post ? { post } : null;
+    syncAnswering();
     const bar = postBarEl();
     if (!bar) return;
     const field = bar.querySelector('textarea');
@@ -23066,6 +23135,7 @@
     const c = Store.chat(id);
     chatReply = null;
     chatSong = null;
+    syncAnswering();
     // Reached from a song's reply, the chevron pops back to My Circle, the
     // way the editors' does (a pushed entry is there to pop).
     const pops = chatPopsTo === id;
@@ -23119,17 +23189,28 @@
     // and the page follows the newest message only if the reader was already at
     // the bottom; someone scrolled back through history is left where they are.
     const repaint = (stick) => {
+      // A heart's held repaint or a send's onSent can land after the reader
+      // has left, and would scroll the next page to its foot and mark this
+      // chat read.
+      if (!list.isConnected) return;
       if (holdRepaint(() => repaint(stick))) return;
       const now = Store.chat(c.id);
       if (!now) { outOfChat(); return; }
       if (now.status !== c.status) { renderChat(id); return; }   // a request answered elsewhere
       const follow = stick || nearBottom();
+      // The message being answered was unsent (by its author, anywhere): the
+      // chip lets go rather than send a reply to nothing.
+      if (chatReply && !Store.messagesFor(c.id).some(m => m.id === chatReply.id)) setChatReply(null);
       patchThread(list, threadHtml(now));
       if (!seekNow() && follow) toBottom(false);
       read();
     };
     chatLive = () => repaint(false);
 
+    // The first paint's tiles (a video, a page, a circle's Join) are wired as
+    // a repaint's are (patchThread): a chat that hadn't changed since it was
+    // opened drew a YouTube link as an empty row and read no page's title.
+    wireLinkTiles(list);
     wireMessages(section, c.id);
     document.getElementById('chat-back')?.addEventListener('click', () => {
       chatPopsTo = null;

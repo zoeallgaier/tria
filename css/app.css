@@ -9297,6 +9297,10 @@ button.card-song-play:active { transform: scale(0.9); }
 }
 .chat-head-avatar { width: 64px; height: 64px; font-size: 1.4rem; }
 .chat-head-name { font-weight: 700; }
+/* A chip over the bar (setChatReply, setChatSong): the foot grows by the
+   chip's own height (.postbar-reply-chip, 44px + 0.8rem + 2px) and the gap
+   it hangs over the bar by (.postbar-attach's 0.6rem). */
+body.chat-answering .msg-list { padding-bottom: calc(1rem + 44px + 1.4rem + 2px); }
 .msg-day {
   align-self: center;
   margin: 1.1rem 0 0.3rem;
@@ -9574,10 +9578,12 @@ button.card-song-play:active { transform: scale(0.9); }
   transition: transform 0.32s var(--ease);
 }
 .msg.is-swiping { transition: none; will-change: transform; }
+/* The arrow waits at the open end of the row (yours open on the left, a
+   friend's on the right) and is held still on screen as the row moves
+   (wireMessages sets its `translate`), so neither ever leaves the screen. */
 .msg-swipe-mark {
   position: absolute;
   top: 50%;
-  left: calc(100% + 16px);
   display: grid;
   place-items: center;
   width: 32px;
@@ -9590,7 +9596,8 @@ button.card-song-play:active { transform: scale(0.9); }
   transition: color 0.16s var(--ease), background-color 0.16s var(--ease), transform 0.22s var(--ease);
   transform: scale(0.8);
 }
-.msg-swipe-mark.is-left { left: auto; right: calc(100% + 16px); }
+.msg-swipe-mark.is-start { left: 0; }
+.msg-swipe-mark.is-end { right: 0; }
 .msg-swipe-mark.is-armed { color: var(--text); background: var(--surface); transform: scale(1); }
 .msg-swipe-mark svg { width: 18px; height: 18px; }
 /* The heart mark carries the like's own sparkle (burstSparkles), in the dot's
