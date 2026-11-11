@@ -356,17 +356,17 @@
   const SIZES = {
     story:  { w: 1080, h: 1920, safeTop: 250, safeBottom: 340, margin: 40, plate: 40,
               pad: 84, padBottom: 72, gap: 64,
-              avatar: 84, name: 36, handle: 31, title: 76, titleMin: 48, body: 50, bodyMin: 42,
+              avatar: 84, name: 36, handle: 31, title: 76, titleMin: 48, body: 44, bodyMin: 38,
               prompt: 42, mark: 84, address: 29, rowGap: 48 },
     square: { w: 1080, h: 1080, safeTop: 0, safeBottom: 0, margin: 36, plate: 38,
               pad: 76, padBottom: 68, gap: 52,
-              avatar: 82, name: 35, handle: 30, title: 68, titleMin: 42, body: 46, bodyMin: 38,
+              avatar: 82, name: 35, handle: 30, title: 68, titleMin: 42, body: 40, bodyMin: 34,
               prompt: 38, mark: 80, address: 27, rowGap: 44 },
     /* The link card is the one nobody chooses — it is what Messages and Slack
        unfurl — so it is the same column laid on its side and nothing more. */
     link:   { w: 1200, h: 630, safeTop: 0, safeBottom: 0, margin: 32, plate: 28,
               pad: 52, padBottom: 44, gap: 32,
-              avatar: 64, name: 28, handle: 24, title: 46, titleMin: 28, body: 32, bodyMin: 26,
+              avatar: 64, name: 28, handle: 24, title: 46, titleMin: 28, body: 28, bodyMin: 24,
               prompt: 28, mark: 64, address: 23, rowGap: 30 },
   };
 
