@@ -11767,11 +11767,14 @@ body[data-ambient="none"] .pf-row-swatch {
   /* On a phone the Frames tab's two columns run edge to edge (Zoe, 2026-11-11:
      "make 2column images edge to edge"), a profile's and a circle's alike: the
      feed's own bleed is kept, the tiles lose their corner and hairline, and a
-     2px seam stands between them, across and down. A desktop keeps the
-     rounded cards above. */
-  .pgrid--frames { padding-inline: 0; gap: 2px; }
+     1px seam stands between them, across and down. A desktop keeps the
+     rounded cards above. The wall also meets the tab strip with no paper
+     between them (Zoe: "I want this gap gone"), paying back the feed's 0.9rem
+     under the strip. */
+  .pgrid--frames { padding-inline: 0; gap: 1px; }
+  .account ~ .profile-tabs + .feed > .pgrid--frames { margin-top: -0.9rem; }
   .pgrid--frames .ptile {
-    margin-bottom: 2px;                /* dealMasonry reads this as the gap */
+    margin-bottom: 1px;               /* dealMasonry reads this as the gap */
     border: 0;
     border-radius: 0;
   }
