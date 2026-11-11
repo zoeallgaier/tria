@@ -20,6 +20,11 @@ if [ $# -ge 1 ]; then next=$1; else next=$((cur + 1)); fi
 # Every ?v=<cur> in the file shares one number; \b keeps us from matching a prefix.
 perl -pi -e "s/\\?v=${cur}\\b/?v=${next}/g" index.html
 
+# The admin dashboard (admin/index.html) loads the app's tokens, config and
+# supabase-js, so it carries the same stamp and moves with it. Not bundled
+# into iOS; the web serves it at /admin/.
+perl -pi -e "s/\\?v=${cur}\\b/?v=${next}/g" admin/index.html
+
 # 404.html is a BYTE COPY of index.html, and this is the only place it is made.
 # GitHub Pages serves it for every path that isn't a real file, which is every
 # clean URL we share (/p/<id>, /u/<name>, /c/<slug>, /daily/<slug>, /i/<code>) — so the 404

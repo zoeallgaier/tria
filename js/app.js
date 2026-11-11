@@ -127,6 +127,80 @@
 
   document.documentElement.dataset.shell = installedShell() ? 'installed' : 'browser';
 
+  /* THE OPEN PING (supabase/admin-dashboard.sql, Zoe 2026-11-11): the admin
+     dashboard's funnel needs an install, a platform and where someone came
+     from, and nothing else in Tria records them. So each device keeps a random
+     id (`tria:device`) and says once a day, per person, that it opened
+     (`Store.noteOpen`), signed in or not, since an install comes before an
+     account. Its source is read ONCE, on the device's first run: the link it
+     arrived on (/i/ an invite, /c/ a circle, /u/ a profile, /p/ a post,
+     /daily/), else the referring site's host, else direct. A cold launch's
+     universal link lands after the first ping, so `arrived` sends again and the
+     database takes the first real source in a device's first hour. Platform is
+     ios (the app), pwa (a home screen shortcut, Android's Chrome one included:
+     there is no Android app) or web. No counts, no events, no SDK. */
+  const openPing = (() => {
+    let device = null, fresh = false;
+    try {
+      device = localStorage.getItem('tria:device');
+      if (!device) {
+        fresh = true;
+        device = crypto.randomUUID ? crypto.randomUUID()
+          : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+              const r = (Math.random() * 16) | 0;
+              return (c === 'x' ? r : (r & 3) | 8).toString(16);
+            });
+        localStorage.setItem('tria:device', device);
+      }
+    } catch { device = null; }   // storage refused: no ping at all
+    const KINDS = { i: 'invite', c: 'circle', u: 'profile', p: 'post', daily: 'daily' };
+    const sourceOf = (path) => {
+      const m = String(path || '').match(/^#?\/(i|c|u|p|daily)\/([^/?#]+)/);
+      if (!m) return null;
+      let ref = null;
+      if (m[1] !== 'p') { try { ref = decodeURIComponent(m[2]).slice(0, 80); } catch { /* keep none */ } }
+      return { source: KINDS[m[1]], ref };
+    };
+    let first = null;
+    if (fresh) {
+      first = sourceOf(location.hash) || sourceOf(location.pathname);
+      if (!first) {
+        try {
+          const host = document.referrer && new URL(document.referrer).hostname;
+          if (host && host !== location.hostname) first = { source: 'referral', ref: host };
+        } catch { /* no referrer */ }
+      }
+    }
+    const ua = navigator.userAgent;
+    const os = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'ios'
+      : /Android/.test(ua) ? 'android' : /Macintosh/.test(ua) ? 'mac' : /Windows/.test(ua) ? 'windows' : 'other';
+    const version = (document.querySelector('script[src*="js/app.js?v="]')?.getAttribute('src') || '')
+      .split('?v=')[1] || null;
+    function note() {
+      if (!device) return;
+      const stamp = new Date().toDateString() + ':' + (Store.currentUser()?.id || '-');
+      try {
+        if (localStorage.getItem('tria:opened') === stamp) return;
+        localStorage.setItem('tria:opened', stamp);
+      } catch { return; }
+      Store.noteOpen({
+        device, os, version,
+        platform: nativeShell() ? 'ios' : installedShell() ? 'pwa' : 'web',
+        source: first?.source, ref: first?.ref,
+      });
+    }
+    return {
+      note,
+      arrived(path) {
+        if (!fresh || first) return;
+        first = sourceOf(path);
+        if (!first) return;
+        try { localStorage.removeItem('tria:opened'); } catch { /* note() will hold */ }
+        note();
+      },
+    };
+  })();
+
   // The --spring token (tokens.css) doubles as the WAAPI easing for the press
   // engine and the lightbox flight — WAAPI takes the same easing strings CSS
   // does, so the token stays the single source of truth. Read once, lazily.
@@ -30405,6 +30479,7 @@
     navHere = arriving;
     fileTrail((location.hash || '#/').split('?')[0]);
     stampSelfPush((location.hash || '#/').split('?')[0]);
+    openPing.note();   // once a day per person; see THE OPEN PING
 
     // Navigating away from Publish must stop a live camera/mic stream — the
     // capture surface's own DOM is about to be replaced, which wouldn't
@@ -31438,6 +31513,7 @@
   // (the channel doesn't hear the background). What it repaints is refreshWorld's
   // call.
   document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && booted) openPing.note();
     if (document.visibilityState !== 'visible' || !Store.isAuthed()) return;
     refreshWorld(herePath());
   });
@@ -31590,6 +31666,7 @@
           try { u = new URL(String(ev?.url || '')); } catch { return; }
           const m = u.pathname.match(/^\/(p|u|c|daily|i)\/(.+?)\/?$/);
           if (!m) return;
+          openPing.arrived('/' + m[1] + '/' + m[2]);
           arriveAt('#/' + m[1] + '/' + m[2] + u.search);
         });
     } catch { /* no listener; a link just opens the app where it was */ }

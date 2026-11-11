@@ -21,6 +21,57 @@ The same files also serve a website; that is a byproduct, not a target. See
 - `supabase/` — `schema.sql` (canonical) + additive migrations + `PUSH-SETUP.md`
   + `OAUTH-SETUP.md`.
 
+## The admin dashboard, triaonline.com/admin (2026-11-11)
+
+**Zoe: "a user admin dashboard, with all features listed with names so we're
+always talking about the same thing ... I also want to see metrics."**
+`admin/` (index.html, admin.js, admin.css, dictionary.js) is a page of its
+own on the site, in the app's tokens and type, **never bundled into iOS**
+(ios-sync.sh copies only the root index.html) and a real folder, so Pages
+never hands it 404.html's app. Same origin, so a session made on the site is
+its session too; `bump.sh` stamps it with the app. Four sections: Overview,
+Funnel, Retention, Dictionary. `?demo` draws sample numbers, flagged.
+**The Dictionary is `admin/dictionary.js`: a new feature adds its entry in
+the same commit.** Its names are the ones to use with Zoe.
+**The numbers are `supabase/admin-dashboard.sql`** (**confirmed run**
+2026-11-11: its own check answered admins 1, profile_done 77, functions 5, and
+anon `rpc/admin_overview` answers its 42501 "Only Tria's team can see that.";
+**it must be RE-RUN for the admin exclusion below**, safe to re-run) and
+`supabase/admin-extras.sql` (the Community section, **NOT run** as of
+2026-11-11; until it runs that tab says so). `admins` (Zoe, seeded by
+username) gates `admin_overview`, `admin_funnel`, `admin_retention`,
+`admin_extras`, each a 42501 to anyone else. **Admins are left out of every
+number** (Zoe: "exclude my metrics? I post a lot and probably skew data"):
+`admins.in_metrics` defaults false, `metrics.skip` lists them, and
+`metrics.people`, `.posts`, `.days`, `.devices`, `meaningful_events`,
+`journeys` all drop them; only Top inviters keeps them (credit, not skew).
+**Community adds no tracking** (Zoe: "goodies (without adding any tracking)"):
+friends each, people on their own, circles by size, what people have set up,
+themes, when Tria is used (weekday by hour), dailies, audiences, top
+inviters, the newest accounts' progress, blocks. **The page is laid out to
+the HIG** (Zoe): a large title handing over to the bar's inline title, a
+tab bar on a phone and a floating glass sidebar from 900px, segmented
+controls, inset grouped lists, 44pt targets, charts drawn at their card's
+width. **Its chrome wears real materials** (Zoe: "proper blurs ... this is a
+web desktop thing"): `saturate() blur()` on the bar, tab bar, sidebar and
+hover card, with solid fallbacks. **Meaningful** (Zoe: create
+or connect) is a post, Moment, daily answer, comment, message, RSVP, vote,
+friendship made or circle joined, never a like (`metrics.meaningful_events`).
+The funnel is Install, Account, Profile complete (a photo or bio,
+`profile_done`), Connected (a friend row they made or a circle joined),
+First action, Returned (any of the 7 days after the account's day);
+**Activated** is connected and a first action, both within 7 days.
+**The open ping is Tria's only usage tracking** (Zoe agreed, first party, no
+SDK): `openPing` in app.js keeps a random `tria:device` id and calls
+`Store.noteOpen` once a day per person, signed in or out (route(), a
+foreground), which writes `devices` (platform ios | pwa | web, there is no
+Android app, Chrome's shortcut is pwa; os; source read once on a device's
+first run off the link it arrived on) and `user_days`; an account's first
+device is `user_origin`, and a redeemed invite always wins its source. None
+of the three tables has a select policy. **App Store Connect's privacy label
+needs "Product Interaction, linked to user" before a build with the ping
+ships.**
+
 ## Favorite circles are a bookmark (2026-11-09)
 
 **Any circle you can open can be a favorite** (Zoe: "Favorite circles for

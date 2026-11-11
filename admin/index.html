@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Tria admin</title>
+  <link rel="icon" href="../icons/icon-32.png?v=1248" />
+  <link rel="apple-touch-icon" href="../icons/icon-180.png?v=1248" />
+  <link rel="stylesheet" href="../css/tokens.css?v=1248" />
+  <link rel="stylesheet" href="admin.css?v=1248" />
+</head>
+<body>
+  <!-- The admin dashboard. Not the app: never bundled into iOS (ios-sync.sh
+       copies only the root index.html), and served by GitHub Pages as a real
+       folder, so it never falls to 404.html's app shell. Its data comes from
+       supabase/admin-dashboard.sql and admin-extras.sql's admin_* functions,
+       which refuse anyone not in public.admins.
+
+       Laid out to Apple's HIG in Tria's materials: a large title that hands
+       over to the bar's inline one as it scrolls under, a tab bar on a phone
+       and a sidebar from 900px, segmented controls, inset grouped lists,
+       44pt targets. -->
+  <div class="wash" aria-hidden="true"></div>
+
+  <aside class="side" id="side" aria-label="Sections" hidden>
+    <a class="side-mark" href="../" aria-label="Tria"><span class="wordmark"></span><span class="mark-sub">admin</span></a>
+    <nav class="side-list" id="side-list"></nav>
+    <div class="side-foot">
+      <p class="side-asof" id="side-asof"></p>
+      <button class="side-row" id="side-out" type="button"></button>
+    </div>
+  </aside>
+
+  <header class="nav" id="nav">
+    <div class="nav-row">
+      <a class="nav-mark" href="../" aria-label="Tria"><span class="wordmark"></span></a>
+      <p class="nav-title" id="nav-title" aria-hidden="true"></p>
+      <div class="nav-acts">
+        <button class="nav-btn" id="refresh" type="button" aria-label="Refresh" title="Refresh" hidden></button>
+        <button class="nav-btn nav-out" id="sign-out" type="button" aria-label="Log out" title="Log out" hidden></button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="main" aria-live="polite"></main>
+
+  <nav class="tabbar" id="tabbar" aria-label="Sections" hidden></nav>
+  <div class="hovercard" id="tooltip" role="status" hidden></div>
+
+  <script src="../js/vendor/supabase-js-2.110.9.min.js?v=1248"></script>
+  <script src="../js/config.js?v=1248"></script>
+  <script src="dictionary.js?v=1248"></script>
+  <script src="admin.js?v=1248"></script>
+</body>
+</html>

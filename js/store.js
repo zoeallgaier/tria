@@ -4452,7 +4452,24 @@ const Store = (() => {
     return { ok: true };
   }
 
+  /* The open ping (supabase/admin-dashboard.sql, Zoe 2026-11-11): one row per
+     install and one per person per day opened, for the admin dashboard's
+     funnel and actives. Tria's only usage tracking: first party, no SDK, no
+     events. Fire and forget; a database without the file says PGRST202 once and
+     the ping stops for the session. */
+  let openPing = true;
+  function noteOpen({ device, platform, os, version, source, ref }) {
+    if (!openPing || !device) return;
+    sb.rpc('note_open', {
+      p_device: device, p_platform: platform, p_os: os,
+      p_version: version || null, p_source: source || 'direct', p_ref: ref || null,
+    }).then(({ error }) => {
+      if (error && (error.code === 'PGRST202' || error.code === '42883')) openPing = false;
+    }, () => { /* offline: the next open tries again */ });
+  }
+
   return {
+    noteOpen,
     init, refresh, whenFresh, primePost, threadPrint, newerPosts, reloadChats,
     users, user, currentUser, isPrivate, friends, friendsOf, friendCount, feed, discover, square, canReact, posts, postsBy, audienceCount, audienceOf,
     // Auth
