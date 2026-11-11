@@ -385,6 +385,9 @@
     // so it sits with the solid tab marks beside it. Never lit, so no `On`.
     newTab:  '<path d="M12 5v14" stroke-width="2.3"/><path d="M5 12h14" stroke-width="2.3"/>',
     compose: '<path d="M11 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V13"/><path d="M18.3 3.7a2 2 0 0 1 2.9 2.9L13 14.8l-3.7.9.9-3.7z"/>',
+    // Drafts (2026-11-11): a page with its corner turned, its last line
+    // left short, a thought not finished yet.
+    drafts:  '<path d="M7 3.5h6.8l4.7 4.7V19a1.5 1.5 0 0 1-1.5 1.5H7A1.5 1.5 0 0 1 5.5 19V5A1.5 1.5 0 0 1 7 3.5z"/><path d="M13.5 3.5v5h5"/><path d="M8.75 12.75h6.5"/><path d="M8.75 16.25h3.25"/>',
     trash:   '<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l.85 12.5h9.3L17.5 7"/><path d="M10 10.5v6"/><path d="M14 10.5v6"/>',
     pencil:  '<path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16l-1 4z"/><path d="M14 7l3 3"/>',
     // Edit profile's row (Zoe, 2026-10-22: "use gear icon for edit profile").
@@ -3014,12 +3017,15 @@
   // of one, a block per line: a stanza's lines become a <p> each and a blank
   // `<p><br></p>` stands between two stanzas, so the field shows the gaps the
   // feed does and serializes back to the same note.
-  const editorPrefill = (note) => {
+  // `poem` is read off the note unless the caller knows it: a draft keeps
+  // its quill's state, so a poem of one-line stanzas (no <br> to tell it by)
+  // comes back with its gaps.
+  const editorPrefill = (note, poem = isPoemNote(note)) => {
     if (!note) return '';
     const items = isRichNote(note)
       ? richItems(parseNoteHtml(note), esc, false)
       : noteParas(note).map(p => ({ tag: 'p', lines: [esc(p)] }));
-    if (!isPoemNote(note)) return items.map(it => itemHtml(it)).join('');
+    if (!poem) return items.map(it => itemHtml(it)).join('');
     return items.map((it, i) => it.tag !== 'p' ? itemHtml(it)
       : (i && items[i - 1].tag === 'p' ? '<p><br></p>' : '') + it.lines.map(l => `<p>${l}</p>`).join('')).join('');
   };
@@ -7491,6 +7497,10 @@
       // Always here, beside Discover's Start a circle card, so both doors are
       // learned (Zoe, 2026-10-24; it was there only once the card was waved off).
       ...(Store.communitiesReady() ? [{ key: 'circle', label: 'Circle', icon: 'circle' }] : []),
+      // Drafts, last and only while there are any (2026-11-11): the
+      // composer's own door is where a thought left in it waits, as
+      // Substack keeps its drafts in the composer. Never a number on it.
+      ...(Store.isAuthed() && Store.drafts().length ? [{ key: 'drafts', label: 'Drafts', icon: 'drafts' }] : []),
     ];
   }
 
@@ -7510,9 +7520,12 @@
       if (row.key === 'daily') return answerDaily(occ);
       if (row.key === 'circle') return go('#/c/new');
       if (row.key === 'moment') { shareMoment(); return; }
+      if (row.key === 'drafts') { openDrafts(); return; }
       pendingAttach = row.key === 'note' ? null : row.key;
       go('#/publish');
     };
+    // What another device wrote shows next time; this one's are already here.
+    Store.syncDrafts();
     openSheet({
       title: 'New',
       items: composeRows().map((row) => ({
@@ -7527,6 +7540,104 @@
     });
   }
   let stopCycle = null;
+
+  /* DRAFTS (2026-11-11, Zoe: "Draft posts and autosave ... I want people to
+     be able to come back to thoughts or not worry about losing one").
+     Substack's shape, read for this: the composer saves as you write, with
+     no Save button and no question on the way out, and the drafts wait at
+     the composer's own door (Substack's Notes keep a Drafts tab in the
+     composer; here, the New sheet's last row, there only while one waits).
+
+     A row is the draft's mark, what it says (its headline, else its first
+     line, else what it is about), and what it is and when it was last
+     touched. A tap opens it in the composer as it was left: its words, its
+     quill, its tags, its link, poll, plan, song or take, and who it was for.
+     Its photos are not kept: they are still in the camera roll, and a draft
+     holding files would hold storage for a post that may never go.
+
+     The x is two taps, as iOS's swipe-to-delete is: the first turns it into
+     Delete, the second lets the draft go (a WARNING tap), and a tap anywhere
+     else in the sheet puts it back. A draft is the one thing here someone
+     can't get back. */
+  const draftPlain = (html) => {
+    const t = document.createElement('template');
+    t.innerHTML = String(html || '').replace(/<br\s*\/?>|<\/(?:p|h1|h2|li)>/gi, '\n');
+    return t.content.textContent;
+  };
+  function draftGist(b) {
+    const line = draftPlain(b.note).split('\n').map(s => s.trim()).find(Boolean);
+    let host = '';
+    try { host = b.url ? new URL(b.url).hostname.replace(/^www\./, '') : ''; } catch {}
+    return b.title || line || (b.song && b.song.title) || (b.take && b.take.title)
+      || host || (b.poll || []).find(Boolean) || b.location || 'Untitled';
+  }
+  const draftMark = (b) => (b.moment ? 'moment' : b.quote ? 'repost' : b.daily ? 'daily'
+    : TYPE_GLYPH[b.kind] || 'pencil');
+  const draftWord = (b) => (b.moment ? 'Moment' : b.quote ? 'Quote' : b.daily ? 'Daily'
+    : TYPE_LABEL[b.kind] || 'Note');
+  function draftWhen(d) {
+    const at = new Date(d.at);
+    const day = `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`;
+    return `${draftWord(d.body || {})} · ${niceAgo(at.toISOString(), day)}`;
+  }
+  function openDrafts() {
+    const list = Store.drafts();
+    if (!list.length) return;
+    const rowHtml = (d) => {
+      const b = d.body || {};
+      return `<div class="draft-row" data-id="${esc(d.id)}">` +
+          `<button type="button" class="draft-open">` +
+            svgIcon(draftMark(b), 'sheet-ico') +
+            `<span class="draft-lines">` +
+              `<span class="draft-gist">${esc(draftGist(b))}</span>` +
+              `<span class="draft-when">${esc(draftWhen(d))}</span>` +
+            `</span>` +
+          `</button>` +
+          `<button type="button" class="draft-x" aria-label="Delete draft">` +
+            svgIcon('close', 'draft-x-ico') + `<span class="draft-x-word">Delete</span>` +
+          `</button>` +
+        `</div>`;
+    };
+    openSheet({
+      title: 'Drafts',
+      head: `<div class="draft-list">${list.map(rowHtml).join('')}</div>`,
+      wire: (scrim, close) => {
+        const listEl = scrim.querySelector('.draft-list');
+        const disarm = (keep) => listEl.querySelectorAll('.draft-row.is-arming')
+          .forEach(r => { if (r !== keep) { r.classList.remove('is-arming'); r.querySelector('.draft-x').setAttribute('aria-label', 'Delete draft'); } });
+        scrim.querySelector('.sheet').addEventListener('click', (e) => {
+          const row = e.target.closest('.draft-row');
+          const x = e.target.closest('.draft-x');
+          disarm(x ? row : null);
+          if (!row || row.classList.contains('is-going')) return;
+          const id = row.dataset.id;
+          if (!x) {
+            if (!e.target.closest('.draft-open')) return;
+            // By id: the open composer flushes on its way out (route), and
+            // this may be the very draft it holds.
+            close(() => { pendingDraft = id; go('#/publish'); });
+            return;
+          }
+          if (!row.classList.contains('is-arming')) {
+            row.classList.add('is-arming');
+            x.setAttribute('aria-label', 'Delete draft, tap again to confirm');
+            hapticTap('LIGHT');
+            return;
+          }
+          hapticEvent('WARNING');
+          Store.dropDraft(id);
+          row.classList.add('is-going');
+          row.style.height = row.offsetHeight + 'px';
+          requestAnimationFrame(() => { row.style.height = '0px'; });
+          const gone = () => {
+            row.remove();
+            if (!listEl.querySelector('.draft-row')) close();
+          };
+          if (prefersReduced()) gone(); else setTimeout(gone, 260);
+        });
+      },
+    });
+  }
 
   /* THE FIRST ROW CYCLES (Zoe, 2026-11-06: "have the icons rotate between
      frames and polls and links", then "include titles I hate the word
@@ -15501,6 +15612,11 @@
   // outlives the render because submitComposer reads it.
   let pendingMoment = false;
   let composingMoment = false;
+  // A draft to open (the Drafts sheet's row, its id), one-shot like the
+  // rest. `liveDraft` is the open composer's autosave, `{ flush, spend }`:
+  // route() and a trip to the background flush it, a share spends it.
+  let pendingDraft = null;
+  let liveDraft = null;
   // The track a Music post will carry, picked on the composer's song surface.
   // Module scope because submitComposer reads it, the way it reads `cropper`.
   let composeSong = null;
@@ -24612,6 +24728,24 @@
     // exactly like any other compose. Consumed once — navigate away and come back
     // and you get a plain composer, because the intent belonged to the tap, not
     // to the page.
+    //
+    // A DRAFT REOPENED (openDrafts) sets up what began it as the tap once did:
+    // the daily it answers while that is still today's and unanswered, the
+    // post it quotes while that is still here, a Moment, a circle's card.
+    // Whatever no longer stands falls back to a plain post with the words.
+    const draft = pendingDraft ? Store.draftById(pendingDraft) : null;
+    pendingDraft = null;
+    const db = draft ? draft.body || {} : null;
+    if (db) {
+      const occ = db.daily ? todaysDaily() : null;
+      pendingDaily = occ && occ.slug === db.daily && !myAnswer(occ) ? occ : null;
+      pendingQuote = db.quote ? Store.posts().find(p => String(p.id) === db.quote) || null : null;
+      pendingMoment = !!db.moment;
+      pendingCircleShare = db.circle || null;
+      pendingCommunity = null;
+      pendingAttach = null;
+      pendingPin = false;
+    }
     const daily = pendingDaily;
     pendingDaily = null;
     answeringDaily = daily;
@@ -24945,6 +25079,7 @@
         pubAudienceTouched = true;
       }
       fieldsEl.innerHTML = fieldsFor(quote ? 'quote' : 'post', { event: !daily && !moment, song: !daily && (moment || !Store.momentsReady()), moment });
+      if (db) fillFromDraft(db, qa);
       // The Takes tip sits under the box whose star it points at (Zoe: "put
       // takes on the publish page", a tip is by its feature). A plain post
       // only: a daily answers a prompt and a Moment has no take.
@@ -25552,6 +25687,141 @@
       return { sync, ticks };
     }
 
+    /* THE AUTOSAVE (2026-11-11). What the form holds, as a draft's body:
+       the words as they post (serializeNote) and the quill, the tags, the
+       ONE live attachment with what is in it, who it is for once that was
+       answered, and what began it (a quote, a daily, a Moment, a circle's
+       card). Photos and clips are not kept (see openDrafts). Music's own
+       page (the song family) keeps nothing: it is one pick. */
+    function draftOf() {
+      if (family === 'song') return null;
+      const v = (id) => (fieldsEl.querySelector('#' + id)?.value || '').trim();
+      const noteEl = fieldsEl.querySelector('#c-note');
+      const kind = family === 'base' ? derivePostType() : 'note';
+      const b = { v: 1, kind: kind === 'photo' ? 'note' : kind };
+      if (quote) b.quote = String(quote.id);
+      if (daily) b.daily = daily.slug;
+      if (moment) b.moment = true;
+      if (sharing && pubCarried) b.circle = sharing.id;
+      b.title = v('c-title');
+      b.note = noteEl ? serializeNote(noteEl) : '';
+      if (noteEl?.classList.contains('is-poem')) b.poem = true;
+      b.tags = v('c-tags');
+      if (kind === 'find') b.url = v('c-url');
+      if (kind === 'poll') b.poll = [...fieldsEl.querySelectorAll('#c-poll-opts .poll-opt-input')].map(el => el.value.trim());
+      if (kind === 'activity') { b.location = v('c-location'); b.date = v('c-date'); b.time = v('c-time'); }
+      if (kind === 'song' && composeSong) b.song = composeSong;
+      if (kind === 'take' && composeTake) { b.take = composeTake; b.rating = v('c-take-rating'); }
+      if (pubAudienceTouched) b.audience = { ...pubAudience, users: (pubAudience.users || []).slice() };
+      return b;
+    }
+    // Nothing written or picked: no draft. The audience and what began it
+    // are only a draft's setting, never a reason to keep one.
+    const draftEmpty = (b) => !b || !(b.title || draftPlain(b.note).trim() || b.tags || b.url
+      || (b.poll || []).some(Boolean) || b.location || b.date || b.song || b.take || b.circle);
+
+    // The draft's own pass over the fresh fields, before they are wired, so
+    // every field wakes up holding it (the editor its words and quill, the
+    // stars their rating, the song and take surfaces their pick). The
+    // attachment is restored only where this form still offers it.
+    function fillFromDraft(b, qa) {
+      const set = (sel, val) => { const el = fieldsEl.querySelector(sel); if (el && val) el.value = val; };
+      set('#c-title', b.title);
+      const noteEl = fieldsEl.querySelector('#c-note');
+      if (noteEl) {
+        noteEl.classList.toggle('is-poem', !!b.poem);
+        if (b.note) noteEl.innerHTML = editorPrefill(b.note, !!b.poem);
+      }
+      if (b.tags) {
+        set('#c-tags', b.tags);
+        fieldsEl.querySelector('.tag-add')?.insertAdjacentHTML('beforebegin', parseTags(b.tags).map(tagChipHtml).join(''));
+      }
+      const offers = (btn) => family === 'base' && !!fieldsEl.querySelector(btn);
+      if (b.kind === 'find' && offers('#c-add-link')) { wantLink = true; set('#c-url', b.url); }
+      if (b.kind === 'poll' && offers('#c-add-poll')) {
+        wantPoll = true;
+        const opts = fieldsEl.querySelector('#c-poll-opts');
+        const want = Math.min(4, Math.max(2, (b.poll || []).length));
+        for (let i = opts.children.length; i < want; i++) opts.insertAdjacentHTML('beforeend', pollOptRowHtml(i));
+        opts.querySelectorAll('.poll-opt-input').forEach((el, i) => { el.value = (b.poll || [])[i] || ''; });
+      }
+      if (b.kind === 'activity' && offers('#c-add-event')) {
+        wantEvent = true;
+        set('#c-location', b.location); set('#c-date', b.date); set('#c-time', b.time);
+      }
+      if (b.kind === 'song' && b.song && offers('#c-add-song')) { wantSong = true; composeSong = { ...b.song }; }
+      if (b.kind === 'take' && b.take && offers('#c-add-take')) {
+        wantTake = true;
+        composeTake = { ...b.take };
+        set('#c-take-rating', b.rating);
+      }
+      // Who it was for, where that still stands: a circle you are still in
+      // (never the one a quoted post was said in), and a Moment only ever
+      // to your friends or people you picked. A quote fixed to its
+      // original's audience keeps that.
+      const a = b.audience;
+      if (a && a.mode && (!quote || (qa && qa.open))) {
+        const room = a.mode !== 'community'
+          || (!moment && Store.inCommunity(a.community) && a.community !== (quote && quote.communityId));
+        const wide = !moment || a.mode === 'circle' || a.mode === 'list';
+        if (room && wide) {
+          pubAudience = { ...a, users: (a.users || []).slice() };
+          pubAudienceTouched = true;
+        }
+      }
+    }
+
+    // Saved on a pause in the writing (700ms after the last key, tap or
+    // pick, the audience sheet's included), on the way out, and on a trip to
+    // the background, the moment an app is most likely to be killed. Only a
+    // real change is saved, so a draft opened and left is not moved to the
+    // top of the list. Leaving with something kept says so once, quietly:
+    // "Saved to drafts." is the whole of the reassurance, no question asked.
+    let draftId = draft ? draft.id : null;
+    let draftSig = '';       // the form as it opened, set once it is mounted (below)
+    let draftKept = false;   // saved this visit, so the way out says so
+    let draftTimer = 0;
+    const saveDraftNow = () => {
+      clearTimeout(draftTimer);
+      if (!Store.isAuthed()) return;
+      const b = draftOf();
+      const sig = JSON.stringify(b);
+      if (sig === draftSig) return;
+      draftSig = sig;
+      if (draftEmpty(b)) {
+        if (draftId) Store.dropDraft(draftId);
+        draftId = null;
+        draftKept = false;
+        return;
+      }
+      draftId ||= Store.newDraftId();
+      Store.saveDraft(draftId, b);
+      draftKept = true;
+    };
+    const saveDraftSoon = () => { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraftNow, 700); };
+    const draftEvents = ['input', 'change', 'click'];
+    draftEvents.forEach(t => document.addEventListener(t, saveDraftSoon, true));
+    const draftOff = () => {
+      clearTimeout(draftTimer);
+      draftEvents.forEach(t => document.removeEventListener(t, saveDraftSoon, true));
+      if (liveDraft === mine) liveDraft = null;
+    };
+    const mine = {
+      flush(leaving) {
+        saveDraftNow();
+        if (!leaving) return;
+        draftOff();
+        if (draftKept && draftId && Store.draftById(draftId)) toast('Saved to drafts.');
+      },
+      // Shared: the draft has become a post.
+      spend() {
+        draftOff();
+        if (draftId) Store.dropDraft(draftId);
+        draftId = null;
+      },
+    };
+    liveDraft = mine;
+
     document.getElementById('composer').addEventListener('submit', (e) => {
       e.preventDefault();
       submitComposer();
@@ -25571,6 +25841,7 @@
     pendingAttach = null;
     if (family === 'song') fieldsEl.querySelector('#c-song-q')?.focus();
     else if (attach && family !== 'quote') fieldsEl.querySelector(ATTACH_BTN[attach])?.click();
+    draftSig = JSON.stringify(draftOf());
   }
   const ATTACH_BTN = {
     find: '#c-add-link', photo: '#c-add-photo', poll: '#c-add-poll',
@@ -27801,6 +28072,7 @@
       return;
     }
     uploading.clear();   // out, and theirs now
+    liveDraft?.spend();  // the draft is a post now
     clearPostProgress();
     // The clips and their cut are spent: the folder goes.
     if (clipPost && clipCutter()) cutCall('clear').catch(() => {});
@@ -27895,6 +28167,7 @@
       return;
     }
     hapticTwinkle();
+    liveDraft?.spend();  // the draft is a post now
     quotingPost = null;
     // The quote lands at the top of the home feed and sparkles in like any other
     // post — which is the whole reason this ends the same way createPost's path
@@ -30628,6 +30901,10 @@
     stampSelfPush((location.hash || '#/').split('?')[0]);
     openPing.note();   // once a day per person; see THE OPEN PING
 
+    // A composer left keeps what it holds as a draft, read off its fields
+    // while they are still on the page (see THE AUTOSAVE in renderPublish).
+    if (liveDraft) liveDraft.flush(true);
+
     // Navigating away from Publish must stop a live camera/mic stream — the
     // capture surface's own DOM is about to be replaced, which wouldn't
     // otherwise release it (see wireFrameCapture's teardown). Same story for the
@@ -31660,10 +31937,14 @@
   // (the channel doesn't hear the background). What it repaints is refreshWorld's
   // call.
   document.addEventListener('visibilitychange', () => {
+    // Backgrounded is when an app is killed: an open composer saves now.
+    if (document.visibilityState === 'hidden') { liveDraft?.flush(false); return; }
     if (document.visibilityState === 'visible' && booted) openPing.note();
     if (document.visibilityState !== 'visible' || !Store.isAuthed()) return;
     refreshWorld(herePath());
+    Store.syncDrafts();   // what another device wrote meanwhile
   });
+  window.addEventListener('pagehide', () => liveDraft?.flush(false));
 
   // The boot splash (static HTML in index.html, so it paints before any JS or
   // network). Dismissed once the first view is in — held on screen a beat so a
@@ -31857,6 +32138,7 @@
       else if (document.getElementById('page-wait') || !(typing() || fillingIn())) route();
     });
     // Charms take their baseline off the real world, never a kept one.
+    Store.whenFresh().then(() => { if (Store.isAuthed()) Store.syncDrafts(); }, () => {});
     Store.whenFresh().then(() => { charmsLive = true; noticeCharmsSoon(); syncThemeIcon(); },
                            () => { charmsLive = true; });
     // Native push housekeeping, after init because it needs the signed-in user:

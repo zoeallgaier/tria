@@ -10260,6 +10260,60 @@ body.chat-answering .msg-list { padding-bottom: calc(1rem + 44px + 1.4rem + 2px)
   right: calc(1.4rem - 8px);
 }
 
+/* DRAFTS (openDrafts, 2026-11-11). A sheet row in every measure, the inset,
+   the soft corner, the press fill, the hairline between, but two lines: what
+   the draft says, one line in ink, and what it is and when, small and muted.
+   Not `.sheet-item` itself, since openSheet wires every one of those as a row
+   that closes the sheet. The x rides the row's end over the open button, so
+   the press fills the whole row; armed, it widens into a red Delete pill on
+   the quick ease, and a row let go folds its height away. */
+.draft-row { position: relative; overflow: hidden; transition: height var(--dur-move) var(--ease), opacity var(--dur-move) var(--ease); }
+.draft-row.is-going { opacity: 0; }
+.draft-row + .draft-row::before {
+  content: ""; position: absolute; top: 0; z-index: 1;
+  left: calc(1.4rem + 24px + 0.95rem);
+  right: 1.4rem;
+  border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+}
+.draft-open {
+  display: flex; align-items: center; gap: 0.95rem;
+  width: calc(100% - 16px); margin-inline: 8px;
+  min-height: 64px;
+  padding: 0.7rem calc(1.4rem - 8px + 44px + 0.4rem) 0.7rem calc(1.4rem - 8px);
+  border: 0; border-radius: var(--radius-soft); background: none;
+  font: inherit; color: var(--text); text-align: left; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.draft-open:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
+@media (hover: hover) { .draft-open:hover { background: color-mix(in srgb, var(--text) 6%, transparent); } }
+.draft-open:focus-visible { outline: none; }
+.draft-lines { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.draft-gist,
+.draft-when { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.draft-gist { font-size: 1.02rem; line-height: 1.3; }
+.draft-when { font-size: 0.82rem; line-height: 1.3; color: var(--muted); }
+.draft-x {
+  position: absolute; top: 50%; right: calc(1.4rem - 8px);
+  transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem;
+  min-width: 44px; height: 44px; padding: 0 0.6rem;
+  border: 0; border-radius: var(--radius-pill); background: transparent;
+  font: inherit; font-size: 0.92rem; font-weight: 700; color: var(--muted);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: background var(--dur-quick, 160ms) var(--ease), color var(--dur-quick, 160ms) var(--ease);
+}
+.draft-x-ico { width: 18px; height: 18px; flex-shrink: 0; }
+.draft-x-word { display: none; }
+.draft-row.is-arming .draft-x {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  padding: 0 0.95rem;
+}
+.draft-row.is-arming .draft-x-ico { display: none; }
+.draft-row.is-arming .draft-x-word { display: inline; }
+.draft-x:focus-visible { outline: none; }
+@media (prefers-reduced-motion: reduce) { .draft-row, .draft-x { transition: none; } }
+
 /* A THREAD OVER THE FEED (2026-10-29, openThreadSheet). A feed card's
    comment glyph raises the thread as the secondary sheet, taller and FIXED in
    height so it holds still as a comment lands or the keys come up, with the

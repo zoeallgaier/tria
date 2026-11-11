@@ -631,6 +631,31 @@ $$;
 revoke all on function public.claim_profile(text, text) from public;
 grant execute on function public.claim_profile(text, text) to authenticated;
 
+-- ── Drafts (drafts.sql, 2026-11-11) ───────────────────────────────────────────
+-- The composer's autosave, following its writer across devices. Owner only.
+create table if not exists public.drafts (
+  id         uuid primary key,
+  user_id    uuid not null references public.users(id) on delete cascade,
+  body       jsonb not null,
+  updated_at timestamptz not null default now(),
+  constraint drafts_body_size check (octet_length(body::text) <= 200000)
+);
+create index if not exists drafts_user_idx on public.drafts (user_id);
+alter table public.drafts enable row level security;
+drop policy if exists "drafts read self" on public.drafts;
+create policy "drafts read self" on public.drafts
+  for select to authenticated using (user_id = auth.uid());
+drop policy if exists "drafts insert self" on public.drafts;
+create policy "drafts insert self" on public.drafts
+  for insert to authenticated with check (user_id = auth.uid());
+drop policy if exists "drafts update self" on public.drafts;
+create policy "drafts update self" on public.drafts
+  for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists "drafts delete self" on public.drafts;
+create policy "drafts delete self" on public.drafts
+  for delete to authenticated using (user_id = auth.uid());
+grant select, insert, update, delete on public.drafts to authenticated;
+
 -- ── Delete your own account ───────────────────────────────────────────────────
 -- Leaving has to be as easy as joining, and it has to reach auth.users, which no
 -- signed-in client may touch. This SECURITY DEFINER function deletes exactly one

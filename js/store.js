@@ -3435,6 +3435,123 @@ const Store = (() => {
     if (error) { flip(!on); return { ok: false }; }
     return { ok: true };
   }
+
+  /* ── Drafts (2026-11-11) ─────────────────────────────────────────────────
+     Zoe: "Draft posts and autosave ... I want people to be able to come back
+     to thoughts or not worry about losing one." Substack's shape: the
+     composer keeps what you write as you write it, with no button and no
+     question on the way out, and the drafts wait at the composer's own door.
+
+     THE DEVICE FIRST. Every save lands in localStorage at once
+     (`tria:drafts:<me>`), so a crash, a flat battery or no signal never
+     costs a word. Then THE ACCOUNT, where drafts.sql has run: a row a draft,
+     read and written by its owner alone, so a thought begun on the phone is
+     there on the laptop. Until it runs (`draftsReady` false) they stay on
+     the device that wrote them.
+
+     A draft is `{ id, at, body }`: a uuid made here, the last edit in ms,
+     and the composer's own snapshot (app.js's `draftOf`), which the store
+     never reads. The newest edit wins, a whole draft at a time. Two marks
+     make the sync honest: `dirty`, an edit the account hasn't taken yet, and
+     `synced`, a draft the account has held, so one that has since gone from
+     the account was deleted on another device and goes here too, where one
+     never synced is carried up. A delete is kept as a tombstone
+     (`tria:drafts-gone:<me>`) until the account has taken it, so a draft
+     deleted offline never comes back from the account. Kept apart from the
+     world's `state`: nothing else reads them, and no refresh may eat one. */
+  const draftsKey = () => 'tria:drafts:' + state.session;
+  const draftsGoneKey = () => 'tria:drafts-gone:' + state.session;
+  const readLs = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || 'null') || d; } catch { return d; } };
+  const keepLs = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* full, or private mode */ } };
+  let draftsLive = null;   // null until the account has been asked; then true or false
+  const draftsReady = () => draftsLive === true && !!state.session;
+  const localDrafts = () => (state.session ? readLs(draftsKey(), []) : []);
+  const drafts = () => localDrafts().slice().sort((a, b) => b.at - a.at);
+  const draftById = (id) => localDrafts().find(d => d.id === id) || null;
+  const newDraftId = () => (crypto.randomUUID ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 3 | 8)).toString(16);
+      }));
+  let draftsPush = 0;
+  function saveDraft(id, body) {
+    if (!state.session || !id) return;
+    const list = localDrafts();
+    const had = list.find(d => d.id === id);
+    const next = { id, at: Date.now(), body, synced: !!(had && had.synced), dirty: true };
+    keepLs(draftsKey(), had ? list.map(d => (d.id === id ? next : d)) : list.concat([next]));
+    clearTimeout(draftsPush);
+    draftsPush = setTimeout(() => { syncDrafts().catch(() => {}); }, 1500);
+  }
+  function dropDraft(id) {
+    if (!state.session || !id) return;
+    const list = localDrafts();
+    const had = list.find(d => d.id === id);
+    if (!had) return;
+    keepLs(draftsKey(), list.filter(d => d.id !== id));
+    if (had.synced || draftsLive !== false) {
+      keepLs(draftsGoneKey(), readLs(draftsGoneKey(), []).filter(x => x !== id).concat([id]));
+      clearTimeout(draftsPush);
+      draftsPush = setTimeout(() => { syncDrafts().catch(() => {}); }, 400);
+    }
+  }
+  // One pull in flight at a time; a second ask while one runs rides it.
+  let draftsSyncing = null;
+  function syncDrafts() {
+    if (!state.session) return Promise.resolve(false);
+    if (draftsSyncing) return draftsSyncing;
+    draftsSyncing = (async () => {
+      const me = idOf(state.session);
+      if (!me) return false;
+      const got = await sb.from('drafts').select('id, body, updated_at').eq('user_id', me);
+      if (got.error) {
+        if (isMissing(got.error)) {
+          draftsLive = false;
+          keepLs(draftsGoneKey(), []);   // nothing on the account to take them
+        }
+        return false;
+      }
+      draftsLive = true;
+      // Tombstones first, so a delete made offline is never read back in.
+      const gone = readLs(draftsGoneKey(), []);
+      if (gone.length) {
+        const { error } = await sb.from('drafts').delete().eq('user_id', me).in('id', gone);
+        if (!error) keepLs(draftsGoneKey(), []);
+      }
+      const away = new Set(gone);
+      const theirs = new Map((got.data || []).filter(r => !away.has(r.id))
+        .map(r => [r.id, { id: r.id, at: Date.parse(r.updated_at) || 0, body: r.body }]));
+      // Read the device's list only now, after the awaits, so a save made
+      // meanwhile is part of the merge rather than written over.
+      const mine = localDrafts();
+      const merged = [];
+      for (const d of mine) {
+        const t = theirs.get(d.id);
+        theirs.delete(d.id);
+        if (!t) { if (!d.synced) merged.push(d); continue; }   // synced and gone: deleted elsewhere
+        merged.push(t.at > d.at ? { ...t, synced: true, dirty: false } : d);
+      }
+      for (const t of theirs.values()) merged.push({ ...t, synced: true, dirty: false });
+      keepLs(draftsKey(), merged);
+      // Up with what the account hasn't taken.
+      const up = merged.filter(d => d.dirty || !d.synced);
+      if (up.length) {
+        const { error } = await sb.from('drafts').upsert(up.map(d => ({
+          id: d.id, user_id: me, body: d.body, updated_at: new Date(d.at).toISOString(),
+        })));
+        if (!error) {
+          const sent = new Map(up.map(d => [d.id, d.at]));
+          // Only what is still the version that went up: an edit made during
+          // the upsert stays dirty for the next one.
+          keepLs(draftsKey(), localDrafts().map(d => (sent.get(d.id) === d.at
+            ? { ...d, synced: true, dirty: false } : sent.has(d.id) ? { ...d, synced: true } : d)));
+        }
+      }
+      return true;
+    })().catch(() => false).finally(() => { draftsSyncing = null; });
+    return draftsSyncing;
+  }
+
   // Holds an invite to this circle: me by default, or one of my friends (the
   // Invite sheet's question, answerable for the circles I am in).
   const invitedTo = (id, username) => {
@@ -4545,6 +4662,8 @@ const Store = (() => {
     communityToolsReady, setCommunityPhoto, deleteCommunity,
     communityAccentReady, setCommunityAccent,
     communityPrivacyReady, favCirclesReady, favCircleIds, setFavCircle, invitedTo, canJoinCommunity, setCommunityPrivacy, inviteToCommunity,
+    // Drafts (the composer's autosave)
+    drafts, draftById, draftsReady, newDraftId, saveDraft, dropDraft, syncDrafts,
     // Push
     pushSupported, pushPermission, pushArmed, pushSubscribed, pushResume, enablePush, disablePush,
     clearDelivered, openAppSettings,

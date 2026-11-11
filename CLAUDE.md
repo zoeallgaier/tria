@@ -72,6 +72,41 @@ of the three tables has a select policy. **App Store Connect's privacy label
 needs "Product Interaction, linked to user" before a build with the ping
 ships.**
 
+## Drafts: the composer saves as you write (2026-11-11)
+
+**Zoe: "Draft posts and autosave ... I want people to be able to come back to
+thoughts or not worry about losing one."** Modelled on Substack (researched
+the same day): autosave with no Save button and no question on the way out,
+the drafts at the composer's own door, synced across devices. **The
+autosave** (`THE AUTOSAVE` in renderPublish, `draftOf`): 700ms after the last
+key, tap or pick anywhere (capture listeners on document, so the audience
+sheet counts), on the way out (`route()` calls `liveDraft.flush(true)` while
+the fields are still on the page) and on a trip to the background
+(visibilitychange hidden, pagehide). Only a real change saves, so a draft
+opened and left is not re-dated; emptied, it is deleted. Leaving with
+something kept toasts **"Saved to drafts."**, the whole of the reassurance.
+A share spends it (`liveDraft.spend()`, after the post is out; a refused
+share keeps it). **What a draft holds:** the words as they post
+(`serializeNote`) and the quill, tags, the ONE live attachment with what is
+in it (link, poll choices, plan, song, take and its stars), the audience once
+answered, and what began it (a quote, a daily while still today's and
+unanswered, a Moment, a circle's card). **Not photos or clips** (they're in
+the roll; a draft holding files would hold storage for a post that may never
+go), and not Music's own page. **Reopening** (`pendingDraft`, an id, read
+after the outgoing composer flushed) fills the fresh fields before they are
+wired (`fillFromDraft`), so every surface wakes holding it; `editorPrefill`
+takes the quill explicitly. **Where they are:** the New sheet's last row,
+**Drafts**, only while one waits, never a number (`openDrafts`, `ICONS.drafts`,
+a page with its last line short): its mark, its headline or first line, and
+"Poll · 3h ago". The x is two taps (Delete pill, then gone, a WARNING tap),
+as iOS's swipe to delete. **Kept on the device first** (`tria:drafts:<me>`,
+`Store.saveDraft`), **then the account** (`supabase/drafts.sql`, owner only,
+**NOT run** as of 2026-11-11; until it runs `Store.draftsReady` is false and
+they stay per device): `syncDrafts` merges newest edit wins, `dirty` and
+`synced` marks tell an edit not yet up from a draft deleted elsewhere, and a
+delete is a tombstone (`tria:drafts-gone:<me>`) until the account takes it.
+Synced at boot, on a foreground and as the New sheet opens.
+
 ## Favorite circles are a bookmark (2026-11-09)
 
 **Any circle you can open can be a favorite** (Zoe: "Favorite circles for
