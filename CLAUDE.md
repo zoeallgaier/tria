@@ -1469,8 +1469,9 @@ profile face, `setCommunityPhoto`), take people out, and **delete it**
 changes. When the host leaves, the longest-standing member inherits; when the
 last member leaves, the circle closes the same way a delete does. Ten circles
 held per person. A circle post is reposted inside its circle and quoted
-anywhere (see Repost inherits, quote chooses); it cannot be pinned to a
-profile.
+anywhere (see Repost inherits, quote chooses); it can be pinned to its author's
+profile (2026-11-11, Zoe; a reader who can't read the circle doesn't get
+that pin, `pinsFor`).
 **Starting one is celebrated** (Zoe, 2026-10-23): the new circle's page opens
 with the brand's stars bursting off its face (`celebrateFace`, cyan and green
 alternating) and a twinkle haptic in step with them (`hapticTwinkle`, the app's

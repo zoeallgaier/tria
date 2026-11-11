@@ -4096,15 +4096,16 @@
   }
 
   /* The pin, between repost and like, on your OWN posts on your OWN profile
-     (Zoe, 2026-11-09). The same rule as the ••• row: no circle post, no
-     Moment, and a pinned one can always come off. Solid while pinned. */
+     (Zoe, 2026-11-09). The same rule as the ••• row: no Moment (circle
+     posts since 2026-11-11), and a pinned one can always come off. Solid
+     while pinned. */
   function pinBtnHtml(post) {
     const me = Store.session();
     if (!me || post.author !== me || post.repostOf) return '';
     const h = location.hash;
     if (!(h === '#/profile' || h.startsWith('#/profile?') || h === '#/u/' + encodeURIComponent(me))) return '';
     const on = myPins().some(e => e.k === 'post' && e.id === post.id);
-    if (!on && (post.communityId || post.moment)) return '';
+    if (!on && post.moment) return '';
     return `<button class="card-pin${on ? ' is-pinned' : ''}" type="button" data-pin="${esc(post.id)}" ` +
       `aria-pressed="${on}" aria-label="${on ? 'Unpin from profile' : 'Pin to profile'}" ` +
       `title="${on ? 'Pinned' : 'Pin'}">${svgIcon('pinned', 'pin-mark')}</button>`;
@@ -14500,9 +14501,9 @@
       // rather than the row appearing and disappearing, so the same place in the
       // same menu is where a pin goes on and comes off.
       const at = myPins().findIndex(e => e.k === 'post' && e.id === post.id);
-      // A circle's post can't be pinned: a profile is not in it. A Moment
-      // can't either: it is gone in a day.
-      if (at >= 0 || (!post.communityId && !post.moment)) items.push(at >= 0
+      // A Moment can't be pinned: it is gone in a day. A circle's post can
+      // (Zoe, 2026-11-11).
+      if (at >= 0 || !post.moment) items.push(at >= 0
         ? { label: 'Unpin from profile', icon: 'pinned', run: () =>
             commitPins(myPins().filter((_, j) => j !== at), { toastOk: 'Unpinned.' }) }
         : { label: 'Pin to profile', icon: 'pinned', run: () => pinPostFromMenu(post) });
@@ -17366,8 +17367,9 @@
      note) and is offered like any other post. Nothing stops a bare repost being
      pinned by hand if some other path ever hands one over; this is the picker
      being opinionated, not the store. */
-  // A circle's post stays in its circle, and a profile is not in it.
-  const pinnablePost = (p) => !(p.repostOf && !p.note) && !p.communityId && !p.moment;
+  // A circle's post is pinnable (Zoe, 2026-11-11): it is yours, and a reader
+  // who can't see the circle's posts simply doesn't get the card (pinsFor).
+  const pinnablePost = (p) => !(p.repostOf && !p.note) && !p.moment;
 
   /* Pin a post from its own ••• (openPostMenu). At three, the row does not go
      away and does not do nothing: it asks which of the three to swap out. A

@@ -1601,8 +1601,9 @@ in the circle, and `Store.discover` (read only by Discover's people search, for
 what someone has said) still drops them. A "new in your circles" card over My
 Circle was tried the same day and removed in favour of this. A card
 says which circle it was said in above its byline, in the repost line's style
-("Posted in c/slug", `communityTagHtml`), except on that circle's own page. A circle post can't be
-pinned to a profile, and sharing a song into a circle doesn't set your listening
+("Posted in c/slug", `communityTagHtml`), except on that circle's own page. A circle post can be
+pinned to its author's profile (2026-11-11; a reader who can't read the circle
+just doesn't get that pin), and sharing a song into a circle doesn't set your listening
 status (the status is read by everyone).
 
 **The two gates.** `canSocial` and `canJoin` both open to a circle's members on
