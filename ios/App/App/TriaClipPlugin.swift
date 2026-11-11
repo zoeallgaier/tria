@@ -26,6 +26,13 @@ import UniformTypeIdentifiers
 ///   the post has left, and resolves `{ path, type }` or `{ cancelled }`.
 /// - `clear { paths }` deletes those clips' files, or with no paths empties
 ///   the folder every clip and every cut lives in.
+/// - `keep { paths }` (2026-11-11, drafts) gives each clip a second name in
+///   `Application Support/tria-drafts`, which iOS never purges as it may tmp:
+///   a hard link, so instant and no second copy of the bytes, a copy only if
+///   linking fails. Resolves `{ paths }` in the same order; a path already
+///   there is its own answer. `clear` never reaches that folder.
+/// - `prune { keep }` deletes every file in that folder but those named, so a
+///   draft deleted, posted or with a clip taken out lets its files go.
 ///
 /// ── Why a real cut, and not the play window ─────────────────────────────────
 ///
@@ -50,6 +57,8 @@ public class TriaClipPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "compose", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "record", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "clear", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "keep", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "prune", returnType: CAPPluginReturnPromise),
     ]
 
     /// The camera while it is up (UIImagePickerController holds its delegate weakly).
@@ -133,6 +142,47 @@ public class TriaClipPlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve()
     }
 
+    /// A draft's clips, out of tmp's reach (see the header).
+    @objc func keep(_ call: CAPPluginCall) {
+        let paths = (call.getArray("paths") ?? []).compactMap { $0 as? String }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let fm = FileManager.default
+            let home = TriaClipCore.draftsDir
+            try? fm.createDirectory(at: home, withIntermediateDirectories: true)
+            // Out of the phone's backups: a clip is the phone's own, and big.
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            var marked = home
+            try? marked.setResourceValues(values)
+            let homePath = home.resolvingSymlinksInPath().path
+            let out: [String] = paths.map { p in
+                guard let src = TriaClipCore.fileURL(p) else { return p }
+                if src.resolvingSymlinksInPath().path.hasPrefix(homePath) { return p }
+                let dest = home.appendingPathComponent(src.lastPathComponent)
+                if !fm.fileExists(atPath: dest.path) {
+                    do { try fm.linkItem(at: src, to: dest) } catch {
+                        do { try fm.copyItem(at: src, to: dest) } catch { return p }
+                    }
+                }
+                return dest.absoluteString
+            }
+            call.resolve(["paths": out])
+        }
+    }
+
+    @objc func prune(_ call: CAPPluginCall) {
+        let keep = Set((call.getArray("keep") ?? []).compactMap { $0 as? String }
+            .compactMap { TriaClipCore.fileURL($0)?.lastPathComponent })
+        DispatchQueue.global(qos: .utility).async {
+            let fm = FileManager.default
+            let home = TriaClipCore.draftsDir
+            for name in (try? fm.contentsOfDirectory(atPath: home.path)) ?? [] where !keep.contains(name) {
+                try? fm.removeItem(at: home.appendingPathComponent(name))
+            }
+            call.resolve()
+        }
+    }
+
     private static func num(_ v: JSValue?) -> Double {
         if let n = v as? NSNumber { return n.doubleValue }
         if let d = v as? Double { return d }
@@ -154,6 +204,12 @@ enum TriaClipCore {
 
     static var dir: URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("tria-clips", isDirectory: true)
+    }
+
+    /// Where a draft's clips are kept (`keep`, `prune`): not tmp, so not purged.
+    static var draftsDir: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return base.appendingPathComponent("tria-drafts", isDirectory: true)
     }
 
     /// The web hands back what native gave it, a `file://` URL string; a bare

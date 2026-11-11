@@ -38,7 +38,7 @@ window.TRIA_DICTIONARY = [
       { name: 'Daily', code: 'DAILIES, daily-<slug> tag', where: 'Discover, #/daily/<slug>', say: 'One prompt a day for everyone. An answer is a post with the day\'s tag.' },
       { name: 'Repost', code: 'bareRepostPlace', say: 'A post shared as is, wearing its original\'s audience (a circle\'s post goes out to your friends).' },
       { name: 'Quote', code: 'createRepost', say: 'A repost with your words, and any audience you choose.' },
-      { name: 'Drafts', code: 'openDrafts, Store.saveDraft, drafts table', where: 'The New sheet\'s last row, while one waits', say: 'The composer saves as you write, no button and no question. Leaving says "Saved to drafts." Words, tags and attachments come back; photos don\'t. Syncs across devices once drafts.sql runs.' },
+      { name: 'Drafts', code: 'openDrafts, Store.saveDraft, drafts table', where: 'The New sheet\'s last row, while one waits', say: 'The composer saves as you write, no button and no question. Leaving says "Saved to drafts." Words, tags, attachments and photos come back on every device; a clip comes back on the phone it was made on. Syncs across devices once drafts.sql runs.' },
       { name: 'Pins', code: '.pin-grid', where: 'Profile', say: 'Up to four posts held above your wall, in a two column grid.' },
       { name: 'Tags', code: 'trendingTags', say: 'Words on a post. Two or more posts on one makes it trend on Discover.' },
     ],

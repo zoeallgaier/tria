@@ -90,9 +90,24 @@ share keeps it). **What a draft holds:** the words as they post
 (`serializeNote`) and the quill, tags, the ONE live attachment with what is
 in it (link, poll choices, plan, song, take and its stars), the audience once
 answered, and what began it (a quote, a daily while still today's and
-unanswered, a Moment, a circle's card). **Not photos or clips** (they're in
-the roll; a draft holding files would hold storage for a post that may never
-go), and not Music's own page. **Reopening** (`pendingDraft`, an id, read
+unanswered, a Moment, a circle's card), not Music's own page. **Photos and
+clips too** (Zoe, 2026-11-11: "make sure drafts also save images/videos";
+they were left out that morning): **a photo is its upload** (it goes up as
+it's picked, so the draft keeps `photos: [{ url, dims, tint }]` and it is on
+every device; a still still going up as the composer goes is `held` from
+`sweepUploads` and written in once it lands; `sweepUploads(true)` spares
+what `draftPhotoUrls` names; a reopened one is `makeStill`'s `it.url`, never
+uploaded again). **A clip stays on the phone that made it** (`clips: [{ path,
+type, start, end }]` and `dev`, the open ping's `tria:device`; never uploaded
+before Share): TriaClip `keep` hard links each into `Application
+Support/tria-drafts` (never purged, out of backups, out of `clear`'s reach)
+and the draft is rewritten naming them there; `prune` drops every file no
+draft on the phone names (after sync, a spend, a delete). Another device
+opens the words with "This draft's clip is on the phone you started it on."
+The app only: the web's and iOS 15 and 16's clips are a File, so their drafts
+keep the words. Deleting a draft by hand deletes its photos' files
+(`dropDraftFiles`); posting one hands them to the post. **Needs a new
+binary** for the clips (`keep`, `prune`); photos are web only. **Reopening** (`pendingDraft`, an id, read
 after the outgoing composer flushed) fills the fresh fields before they are
 wired (`fillFromDraft`), so every surface wakes holding it; `editorPrefill`
 takes the quill explicitly. **Where they are:** the New sheet's last row,

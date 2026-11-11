@@ -7571,7 +7571,9 @@
     let host = '';
     try { host = b.url ? new URL(b.url).hostname.replace(/^www\./, '') : ''; } catch {}
     return b.title || line || (b.song && b.song.title) || (b.take && b.take.title)
-      || host || (b.poll || []).find(Boolean) || b.location || 'Untitled';
+      || host || (b.poll || []).find(Boolean) || b.location
+      || ((b.clips || []).length ? 'A clip' : (b.photos || []).length > 1 ? `${b.photos.length} photos` : (b.photos || []).length ? 'A photo' : '')
+      || 'Untitled';
   }
   const draftMark = (b) => (b.moment ? 'moment' : b.quote ? 'repost' : b.daily ? 'daily'
     : TYPE_GLYPH[b.kind] || 'pencil');
@@ -7627,7 +7629,9 @@
             return;
           }
           hapticEvent('WARNING');
+          const body = Store.draftById(id)?.body;
           Store.dropDraft(id);
+          dropDraftFiles(body);
           row.classList.add('is-going');
           row.style.height = row.offsetHeight + 'px';
           requestAnimationFrame(() => { row.style.height = '0px'; });
@@ -25012,6 +25016,7 @@
       syncAudienceLock(formEl);
     }
 
+    let frame = null;   // the frame surface's api (wireFrameCapture), once mounted
     function mountFields() {
       // Leaving a live camera/mic stream running behind a torn-down capture surface
       // would keep recording (and draining battery) after a re-mount — always stop
@@ -25107,7 +25112,8 @@
       wireTagRow(fieldsEl);
       if (family !== 'quote') {
         wireCarriedCircle();
-        roll = wireRoll(wireFrameCapture(fieldsEl));   // the frame surface ships hidden in the field set
+        frame = wireFrameCapture(fieldsEl);   // the frame surface ships hidden in the field set
+        roll = wireRoll(frame);
         wireWhenHints(fieldsEl);           // …and so do the date and time inputs
         wireLocationSuggest(fieldsEl.querySelector('#c-location'));
         wireAttachBar();
@@ -25128,6 +25134,18 @@
         wireAudienceLock(formEl, null, { rooms: true, except: quote.communityId || null });
       }
       applyBaseSurface();
+      // A draft's photos or clips, back in the post now the surface is wired.
+      if (db && frame && ((db.photos || []).length || (db.clips || []).length)) {
+        const clipsHere = (db.clips || []).length && clipCutter() && db.dev === thisDevice();
+        if (!(db.clips || []).length || clipsHere) {
+          wantPhoto = true;
+          applyBaseSurface();
+          frame.restore(db);
+          syncType();
+        } else {
+          document.getElementById('c-error').textContent = 'This draft’s clip is on the phone you started it on.';
+        }
+      }
     }
 
     // The nameplate rides the inferred type alongside the mark: attach a photo and
@@ -25693,14 +25711,34 @@
        the words as they post (serializeNote) and the quill, the tags, the
        ONE live attachment with what is in it, who it is for once that was
        answered, and what began it (a quote, a daily, a Moment, a circle's
-       card). Photos and clips are not kept (see openDrafts). Music's own
-       page (the song family) keeps nothing: it is one pick. */
+       card). Music's own page (the song family) keeps nothing: it is one pick.
+       PHOTOS AND CLIPS TOO (Zoe, 2026-11-11: "make sure drafts also save
+       images/videos"). A photo goes up the moment it's picked anyway, so a
+       draft keeps its URL, size and colour, and it is there on every device;
+       one still on its way up is written in once it lands. A clip is never
+       uploaded before Share (a source can run to three minutes of 4K), so a
+       draft keeps each clip's file and window ON THE PHONE that made it
+       (`dev`, TriaClip `keep`), and the app only: the web's and iOS 15 and
+       16's clips are a File the page can't keep, so their drafts keep the
+       words. */
     function draftOf() {
       if (family === 'song') return null;
       const v = (id) => (fieldsEl.querySelector('#' + id)?.value || '').trim();
       const noteEl = fieldsEl.querySelector('#c-note');
       const kind = family === 'base' ? derivePostType() : 'note';
-      const b = { v: 1, kind: kind === 'photo' ? 'note' : kind };
+      const b = { v: 1, kind };
+      if (kind === 'photo') {
+        const cl = videoCapture && videoCapture.clips;
+        if (cl && cl.length && clipCutter() && cl.every(c => c.path)) {
+          const at = (t) => Math.round(t * 1000) / 1000;
+          b.clips = cl.map(c => ({ path: c.path, type: c.type, start: at(c.start), end: at(c.end) }));
+          b.dev = thisDevice();
+        } else if (!videoCapture) {
+          const up = stills.filter(st => st.url);
+          if (up.length) b.photos = up.map(st => ({ url: st.url, dims: st.dims || null, tint: st.tint || null }));
+        }
+        if (!b.clips && !b.photos) b.kind = 'note';
+      }
       if (quote) b.quote = String(quote.id);
       if (daily) b.daily = daily.slug;
       if (moment) b.moment = true;
@@ -25720,7 +25758,8 @@
     // Nothing written or picked: no draft. The audience and what began it
     // are only a draft's setting, never a reason to keep one.
     const draftEmpty = (b) => !b || !(b.title || draftPlain(b.note).trim() || b.tags || b.url
-      || (b.poll || []).some(Boolean) || b.location || b.date || b.song || b.take || b.circle);
+      || (b.poll || []).some(Boolean) || b.location || b.date || b.song || b.take || b.circle
+      || (b.photos || []).length || (b.clips || []).length);
 
     // The draft's own pass over the fresh fields, before they are wired, so
     // every field wakes up holding it (the editor its words and quill, the
@@ -25799,13 +25838,31 @@
       draftId ||= Store.newDraftId();
       Store.saveDraft(draftId, b);
       draftKept = true;
+      keepClips(draftId, b, sig);
+    };
+    // A draft's clips get their second name out of tmp (TriaClip `keep`),
+    // and the draft is written again naming them there, unless it has
+    // changed meanwhile (the next save keeps its own).
+    const keepClips = (id, b, sig) => {
+      if (!b.clips || !clipCutter()) return;
+      const paths = b.clips.map(c => c.path);
+      clipKeeps = clipKeeps.then(() => cutCall('keep', { paths })).then((r) => {
+        const got = r && r.paths;
+        const d = Store.draftById(id);
+        if (!Array.isArray(got) || got.length !== paths.length || !d) return;
+        if (JSON.stringify(d.body) !== sig || got.every((q, i) => q === paths[i])) return;
+        Store.saveDraft(id, { ...d.body, clips: d.body.clips.map((c, i) => ({ ...c, path: got[i] })) });
+      }).catch(() => {});
     };
     const saveDraftSoon = () => { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraftNow, 700); };
-    const draftEvents = ['input', 'change', 'click'];
+    stillUp = saveDraftSoon;   // a photo landing up is a change worth keeping
+    // pointerup: a trim, a reorder or a scrub in the clip editor is a drag.
+    const draftEvents = ['input', 'change', 'click', 'pointerup'];
     draftEvents.forEach(t => document.addEventListener(t, saveDraftSoon, true));
     const draftOff = () => {
       clearTimeout(draftTimer);
       draftEvents.forEach(t => document.removeEventListener(t, saveDraftSoon, true));
+      if (stillUp === saveDraftSoon) stillUp = null;
       if (liveDraft === mine) liveDraft = null;
     };
     const mine = {
@@ -25813,13 +25870,38 @@
         saveDraftNow();
         if (!leaving) return;
         draftOff();
-        if (draftKept && draftId && Store.draftById(draftId)) toast('Saved to drafts.');
+        // Photos still on their way up as the composer goes: held from the
+        // sweep, and written into the draft as they land, in their place.
+        const kept = !!(draftKept && draftId && Store.draftById(draftId));
+        const all = !videoCapture ? stills.slice() : [];
+        const late = all.filter(st => !st.url && st.up);
+        if (late.length) {
+          const id = kept ? draftId : Store.newDraftId();
+          const snap = draftOf();   // the fields are still on the page
+          late.forEach(st => { st.held = true; });
+          Promise.all(late.map(st => st.up.catch(() => null))).then(() => {
+            const photos = all.filter(st => st.url).map(st => ({ url: st.url, dims: st.dims || null, tint: st.tint || null }));
+            const d = Store.draftById(id);
+            // Deleted meanwhile, or nothing ever landed: nothing to keep.
+            if ((kept && !d) || !photos.length) {
+              const landed = late.map(st => st.url).filter(Boolean);
+              if (landed.length) Store.dropUploads(landed);
+              return;
+            }
+            Store.saveDraft(id, { ...(d ? d.body : snap), kind: 'photo', photos });
+            if (!kept) toast('Saved to drafts.');
+          });
+        }
+        if (kept) toast('Saved to drafts.');
       },
-      // Shared: the draft has become a post.
+      // Shared: the draft has become a post. Its photos are the post's now;
+      // its clips were cut into it, so their kept files go.
       spend() {
         draftOff();
+        const had = draftId && Store.draftById(draftId);
         if (draftId) Store.dropDraft(draftId);
         draftId = null;
+        if (had && (had.body?.clips || []).length) pruneDraftClips();
       },
     };
     liveDraft = mine;
@@ -25957,6 +26039,17 @@
         return editor.expect(n);
       },
       error: (msg) => showPickError(msg),
+      // A draft's photos (already up, by URL) or its clips (files kept on
+      // this phone, each with its window), back in the post.
+      restore(b) {
+        if ((b.clips || []).length) {
+          openClips(b.clips.map(c => ({ path: c.path, type: c.type, start: c.start, end: c.end })));
+          return;
+        }
+        const items = (b.photos || []).filter(p => p && p.url).slice(0, maxStills())
+          .map(p => ({ src: sizedSrc(p.url, 1280), url: p.url, files: { dims: p.dims, tint: p.tint } }));
+        if (items.length) finishStills(items, false);
+      },
     };
 
     // Put a pick rejection where it can't be missed. iOS holds the user in the
@@ -26949,12 +27042,20 @@
         let c = null;
         try { c = it.path ? await fromPath(it) : await fromFile(it.file); } catch {}
         if (!alive()) return;
+        if (c && it.end > it.start) c.want = [it.start, it.end];   // a draft's own trim
         if (!c || !(c.dur > 0)) { unreadable = true; continue; }
         if (c.known !== false && c.dur > MAX_SOURCE_SEC) { tooLong = true; continue; }
         got.push(c);
       }
       if (got.length) {
         makeRoom(got);
+        // A draft's clips come back as they were trimmed, not shared out anew.
+        got.forEach((c) => {
+          if (!c.want) return;
+          c.start = clamp(c.want[0], 0, Math.max(0, c.dur - TRIM_MIN_SEC));
+          c.end = clamp(c.want[1], c.start + TRIM_MIN_SEC, c.dur);
+          delete c.want;
+        });
         sel = clips.length - got.length;   // the first of them, playing from its start
       }
       busy--;
@@ -27515,11 +27616,14 @@
        (`sweepUploads`). A refused post's are dropped by Store.createPost, so
        submitComposer sets them to go up again.
 
-     A still is { im, rollId, pending, shown, files, up, frac }: `im` is its
-     preview (the thumbs and slides draw it), `shown` settles once it has a
-     picture, `files` is the promise of what goes up, `up` of its URL. */
+     A still is { im, rollId, pending, shown, files, up, frac, url, dims,
+     tint }: `im` is its preview (the thumbs and slides draw it), `shown`
+     settles once it has a picture, `files` is the promise of what goes up,
+     `up` of its URL, and `url`, `dims` and `tint` are that answer once it
+     has landed, which is what a draft keeps (THE AUTOSAVE). */
   const uploading = new Set();   // stills whose files have gone, or are going, up
   let upChain = Promise.resolve();
+  let stillUp = null;            // the open composer's ear for a still landing up (its draft saves)
   function startUpload(s) {
     if (s.up) return s.up;
     uploading.add(s);
@@ -27527,24 +27631,68 @@
     const run = async () => {
       if (!stills.includes(s)) return null;   // taken out before its turn
       const f = await s.files;
+      s.dims = f.dims;
+      s.tint = f.tint || null;
       return Store.uploadPhoto(f, { onProgress: (p) => { s.frac = p; s.onFrac?.(); } });
     };
     const up = upChain.then(run, run);
     s.up = up;
     upChain = up.catch(() => {});
-    up.then((url) => { if (url && s.up === up) { s.frac = 1; s.onFrac?.(); } }, () => {});
+    up.then((url) => {
+      if (!url || s.up !== up) return;
+      s.frac = 1; s.url = url; s.onFrac?.();
+      stillUp?.();
+    }, () => {});
     return up;
   }
   // Whatever is no longer in the post (or everything, `all`, as the composer
-  // goes) has its files deleted, once its upload settles.
+  // goes) has its files deleted, once its upload settles. A composer left
+  // behind spares what a draft now holds (THE AUTOSAVE): its draft was
+  // written in route() just before this, and a still still on its way up
+  // when it left is `held` until it lands and is written in too.
   function sweepUploads(all) {
+    const kept = all ? draftPhotoUrls() : null;
     for (const s of [...uploading]) {
       if (!all && stills.includes(s)) continue;
       uploading.delete(s);
-      s.up?.then((url) => { if (url) Store.dropUploads([url]); }, () => {});
       if (s.blobUrl) URL.revokeObjectURL(s.blobUrl);
+      if (all && s.held) continue;
+      s.up?.then((url) => { if (url && !(kept && kept.has(url))) Store.dropUploads([url]); }, () => {});
     }
   }
+  // Every photo any draft on this device holds.
+  function draftPhotoUrls() {
+    const out = new Set();
+    for (const d of Store.drafts()) (d.body?.photos || []).forEach(p => p && p.url && out.add(p.url));
+    return out;
+  }
+  // A draft's clips live on the phone that made them, in a folder iOS never
+  // purges (TriaClip `keep`); `prune` lets go of every file no draft here
+  // names any more, after any keep still on its way.
+  let clipKeeps = Promise.resolve();
+  function pruneDraftClips() {
+    if (!clipCutter()) return;
+    clipKeeps = clipKeeps.then(() => {
+      // Every account's drafts on this phone, not only the one signed in:
+      // the folder is the phone's.
+      const keep = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith('tria:drafts:')) continue;
+        let list = [];
+        try { list = JSON.parse(localStorage.getItem(k) || '[]') || []; } catch {}
+        if (Array.isArray(list)) list.forEach(d => (d?.body?.clips || []).forEach(c => c && c.path && keep.push(c.path)));
+      }
+      return cutCall('prune', { keep });
+    }).catch(() => {});
+  }
+  // A draft deleted by hand: its photos' files go, and its clips.
+  function dropDraftFiles(body) {
+    const urls = (body?.photos || []).map(p => p && p.url).filter(Boolean);
+    if (urls.length) Store.dropUploads(urls);
+    if ((body?.clips || []).length) pruneDraftClips();
+  }
+  const thisDevice = () => { try { return localStorage.getItem('tria:device'); } catch { return null; } };
   // Share's wait: every still's URL, its size and colour, in order. One that
   // failed on the way up is tried once more here; a second failure is the post's.
   async function photoUrls(list, progress) {
@@ -27573,6 +27721,12 @@
       im.addEventListener('load', done, { once: true });
       im.addEventListener('error', done, { once: true });
     });
+    // A draft's photo is already up: its URL is its upload, nothing goes again.
+    if (it.url) {
+      s.url = it.url; s.dims = it.files?.dims; s.tint = it.files?.tint || null;
+      s.up = Promise.resolve(it.url); s.frac = 1;
+      uploading.add(s);
+    }
     if (!s.pending) landStill(s, it);
     return s;
   }
@@ -31947,7 +32101,7 @@
     if (document.visibilityState === 'visible' && booted) openPing.note();
     if (document.visibilityState !== 'visible' || !Store.isAuthed()) return;
     refreshWorld(herePath());
-    Store.syncDrafts();   // what another device wrote meanwhile
+    Store.syncDrafts().then(pruneDraftClips);   // what another device wrote meanwhile
   });
   window.addEventListener('pagehide', () => liveDraft?.flush(false));
 
@@ -32143,7 +32297,7 @@
       else if (document.getElementById('page-wait') || !(typing() || fillingIn())) route();
     });
     // Charms take their baseline off the real world, never a kept one.
-    Store.whenFresh().then(() => { if (Store.isAuthed()) Store.syncDrafts(); }, () => {});
+    Store.whenFresh().then(() => { if (Store.isAuthed()) Store.syncDrafts().then(pruneDraftClips); }, () => {});
     Store.whenFresh().then(() => { charmsLive = true; noticeCharmsSoon(); syncThemeIcon(); },
                            () => { charmsLive = true; });
     // Native push housekeeping, after init because it needs the signed-in user:
