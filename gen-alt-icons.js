@@ -31,7 +31,7 @@
 // ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES.
 const fs = require('fs');
 const path = require('path');
-const { papers, forWhite, SURFACES } = require('./js/paper.js');
+const { papers, forWhite, SURFACES, TRIA } = require('./js/paper.js');
 
 const DIR = path.join(__dirname, 'ios/App');
 const SRC = path.join(DIR, 'TriaAppIcon.icon');
@@ -102,6 +102,19 @@ const darkPaper = (hex) => solid(hex ? papers(hex).dk.bg : SURFACES.dk.bg[0]);
 const GROUND_ORIENT = { start: { x: 0.5, y: 0 }, stop: { x: 0.5, y: 1 } };
 
 const icon = JSON.parse(fs.readFileSync(path.join(SRC, 'icon.json'), 'utf8'));
+// TriaAppIcon.icon is itself written below (Tria's own wears the same scheme,
+// Zoe, 2026-11-11: "match the other colors, Tria teal bg"), so its layers
+// carry their brand fills as the DARK specialization. Read them back as the
+// plain `fill` every recipe below starts from, so this runs again and again.
+for (const group of icon.groups) {
+  for (const layer of group.layers) {
+    const spec = layer['fill-specializations'];
+    if (!layer.fill && spec) {
+      layer.fill = (spec.find(s => s.appearance === 'dark') || spec[0]).value;
+      delete layer['fill-specializations'];
+    }
+  }
+}
 
 // NONE is no colour: the neutral, --mono-band's ends: the deep one under
 // white on the light icon, and the light one as the wordmark on the dark,
@@ -147,4 +160,26 @@ for (const [key, hex] of ACCENTS) {
   delete out.fill;
   out['fill-specializations'] = byLook({ ...rampOf(MONO.light), orientation: GROUND_ORIENT }, darkPaper(null));
   write('none', out);
+}
+
+// TRIA'S OWN, the primary icon, on the same rule: light is the brand ramp
+// (#00c9ce to #00cc9e, each end deepened by forWhite as cyan is) under the
+// white wordmark and rings; dark is Tria's dark paper under the brand's own
+// fills, untouched. Written in place, last, since every copy above is made
+// from it.
+{
+  const out = JSON.parse(JSON.stringify(icon));
+  for (const group of out.groups) {
+    for (const layer of group.layers) {
+      if (!layer.fill) continue;
+      const dark = layer.fill;
+      delete layer.fill;
+      layer['fill-specializations'] = byLook({ solid: WHITE }, dark);
+    }
+  }
+  delete out.fill;
+  const ground = ['#00c9ce', '#00cc9e'].map(h => forWhite(h));
+  out['fill-specializations'] = byLook({ ...rampOf(ground), orientation: GROUND_ORIENT }, darkPaper(TRIA));
+  fs.writeFileSync(path.join(SRC, 'icon.json'), JSON.stringify(out, null, 2) + '\n');
+  console.log('wrote', path.relative(__dirname, SRC));
 }

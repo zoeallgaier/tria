@@ -11908,6 +11908,8 @@
         title: 'App icon color',
         now: iconKey(),
         disc: (k) => bandAround(cssToRgb(TriaPaper.forWhite(accentCss(k)))),
+        // Tria's own icon is the brand ramp deepened the same way (2026-11-11).
+        tria: `linear-gradient(115deg, ${TriaPaper.forWhite('#00c9ce')}, ${TriaPaper.forWhite('#00cc9e')})`,
         afterClose: true,
         pick: pickIcon,
       }));
@@ -14027,14 +14029,14 @@
      the sheet to go (the icon, whose iOS alert would land on it). */
   const COLOUR_SOURCES = { tria: 'Tria', theme: 'My theme', none: 'None' };
   const colourLabel = (k) => COLOUR_SOURCES[k] || (accentOf(k) || {}).label || 'My theme';
-  function colourSheet({ title, now, pick, disc = accentBand, afterClose = false }) {
+  function colourSheet({ title, now, pick, disc = accentBand, tria = 'var(--brand-band)', afterClose = false }) {
     const swatch = (key, css) => swatchHtml({ key, label: colourLabel(key), css }, now);
     openSheet({
       title,
       scrimClass: 'sheet-scrim--see-through',
       head:
         `<div class="swatches swatches--source" role="group" aria-label="${esc(title)} source">` +
-          swatch('tria', 'var(--brand-band)') + swatch('theme', themeWheel()) + swatch('none') +
+          swatch('tria', tria) + swatch('theme', themeWheel()) + swatch('none') +
         `</div>` +
         `<div class="swatches" role="group" aria-label="Colors">` +
           ACCENTS.map(a => swatch(a.key, disc(a.key))).join('') +

@@ -208,7 +208,13 @@ WHITE wordmark and rings (Zoe: "the full color punch and the logo white on
 top"), each colour deepened in OKLCH until white on it reaches 3:1
 (`TriaPaper.forWhite`, also the App icon picker's discs); dark is the
 colour's dark paper under the coloured wordmark (`fill-specializations`).
-Tria's own primary icon is still white.
+**Tria's own primary icon wears the same scheme since 2026-11-11** (Zoe:
+"match the other colors, Tria teal bg"): the brand ramp, each end deepened by
+`forWhite` (#07a5aa to #0ba983), under the white wordmark and rings on
+light, Tria's dark paper under the brand's fills on dark. gen-alt-icons.js
+writes TriaAppIcon.icon too, last, reading its brand fills back off the dark
+specialization, so it reruns cleanly; the App icon sheet's Tria disc is that
+deepened ramp.
 
 ## Explore circles is a field of discs (2026-11-07)
 
