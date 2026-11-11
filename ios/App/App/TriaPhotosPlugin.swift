@@ -118,13 +118,23 @@ public class TriaPhotosPlugin: CAPPlugin, CAPBridgedPlugin {
             guard let self else { return }
             guard #available(iOS 17.0, *) else { call.resolve(["ok": false]); return }
             if call.getBool("drop") ?? false {
-                (self.strip as? TriaRoll)?.remove()
-                self.strip = nil
+                // Hidden at once, taken down a beat later (`dropLater`).
+                if let r = self.strip as? TriaRoll {
+                    r.setShown(false)
+                    self.dropLater(r)
+                }
                 call.resolve(["ok": true])
                 return
             }
             let show = call.getBool("show") ?? false
             var roll = self.strip as? TriaRoll
+            if let r = roll, self.dropping != nil {
+                // A composer came back inside the beat: the same picker, as new.
+                self.dropping?.cancel()
+                self.dropping = nil
+                TriaPhotoSizes.clear()
+                r.reset(limit: call.getInt("limit") ?? 6)
+            }
             if roll == nil {
                 guard show,
                       let host = self.bridge?.viewController,
@@ -149,6 +159,32 @@ public class TriaPhotosPlugin: CAPPlugin, CAPBridgedPlugin {
             roll?.setShown(show)
             call.resolve(["ok": true])
         }
+    }
+
+    /// THE ROLL IS NEVER TORN DOWN AND REBUILT IN ONE BREATH (2026-11-11,
+    /// Zoe: the app quit after sharing a post). Four crash reports from her
+    /// phone (2.5.1 (11), iOS 27.0.1) were all UIKit's hierarchy check
+    /// aborting inside `attach`, at the `addSubview` that brings a NEW
+    /// picker's view into the window. Leaving a composer, or the composer
+    /// repainting after Share, dropped one embedded PHPicker and attached a
+    /// fresh one in the same main queue turn; the picker is a remote view
+    /// hosted out of process, and a back to back teardown and rebuild is where
+    /// its controllers and views can disagree for a moment. So a drop hides the
+    /// row at once and takes it down a beat later, and a composer that comes
+    /// back inside that beat gets the same picker, emptied (`reset`).
+    private var dropping: DispatchWorkItem?
+
+    private func dropLater(_ roll: AnyObject) {
+        dropping?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.dropping = nil
+            guard self.strip === roll else { return }
+            if #available(iOS 17.0, *) { (roll as? TriaRoll)?.remove() }
+            self.strip = nil
+        }
+        dropping = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
     }
 
     @objc func rollDeselect(_ call: CAPPluginCall) {
@@ -218,13 +254,35 @@ final class TriaRoll: NSObject, PHPickerViewControllerDelegate {
     @objc private func tapMore() { emit("rollMore", [:]) }
 
     func attach(host: UIViewController, scroller: UIScrollView) {
-        host.addChild(picker)
+        // The parent is whichever controller really owns the scroll view, so
+        // UIKit's check (the picker's parent is the controller its view lands
+        // under) holds even if the web view is ever wrapped. Today that is
+        // `host`. The box goes in first, then the child in the usual order:
+        // addChild, its view into a box already on screen, didMove.
+        var owner: UIViewController = host
+        var next: UIResponder? = scroller.next
+        while let n = next {
+            if let vc = n as? UIViewController { owner = vc; break }
+            next = n.next
+        }
+        scroller.addSubview(clip)
+        clip.addSubview(more)
+        owner.addChild(picker)
         picker.view.frame = clip.bounds
         picker.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        clip.addSubview(picker.view)
-        clip.addSubview(more)
-        scroller.addSubview(clip)
-        picker.didMove(toParent: host)
+        clip.insertSubview(picker.view, belowSubview: more)
+        picker.didMove(toParent: owner)
+    }
+
+    /// A composer came back before the old one's roll was taken down: nothing
+    /// ticked, the disc's flip to play again. The limit is fixed when the picker
+    /// is made, so it is left as it was (it is always the post's six).
+    func reset(limit: Int) {
+        if !picked.isEmpty {
+            picker.deselectAssets(withIdentifiers: picked)
+            picked = []
+        }
+        hinted = false
     }
 
     func place(_ rect: CGRect, radius: CGFloat) {
