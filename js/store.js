@@ -1354,18 +1354,19 @@ const Store = (() => {
 
   /* THE SQUARE (Zoe, 2026-11-05: "include peoples posts if they are public ...
      like a town square"). Discover's posts, under its circles and people: what
-     was said in public this week. Public means one of two things: a post set
+     was said in public in the last two weeks (Zoe, 2026-11-11: "2 weeks not
+     1"; it was a week). Public means one of two things: a post set
      to Anyone ("Everyone on Tria, friend or not", the audience sheet's own
      promise), or a post in a PUBLIC circle, which anyone can already read
      (circle-public-posts.sql) and which is the square's way into that circle.
      An invite-only circle's posts stay in it.
-     It ENDS: a week, and at most SQUARE_EACH posts a person, each one's newest,
-     so a busy week from one person can't fill it. Friends are in it (a square
+     It ENDS: two weeks, and at most SQUARE_EACH posts a person, each one's
+     newest, so a busy fortnight from one person can't fill it. Friends are in it (a square
      without your neighbours in it is not a square); you are not, since your
      own posts are already in My Circle and on your profile. No reposts (it is
      people's own words), and nothing offFeed (a Moment or a song).
      Newest first, never ranked, as posts() is. Blocks are app.js's (Blocks). */
-  const SQUARE_MS = 7 * 24 * 60 * 60 * 1000;
+  const SQUARE_MS = 14 * 24 * 60 * 60 * 1000;
   const SQUARE_EACH = 2;
   function square(now = Date.now()) {
     const from = now - SQUARE_MS;

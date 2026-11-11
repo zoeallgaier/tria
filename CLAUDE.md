@@ -642,8 +642,8 @@ twinkle replaces the LIGHT tap on that path. The code landed inside 9db51b7
 
 **Discover has posts again** (Zoe: "include peoples posts if they are public
 ... like a town square"), undoing 2.0's "shows no posts". It is search, today's
-daily, then **the square** (`Store.square`, `paintSquare`): this WEEK's
-public posts, meaning Anyone posts and posts in PUBLIC circles (never
+daily, then **the square** (`Store.square`, `paintSquare`): the last TWO WEEKS'
+public posts (two weeks since 2026-11-11, Zoe: "2 weeks not 1"), meaning Anyone posts and posts in PUBLIC circles (never
 invite-only), friends' included, yours not, no reposts, nothing `offFeed`,
 today's daily answers left to the daily's card, at most TWO a person
 (`SQUARE_EACH`), newest first and never ranked, as My Circle's own cards in the

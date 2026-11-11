@@ -21612,7 +21612,7 @@
       squareFootSig = footSig;
       squareFoot.innerHTML =
         (list.length ? ''
-          : '<p class="square-end">It’s quiet here this week. Post to Anyone and it shows up on Discover.</p>') +
+          : '<p class="square-end">It’s been quiet here lately. Post to Anyone and it shows up on Discover.</p>') +
         shareAsk;
       squareFoot.classList.toggle('is-quiet', !list.length);
       wireShare();
