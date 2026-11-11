@@ -22857,6 +22857,10 @@
         `<span class="postbar-reply-text">Replying to <strong>${esc(who)}’s</strong> ${what}${said ? ': ' + esc(said) : ''}</span>` +
         `<button class="postbar-reply-x" type="button" aria-label="Don’t attach the ${what}">${svgIcon('close')}</button>` +
       `</div>`;
+    // Its rise ends and is gone: an animation left live keeps the chip on its
+    // own layer, which iOS scrolled away with the keys up (.postbar-song-chip).
+    const chip = tray.querySelector('.postbar-song-chip');
+    chip.addEventListener('animationend', () => chip.classList.add('is-in'), { once: true });
     const x = tray.querySelector('.postbar-reply-x');
     x.addEventListener('mousedown', (e) => e.preventDefault());
     x.addEventListener('click', () => setChatSong(null));
