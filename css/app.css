@@ -12819,6 +12819,27 @@ body.circles-live .topbar--bare::before { opacity: 1; }
 .community-card-about { margin-top: 0.7rem; }
 .community-card-pic { width: 90px; height: 90px; }
 .community-card-info { flex: 1; min-width: 0; }
+/* A circles page's bookmark (#/in/), the sidebar's own at the card's top
+   right, over the stretched link; the words keep clear of it. */
+.community-card-fav {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  -webkit-tap-highlight-color: transparent;
+}
+.community-card-fav svg { width: 18px; height: 18px; transition: transform 0.12s var(--ease-soft); }
+.community-card-fav.is-fav { color: var(--heart); }
+.community-card-fav:active svg { transform: scale(0.86); }
+.community-card.has-fav .community-card-info { padding-right: 28px; }
 
 /* A dashed card is a tip now (.tip): the circle's dashed Start card and an
    empty room's dashed first post both went (2026-11-08). */

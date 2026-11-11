@@ -89,7 +89,11 @@ Where it shows: **the end of the circle page's bar, after the •••** (Zoe:
 `syncFavBtn`, the bar's observer carries it native); **the end of every
 circle's row in the sidebar** (Zoe: "put save icons on the menu itself";
 `.feed-side-fav`, its own button beside the pick in a `.feed-side-line`, the
-row staying in its list until the sidebar opens again); the disc's size line
+row staying in its list until the sidebar opens again); **the top right of
+every card on a profile's circles page** (`#/in/<username>`, Zoe,
+2026-11-11: "Allow favoriting circles from the page when I tap circles in my
+profile"; `communityCardHtml`'s `fav`, `.community-card-fav`, over the
+stretched link); the disc's size line
 on Explore circles, the bookmark in place of the joined check (`subMark`);
 and **the sidebar's Favorites section, over Circles**, which then leaves
 them out (an invite-only one only while you're in it). **Not on the lifted

@@ -11294,7 +11294,7 @@
         mastheadEl('', esc(title)) +
         (list.length
           ? `<section class="communities" id="user-circles">` +
-              list.map(c => communityCardHtml(c)).join('') + `</section>` +
+              list.map(c => communityCardHtml(c, { fav: true })).join('') + `</section>` +
             `<p class="feed-empty" id="user-circles-none" hidden>No circle by that name.</p>`
           : `<p class="feed-empty">${isSelf
               ? 'No circles yet. Explore circles is on Discover.'
@@ -11303,6 +11303,13 @@
     const el = document.getElementById('user-circles');
     if (!el) return;
     wireCommunityJoins(el);
+    el.addEventListener('click', (e) => {
+      const btn = e.target.closest('.community-card-fav');
+      if (!btn) return;
+      e.preventDefault();
+      const c = list.find(x => String(x.id) === btn.dataset.fav);
+      if (c) syncFavBtn(btn, toggleFavCircle(c));
+    });
 
     // The friends page's find bar, the same job (Zoe, 2026-11-08): a circle
     // matches on its name, its c/slug and its about.
@@ -17781,13 +17788,22 @@
      members is a size, like a friend count, never a number to drive anywhere. */
   // `pick` is the first run's card (renderWelcomeCircles): its name is not a
   // door out of the flow, and its pill is a Join that toggles to Joined.
-  function communityCardHtml(c, { pick = false } = {}) {
+  function communityCardHtml(c, { pick = false, fav = false } = {}) {
     const me = Store.session();
+    // A circles page's card wears the bookmark in its top right (Zoe,
+    // 2026-11-11: "Allow favoriting circles from the page when I tap circles
+    // in my profile"), over the stretched link so a tap saves, never opens.
+    const faved = fav && me && isFavCircle(c);
+    const favBtn = fav && me
+      ? `<button class="community-card-fav${faved ? ' is-fav' : ''}" type="button" data-fav="${esc(String(c.id))}" ` +
+          `aria-pressed="${!!faved}" aria-label="${favLabel(!!faved)}">${favBtnInner(!!faved)}</button>`
+      : '';
     // Signed out too: a size is as public as the circle (communitySize).
     const n = Store.communitySize(c.id);
     const mine = Store.inCommunity(c.id);
     const faces = me ? communityFaces(c, 4) : [];
-    return `<section class="daily-card community-card" data-community="${esc(c.id)}">` +
+    return `<section class="daily-card community-card${favBtn ? ' has-fav' : ''}" data-community="${esc(c.id)}">` +
+        favBtn +
         `<div class="community-card-top">` +
         communityPicHtml(c, 'community-card-pic', 90) +
         `<div class="community-card-info">` +
