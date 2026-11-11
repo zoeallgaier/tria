@@ -2245,6 +2245,27 @@
                 el.style.transform = by ? `translateY(${by}px)` : '';
               }
             });
+          /* AND A SCROLL WITH THE KEYS UP (2026-11-10, Zoe: the chip "keeps
+             floating away with any scrolling"). WebKit lays fixed boxes against
+             a layout viewport taller than what shows while a keyboard is up,
+             and a scroll moves the visible part inside it first, so the trays
+             slid off with the page by up to the keyboard's height. The bar is
+             carried back by that offset (--vv-pin on .postbar), read off the
+             visual viewport on its own scroll and resize. Never negative: a
+             rubber band is not the keyboard's doing. */
+          const vv = window.visualViewport;
+          if (vv) {
+            let pinned = 0;
+            const pinTrays = () => {
+              const off = Math.max(0, Math.round(vv.offsetTop));
+              if (off === pinned) return;   // a compare, not a write, per scroll frame
+              pinned = off;
+              document.documentElement.style.setProperty('--vv-pin', off + 'px');
+            };
+            vv.addEventListener('scroll', pinTrays);
+            vv.addEventListener('resize', pinTrays);
+            window.addEventListener('scroll', pinTrays, { passive: true });
+          }
         } catch { /* the bars are up but inert; better than no bars */ }
         watchToolbar();
         told.route = told.chrome = told.fab = null;   // force the first push

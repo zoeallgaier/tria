@@ -13172,15 +13172,16 @@ html[data-chrome="native"] .statusbar-scrim { display: none; }
 html[data-chrome="native"] .postbar .postbar-form {
   visibility: hidden;
 }
-/* AND THE BAR IS A LAYER OF ITS OWN (2026-11-10, Zoe: a Moment's reply chip
-   "gets stuck on the page position" after a scroll up and back down with the
-   keys up, and floats off). With its form hidden the fixed bar paints nothing,
-   so WebKit need not composite it, while the chip under it always is (its
-   glass blur). A composited child of a fixed box that is not one hangs off the
-   page's own layer, which the UI process scrolls with the content: the
-   scrolling tree never learns the chip is pinned to the viewport. Composited,
-   the bar is a viewport-constrained node and carries every tray with it. */
+/* AND IT IS PINNED TO WHAT YOU SEE, NOT TO THE LAYOUT VIEWPORT (2026-11-10,
+   Zoe: with the keys up a reply's chip "keeps floating away with any
+   scrolling"). With a keyboard up WebKit lays fixed boxes against a layout
+   viewport taller than the visible one, and a scroll moves the visible one
+   inside it first, so everything fixed slid off with the content by up to the
+   keyboard's height (the drift measured off her screenshots). The trays are
+   the only fixed web pixels under the native pill, so the bar is carried back
+   by the visual viewport's offset (--vv-pin, pinTrays in app.js). */
 html[data-chrome="native"] .postbar {
+  transform: translateY(var(--vv-pin, 0px));
   will-change: transform;
 }
 
