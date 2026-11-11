@@ -1,12 +1,18 @@
-/* Tria admin (Zoe, 2026-11-11): the Dictionary, and the numbers.
-   Reads supabase/admin-dashboard.sql's and admin-extras.sql's admin_*
-   functions, which refuse anyone not in public.admins, and which leave admins
-   themselves out of every number. Same origin as the site, so a session made
-   on triaonline.com is this page's too. `?demo` draws sample numbers, flagged.
+/* Tria admin (Zoe, 2026-11-11): the numbers that matter for a word of mouth
+   beta, and the Dictionary. Reads supabase/admin-dashboard.sql's and
+   admin-extras.sql's admin_* functions, which refuse anyone not in
+   public.admins and leave admins themselves out of every number. Same origin
+   as the site, so a session made on triaonline.com is this page's too.
+   `?demo` draws sample numbers, flagged.
 
-   HIG: a large title that hands over to the bar's inline title as it scrolls
-   under; a tab bar on a phone, a sidebar from 900px; segmented controls; inset
-   grouped lists; every target 44pt. */
+   THE LAYOUT IS TRIA'S OWN (Zoe: "This shouldn't really be different from the
+   standard tria layout"): the inset glass rail on a desktop, wordmark ruled
+   off at its head and the way back to your profile at its foot; on a phone
+   the floating glass capsule and a top bar with a back chevron, the page's
+   name centred, the band and hairline only once content is under it. There
+   is no Log out here (Zoe: "I don't want to log out I want to go back to my
+   account"). Copy is as few words as do the job (Zoe: "use as little words as
+   possible"); definitions live in the hover cards and the Dictionary. */
 (() => {
   'use strict';
 
@@ -14,10 +20,11 @@
   const sb = window.supabase.createClient(url, key);
   const DEMO = new URLSearchParams(location.search).has('demo');
   const $ = (id) => document.getElementById(id);
-  const main = $('main'), nav = $('nav'), navTitle = $('nav-title');
-  const tabbar = $('tabbar'), side = $('side'), sideList = $('side-list');
-  const refreshBtn = $('refresh'), outBtn = $('sign-out'), sideOut = $('side-out'), sideAsof = $('side-asof');
+  const main = $('main'), bar = $('bar'), barTitle = $('bar-title');
+  const dock = $('dock'), dockPill = $('dock-pill'), rail = $('rail'), railList = $('rail-list');
+  const refreshBtn = $('refresh'), asof = $('asof'), face = $('face');
   const tip = $('tooltip');
+  const PROFILE = '../#/profile';
 
   const ICON = {
     overview: '<path d="M5 20v-6M12 20V5M19 20v-10"/>',
@@ -26,7 +33,7 @@
     community: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.6 14.6c2.6.2 4.3 1.9 4.9 4.9"/>',
     dictionary: '<path d="M5 19.5v-15A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5 1.5 1.5 0 0 0 6.5 21H19"/>',
     refresh: '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/>',
-    out: '<path d="M14 4h3.5A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5H14"/><path d="M9.5 16.5 5 12l4.5-4.5M5 12h11"/>',
+    chevron: '<path d="M15 5.5 8 12l7 6.5"/>',
     search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>',
     lock: '<rect x="5" y="11" width="14" height="9.5" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
   };
@@ -61,6 +68,7 @@
     const d = (Date.now() - new Date(iso)) / 86400000;
     return d < 1 ? 'today' : d < 2 ? 'yesterday' : d < 14 ? Math.floor(d) + ' days ago' : day(iso);
   };
+  const missing = (err) => err && (err.code === 'PGRST202' || err.code === '42883');
 
   // ── The hover card ────────────────────────────────────────────────────────
   function showTip(html, x, y) {
@@ -83,34 +91,41 @@
     if (e.target.closest('[data-tip]') && !e.relatedTarget?.closest?.('[data-tip]')) hideTip();
   });
 
-  // ── The bar: material once content is under it, the inline title once
-  //    the large one has gone under. ───────────────────────────────────────
+  // ── The bar: its band once content is under it; on a desktop its title
+  //    once the page's own has gone under (a phone always shows it). ───────
   let titleWatch = null;
   function watchTitle(title) {
-    navTitle.textContent = title;
+    barTitle.textContent = title;
+    document.title = title ? `${title} · Tria admin` : 'Tria admin';
     titleWatch?.disconnect();
-    nav.classList.remove('is-titled');
+    bar.classList.remove('is-titled');
     const h1 = main.querySelector('h1');
     if (!h1) return;
     titleWatch = new IntersectionObserver(([e]) => {
-      nav.classList.toggle('is-titled', !e.isIntersecting && e.boundingClientRect.top < nav.offsetHeight);
-    }, { rootMargin: `-${nav.offsetHeight}px 0px 0px 0px` });
+      bar.classList.toggle('is-titled', !e.isIntersecting && e.boundingClientRect.top < bar.offsetHeight);
+    }, { rootMargin: `-${bar.offsetHeight}px 0px 0px 0px` });
     titleWatch.observe(h1);
   }
-  const syncUnder = () => nav.classList.toggle('is-under', window.scrollY > 2);
+  const syncUnder = () => bar.classList.toggle('is-under', window.scrollY > 2);
   window.addEventListener('scroll', () => { hideTip(); syncUnder(); }, { passive: true });
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  let fetchedAt = null;
   async function call(fn, args) {
     const id = fn + JSON.stringify(args || {});
     if (cache[id]) return cache[id];
     if (DEMO) return (cache[id] = SAMPLE[fn](args || {}));
     const { data, error } = await sb.rpc(fn, args || {});
     if (error) throw error;
-    fetchedAt = new Date();
-    sideAsof.textContent = 'Updated ' + clock(fetchedAt);
+    asof.textContent = 'Updated ' + clock(new Date());
     return (cache[id] = data);
+  }
+  // admin-extras.sql may not be run yet: null, never a throw.
+  async function extras() {
+    if (!extrasOk) return null;
+    try { return await call('admin_extras'); } catch (err) {
+      if (missing(err)) { extrasOk = false; return null; }
+      throw err;
+    }
   }
 
   // ── Shell ─────────────────────────────────────────────────────────────────
@@ -120,23 +135,21 @@
     return TABS.some((t) => t.key === h) ? h : 'overview';
   }
   function paintShell(on) {
-    side.hidden = !on; tabbar.hidden = !on;
-    document.body.classList.toggle('has-side', on);
-    document.body.classList.toggle('has-tabs', on);
+    rail.hidden = !on; dock.hidden = !on;
+    document.body.classList.toggle('has-shell', on);
     refreshBtn.hidden = !on || !dataOk;
-    outBtn.hidden = !on || DEMO;
-    sideOut.hidden = DEMO;
     if (!on) return;
     const cur = currentTab();
-    const dead = (k) => !dataOk && k !== 'dictionary';
-    tabbar.innerHTML = TABS.map((t) =>
-      `<button class="tab" type="button" data-tab="${t.key}"${t.key === cur ? ' aria-current="page"' : ''}${dead(t.key) ? ' disabled' : ''}>` +
-      `${svg(t.key)}<span>${esc(t.label)}</span></button>`).join('');
-    sideList.innerHTML = TABS.map((t) =>
-      `<button class="side-row" type="button" data-tab="${t.key}"${t.key === cur ? ' aria-current="page"' : ''}${dead(t.key) ? ' disabled' : ''}>` +
-      `${svg(t.key)}<span>${esc(t.label)}</span></button>`).join('');
+    const item = (t, cls) => {
+      const dead = !dataOk && t.key !== 'dictionary';
+      return `<button class="${cls}" type="button" data-tab="${t.key}" aria-label="${esc(t.label)}"` +
+        `${t.key === cur ? ' aria-current="page"' : ''}${dead ? ' disabled' : ''}>` +
+        `${svg(t.key)}<span class="lbl">${esc(t.label)}</span></button>`;
+    };
+    dockPill.innerHTML = TABS.map((t) => item(t, 'dock-tab')).join('');
+    railList.innerHTML = TABS.map((t) => item(t, 'rail-row')).join('');
   }
-  for (const el of [tabbar, sideList]) {
+  for (const el of [dockPill, railList]) {
     el.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-tab]');
       if (!b || b.disabled) return;
@@ -144,20 +157,17 @@
       else location.hash = b.dataset.tab;
     });
   }
+  $('bar-back').innerHTML = svg('chevron');
   refreshBtn.innerHTML = svg('refresh');
-  outBtn.innerHTML = svg('out');
-  sideOut.innerHTML = svg('out') + '<span>Log out</span>';
   refreshBtn.addEventListener('click', async () => {
     for (const k in cache) delete cache[k];
+    extrasOk = true;
     refreshBtn.classList.add('is-spinning');
     const y = window.scrollY;
     await render(false);
     window.scrollTo(0, y);
     refreshBtn.classList.remove('is-spinning');
   });
-  const signOut = async () => { await sb.auth.signOut(); location.hash = ''; boot(); };
-  outBtn.addEventListener('click', signOut);
-  sideOut.addEventListener('click', signOut);
   window.addEventListener('hashchange', () => render(true));
 
   async function render(top = true) {
@@ -176,27 +186,36 @@
     }
     if (!dataOk && !DEMO) {
       main.insertAdjacentHTML('afterbegin',
-        '<div class="callout banner">The numbers need <b>supabase/admin-dashboard.sql</b> run in the Supabase SQL editor. The Dictionary is here meanwhile.</div>');
+        '<div class="callout banner">Numbers need <b>supabase/admin-dashboard.sql</b> run.</div>');
     }
     watchTitle(TABS.find((x) => x.key === t)?.label || '');
     syncUnder();
   }
 
+  // Your face at the rail's foot, the way back to your profile.
+  async function paintFace(userId) {
+    if (DEMO || !userId) return;
+    const { data } = await sb.from('users').select('name, avatar').eq('id', userId).maybeSingle();
+    if (!data) return;
+    face.innerHTML = data.avatar
+      ? `<img src="${esc(data.avatar)}" alt="" />`
+      : esc((data.name || '?').trim().charAt(0).toUpperCase());
+  }
+
   // ── The gate ──────────────────────────────────────────────────────────────
   function renderSignIn() {
     paintShell(false);
-    navTitle.textContent = '';
+    barTitle.textContent = '';
     main.innerHTML = `
       <div class="gate">
         <h1>Tria admin</h1>
-        <p>Log in with your Tria account.</p>
         <form id="signin" novalidate>
           <input class="field" type="email" name="email" placeholder="Email" autocomplete="email" required />
           <input class="field" type="password" name="password" placeholder="Password" autocomplete="current-password" required />
           <p class="err" id="err"></p>
           <button class="publish-fill" type="submit">Log in</button>
         </form>
-        <p class="note">Signed in with Apple or Google? <a href="../">Log in on triaonline.com</a>, then come back here.</p>
+        <p class="note">Apple or Google? <a href="../">Log in on Tria</a> first.</p>
       </div>`;
     const form = $('signin');
     form.addEventListener('submit', async (e) => {
@@ -219,12 +238,13 @@
     main.innerHTML = '';
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { renderSignIn(); return; }
+    paintFace(session.user.id);
     const { data: isAdmin, error } = await sb.rpc('is_admin');
-    if (error && (error.code === 'PGRST202' || error.code === '42883')) { dataOk = false; render(); return; }
+    if (missing(error)) { dataOk = false; render(); return; }
     if (!isAdmin) {
       paintShell(false);
-      outBtn.hidden = false;
-      main.innerHTML = '<div class="gate"><h1>Not here.</h1><p>This page is for Tria\'s team.</p></div>';
+      main.innerHTML = `<div class="gate"><h1>Not here.</h1><p>This page is for Tria's team.</p>` +
+        `<a class="pill-quiet gate-back" href="${PROFILE}">Back to Tria</a></div>`;
       return;
     }
     dataOk = true;
@@ -232,18 +252,25 @@
   }
 
   // ── Building blocks ───────────────────────────────────────────────────────
-  function headHtml(title, lede, asOf) {
-    return `<div class="head"><h1>${esc(title)}${DEMO ? '<span class="sample-flag">Sample data</span>' : ''}</h1>` +
-      (lede ? `<p class="lede">${lede}</p>` : '') +
-      (asOf ? `<p class="asof">As of ${esc(new Date(asOf).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}</p>` : '') + '</div>';
+  const headHtml = (title) =>
+    `<div class="head"><h1>${esc(title)}</h1>${DEMO ? '<span class="sample-flag">Sample data</span>' : ''}</div>`;
+  const sectionHead = (title, sub, link) =>
+    `<div class="section-head"><h2>${esc(title)}</h2>${link || ''}${sub ? `<p class="sub">${sub}</p>` : ''}</div>`;
+  // A change on the week before: an arrow and a word, never colour alone.
+  function delta(now, before, unit = '') {
+    if (before == null || now == null) return '';
+    const d = Math.round((now - before) * 10) / 10;
+    if (!d) return '<span class="delta">Same as last week</span>';
+    return `<span class="delta ${d > 0 ? 'is-up' : 'is-down'}">${d > 0 ? '↑' : '↓'} ${fmt(Math.abs(d))}${unit} on last week</span>`;
   }
-  const sectionHead = (title, lede) =>
-    `<div class="section-head"><h2>${esc(title)}</h2>${lede ? `<p class="lede">${lede}</p>` : ''}</div>`;
-  function tile(label, value, note, tipText) {
-    return `<div class="card tile"${tipText ? ` data-tip="${esc(tipText)}"` : ''}>` +
+  function tile(label, value, note, tipText, cls = '') {
+    return `<div class="card tile${cls ? ' ' + cls : ''}"${tipText ? ` data-tip="${esc(tipText)}"` : ''}>` +
       `<div class="tile-label">${esc(label)}</div><div class="tile-value">${value}</div>` +
       (note ? `<div class="tile-note">${note}</div>` : '') + '</div>';
   }
+  // A row of small figures in one card.
+  const strip = (items) => '<div class="card strip">' + items.map(([label, value, tipText]) =>
+    `<div class="strip-item"${tipText ? ` data-tip="${esc(tipText)}"` : ''}><div class="strip-value">${value}</div><div class="strip-label">${esc(label)}</div></div>`).join('') + '</div>';
   // An inset grouped list row: title (and sub), then a meter and/or a value.
   function row({ title, sub, val, meter, lead, tipText, cls }) {
     return `<div class="row${cls ? ' ' + cls : ''}"${tipText ? ` data-tip="${esc(tipText)}"` : ''}>${lead || ''}` +
@@ -259,35 +286,34 @@
       '</div></div>';
   }
 
-  function barsHtml(obj, names, total) {
+  function barsHtml(obj, names) {
     const rows = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]);
-    if (!rows.length) return '<p class="empty">Nothing this week yet.</p>';
+    if (!rows.length) return '<p class="empty">Nothing yet.</p>';
     const max = Math.max(...rows.map((r) => r[1]));
-    const sum = total ?? rows.reduce((s, r) => s + r[1], 0);
+    const sum = rows.reduce((s, r) => s + r[1], 0);
     return '<div class="bars">' + rows.map(([k, v]) => {
       const name = names[k] || k;
-      return `<div class="barrow" data-tip="<b>${esc(name)}</b><br>${fmt(v)}, ${pctTxt(pct(v, sum))} of these">` +
+      return `<div class="barrow" data-tip="<b>${esc(name)}</b><br>${fmt(v)}, ${pctTxt(pct(v, sum))}">` +
         `<span class="barrow-name">${esc(name)}</span>` +
         `<span class="barrow-track"><span class="barrow-fill" style="width:${(v / max) * 100}%"></span></span>` +
         `<span class="barrow-val">${fmt(v)}</span></div>`;
     }).join('') + '</div>';
   }
-  const chartW = () => Math.round(Math.max(300, Math.min(980, main.clientWidth - 2 * parseFloat(getComputedStyle(main).paddingLeft) - 36))) || 640;
+  // A chart is drawn at its card's own width, so its words are their real size.
+  const chartW = (el) => Math.round(Math.max(260, Math.min(980, (el?.clientWidth || main.clientWidth) - 36))) || 600;
   function niceMax(v) {
     const p = Math.pow(10, Math.floor(Math.log10(Math.max(1, v))));
     for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p;
     return 10 * p;
   }
 
-  // A weekly line chart: two series on one scale, a crosshair and a hover card.
-  function lineChart(series) {
-    // Drawn at the card's own width, so its words are their real size.
-    const W = chartW(), H = W < 480 ? 200 : 240, L = 34, R = 10, T = 12, B = 26;
+  // A weekly line chart: meaningful actives, and opens once the ping exists.
+  function lineChart(series, W) {
+    const H = W < 480 ? 190 : 220, L = 34, R = 10, T = 12, B = 26;
     const n = series.length;
     const nice = niceMax(Math.max(1, ...series.map((s) => Math.max(s.active, s.opened))));
     const x = (i) => L + (n === 1 ? 0 : (i / (n - 1)) * (W - L - R));
     const y = (v) => T + (1 - v / nice) * (H - T - B);
-    // Opened only exists since the ping shipped: its line starts there.
     const from = Math.max(0, series.findIndex((s) => s.opened > 0));
     const hasOpened = series.some((s) => s.opened > 0);
     const path = (k) => series.map((s, i) => (k === 'opened' && i < from) ? ''
@@ -297,8 +323,9 @@
       g += `<line class="${t ? 'gridline' : 'baseline'}" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/>` +
         `<text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${fmt(t)}</text>`;
     });
+    const every = W < 420 ? 4 : W < 560 ? 3 : 2;
     series.forEach((s, i) => {
-      if ((n - 1 - i) % (W < 480 ? 3 : 2) === 0) g += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${esc(day(s.week))}</text>`;
+      if ((n - 1 - i) % every === 0) g += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${esc(day(s.week))}</text>`;
     });
     g += `<path class="area" d="${path('active')}L${x(n - 1)},${y(0)}L${x(0)},${y(0)}Z"/>`;
     if (hasOpened) g += `<path class="line line--b" d="${path('opened')}"/>`;
@@ -307,8 +334,8 @@
     g += '<circle class="dot dot--a" r="4" visibility="hidden"/>';
     if (hasOpened) g += '<circle class="dot dot--b" r="4" visibility="hidden"/>';
     g += `<rect class="hit" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></svg>`;
-    const legend = '<ul class="legend"><li><span class="swatch"></span>Meaningful</li>' +
-      (hasOpened ? '<li><span class="swatch swatch--b"></span>Opened</li>' : '') + '</ul>';
+    const legend = hasOpened
+      ? '<ul class="legend"><li><span class="swatch"></span>Active</li><li><span class="swatch swatch--b"></span>Opened</li></ul>' : '';
     return { html: legend + g, wire(root) {
       const el = root.querySelector('svg.chart');
       const cross = el.querySelector('.cross'), da = el.querySelector('.dot--a'), db = el.querySelector('.dot--b');
@@ -320,9 +347,8 @@
         cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
         da.setAttribute('cx', x(i)); da.setAttribute('cy', y(s.active)); da.setAttribute('visibility', 'visible');
         if (db) { db.setAttribute('cx', x(i)); db.setAttribute('cy', y(s.opened)); db.setAttribute('visibility', i >= from ? 'visible' : 'hidden'); }
-        showTip(`<b>Week of ${esc(day(s.week))}</b><br><span class="k"></span>Meaningful ${fmt(s.active)}` +
-          (hasOpened && i >= from ? `<br><span class="k k--b"></span>Opened ${fmt(s.opened)}` : '') +
-          `<br>New accounts ${fmt(s.joined)}`, e.clientX, e.clientY);
+        showTip(`<b>Week to ${esc(day(addDays(s.week, 6)))}</b><br><span class="k"></span>Active ${fmt(s.active)}` +
+          (hasOpened && i >= from ? `<br><span class="k k--b"></span>Opened ${fmt(s.opened)}` : ''), e.clientX, e.clientY);
       };
       const hit = el.querySelector('.hit');
       hit.addEventListener('pointermove', at);
@@ -330,89 +356,167 @@
       hit.addEventListener('pointerleave', () => { hideTip(); [cross, da, db].forEach((d) => d?.setAttribute('visibility', 'hidden')); });
     } };
   }
+  const addDays = (iso, n) => { const d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString(); };
 
-  // Vertical columns, for a distribution.
-  function columns(items) {
-    const W = chartW(), H = 200, L = 8, R = 8, T = 22, B = 26;
-    const n = items.length, gap = 10;
+  // Vertical columns: a distribution, or a count a week.
+  function columns(items, W, { every = 1, label = '' } = {}) {
+    const H = 190, L = 4, R = 4, T = 22, B = 26;
+    const n = items.length, gap = n > 8 ? 6 : 10;
     const bw = (W - L - R - gap * (n - 1)) / n;
     const max = Math.max(1, ...items.map((d) => d.n));
-    const total = items.reduce((s, d) => s + d.n, 0);
-    let g = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="People by number of friends">`;
+    let g = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">`;
     g += `<line class="baseline" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>`;
     items.forEach((d, i) => {
       const h = (d.n / max) * (H - T - B);
       const x0 = L + i * (bw + gap);
       const y0 = H - B - h;
-      // 4px round at the value end, square at the baseline.
-      const r = Math.min(4, h, bw / 2);
-      g += `<g data-tip="<b>${esc(d.label)} friend${d.label === '1' ? '' : 's'}</b><br>${fmt(d.n)} people, ${pctTxt(pct(d.n, total))}">` +
+      const r = Math.min(4, h, bw / 2);   // 4px round at the value end, square at the baseline
+      const showX = (n - 1 - i) % every === 0;
+      g += `<g data-tip="${esc(d.tip)}">` +
         `<rect class="hit" x="${x0}" y="${T - 20}" width="${bw}" height="${H - B - T + 20}"/>` +
         (h > 0 ? `<path class="col" d="M${x0},${H - B}V${y0 + r}Q${x0},${y0} ${x0 + r},${y0}H${x0 + bw - r}Q${x0 + bw},${y0} ${x0 + bw},${y0 + r}V${H - B}Z"/>` : '') +
-        `<text class="col-label" x="${x0 + bw / 2}" y="${y0 - 6}" text-anchor="middle">${fmt(d.n)}</text>` +
-        `<text x="${x0 + bw / 2}" y="${H - 8}" text-anchor="middle">${esc(d.label)}</text></g>`;
+        (bw >= 18 || i === n - 1 ? `<text class="col-label" x="${x0 + bw / 2}" y="${y0 - 6}" text-anchor="middle">${fmt(d.n)}</text>` : '') +
+        (showX ? `<text x="${x0 + bw / 2}" y="${H - 8}" text-anchor="middle">${esc(d.label)}</text>` : '') + '</g>';
     });
     return g + '</svg>';
   }
 
-  // ── Overview ──────────────────────────────────────────────────────────────
+  // Where the most people stop, on a funnel's in-order counts.
+  function worstDrop(seq, first) {
+    let worst = -1, rate = 2;
+    for (let i = first + 1; i < 6; i++) {
+      if (!seq[i - 1]) continue;
+      const r = seq[i] / seq[i - 1];
+      if (r < rate) { rate = r; worst = i; }
+    }
+    return worst;
+  }
+
+  // ── Names ─────────────────────────────────────────────────────────────────
   const TYPE_NAMES = {
     note: 'Notes', photo: 'Frames', take: 'Takes', find: 'Finds', poll: 'Polls',
-    activity: 'Plans', song: 'Music', repost: 'Reposts and quotes', moment: 'Moments', daily: 'Daily answers',
+    activity: 'Plans', song: 'Music', repost: 'Reposts', moment: 'Moments', daily: 'Daily answers',
   };
   const KIND_NAMES = {
     post: 'Posts', moment: 'Moments', daily: 'Daily answers', comment: 'Comments', message: 'Messages',
-    rsvp: 'RSVPs', vote: 'Poll votes', friend: 'Friendships made', circle: 'Circle joins',
+    rsvp: 'RSVPs', vote: 'Poll votes', friend: 'Friendships', circle: 'Circle joins',
   };
-  const PLATFORM = { ios: 'iOS app', pwa: 'Home screen shortcut', web: 'Web', unknown: 'Before the ping' };
-  const SOURCE = { invite: 'Invite link', circle: 'Circle link', profile: 'Profile link', post: 'Post link', daily: 'Daily link', referral: 'Another site', direct: 'Direct', unknown: 'Before the ping' };
-  const SKIP_NOTE = 'Admins aren\'t counted, so your own activity is left out of every number here.';
+  const PLATFORM = { ios: 'iOS app', pwa: 'Home screen', web: 'Web', unknown: 'Before tracking' };
+  const SOURCE = { invite: 'Invite', circle: 'Circle link', profile: 'Profile link', post: 'Post link', daily: 'Daily link', referral: 'Another site', direct: 'Direct', unknown: 'Before tracking' };
+  const SKIP_NOTE = 'Your own activity isn\'t counted.';
+  const foot = () => `<p class="footnote">${SKIP_NOTE}</p>`;
 
+  // What a new account still needs, in funnel order.
+  function nextStep(p) {
+    if (!p.profile) return 'No photo or bio';
+    if (!p.connected) return 'No friends yet';
+    if (!p.acted) return 'Hasn\'t posted';
+    if (!p.returned) return (Date.now() - new Date(p.joined)) / 86400000 < 1 ? 'Joined today' : 'Hasn\'t come back';
+    return 'Settled in';
+  }
+  const stepDots = (p) => `<span class="steps" aria-hidden="true">` +
+    ['profile', 'connected', 'acted', 'returned'].map((k) => `<i class="${p[k] ? 'on' : ''}"></i>`).join('') + '</span>';
+
+  // ── Overview: the pulse of a word of mouth beta ───────────────────────────
   async function renderOverview() {
-    const o = await call('admin_overview');
-    const stick = o.mau28 ? pct(o.avgDau28, o.mau28) : null;
-    const chart = lineChart(o.series || []);
+    const [o, f30, src30, ret, x] = await Promise.all([
+      call('admin_overview'),
+      call('admin_funnel', { p_days: 30, p_basis: 'account', p_by: 'none' }),
+      call('admin_funnel', { p_days: 30, p_basis: 'account', p_by: 'source' }),
+      call('admin_retention'),
+      extras(),
+    ]);
+    const s = o.series || [];
+    const cur = s[s.length - 1], prev = s[s.length - 2];
+    const g = f30.groups?.[0] || { seq: [0, 0, 0, 0, 0, 0], activated: 0 };
+    const accounts30 = g.seq[1];
+
+    // Week 1 retention: the last four cohorts old enough to say.
+    const ripe = (ret.cohorts || []).filter((c) => c.weeks?.[0]?.eligible > 0).slice(-4);
+    const w1 = pct(ripe.reduce((a, c) => a + c.weeks[0].alive, 0), ripe.reduce((a, c) => a + c.weeks[0].eligible, 0));
+
+    // Word of mouth: the share of last month's accounts that came by invite.
+    const srcGroups = src30.groups || [];
+    const invited = srcGroups.find((x) => x.key === 'invite')?.seq[1] || 0;
+    const srcTotal = srcGroups.reduce((a, x) => a + (x.seq[1] || 0), 0);
+
+    const worst = worstDrop(g.seq, 1);
+    const dropLine = worst > 0
+      ? `<div class="callout"><span>Biggest drop: <b>${esc(STAGES[worst - 1].name)} → ${esc(STAGES[worst].name)}</b>, ` +
+        `${pctTxt(100 - pct(g.seq[worst], g.seq[worst - 1]))} stop there.</span><a href="#funnel">Funnel</a></div>`
+      : '';
+
     const plats = Object.entries(o.platforms7 || {}).sort((a, b) => b[1] - a[1]);
-    const platTotal = plats.reduce((s, p) => s + p[1], 0);
+    const platTotal = plats.reduce((a, p) => a + p[1], 0);
+
+    const newest = (x?.newest || []).map((p) => row({
+      title: `<a class="who" href="../#/u/${encodeURIComponent(p.handle)}">${esc(p.name)}</a>`,
+      sub: `${esc(ago(p.joined))} · ${esc(SOURCE[p.source] || p.source)} · ${esc(PLATFORM[p.platform] || p.platform)}`,
+      val: `<span class="next${p.returned ? ' is-done' : ''}">${esc(nextStep(p))}</span>${stepDots(p)}`,
+      tipText: `<b>${esc(p.name)}</b><br>Profile ${p.profile ? '✓' : '·'}  Connected ${p.connected ? '✓' : '·'}<br>Posted ${p.acted ? '✓' : '·'}  Came back ${p.returned ? '✓' : '·'}`,
+    }));
+
     main.innerHTML =
-      headHtml('Overview', 'Who\'s here, and who\'s doing something. Active means a meaningful interaction: create or connect, never just a like.', o.asOf) +
-      '<div class="grid grid--tiles">' +
-        tile('Total users', fmt(o.users), `${fmt(o.new7)} new this week, ${fmt(o.new30)} this month`) +
-        tile('Weekly active', fmt(o.wau), `${pctTxt(pct(o.wau, o.users))} of everyone`, 'A meaningful interaction in the last 7 days') +
-        tile('Monthly active', fmt(o.mau), 'the last 30 days', 'A meaningful interaction in the last 30 days') +
-        tile('Active today', fmt(o.dau), `${fmt(o.avgDau28)} a day on average`) +
-        tile('Stickiness', pctTxt(stick), 'daily ÷ monthly, 28 days', 'Average daily actives over the last 28 days, divided by the 28 day actives') +
-        tile('Opened this week', fmt(o.openedWau), o.pingSince ? `since ${esc(day(o.pingSince))}` : 'counts start with the open ping', 'Opened Tria at all, from the open ping') +
+      headHtml('Overview') +
+      '<div class="grid grid--kpi">' +
+        tile('Weekly active', fmt(o.wau), delta(cur?.active, prev?.active), 'Created or connected in the last 7 days. Likes don\'t count.') +
+        tile('New accounts', fmt(o.new7), delta(cur?.joined, prev?.joined), 'Accounts made in the last 7 days') +
+        tile('Activated', pctTxt(pct(g.activated, accounts30)), `${fmt(g.activated)} of ${fmt(accounts30)}, 30 days`, 'Connected and posted within a week of joining. New accounts, last 30 days.') +
+        tile('Back in week 1', pctTxt(w1), 'last 4 signup weeks', 'Active again 7 to 13 days after joining') +
       '</div>' +
-      `<div class="section">${sectionHead('Weekly actives', 'The last 12 weeks, each point the seven days ending that week.')}<div class="card">${chart.html}</div></div>` +
+      dropLine +
+      strip([
+        ['Total users', fmt(o.users)],
+        ['Monthly active', fmt(o.mau), 'Created or connected in the last 30 days'],
+        ['Today', fmt(o.dau), 'Active today'],
+        ['Stickiness', pctTxt(o.mau28 ? pct(o.avgDau28, o.mau28) : null), 'Average daily active ÷ monthly active, 28 days'],
+        ['Opened this week', fmt(o.openedWau), 'Opened Tria at all'],
+      ]) +
       '<div class="section grid grid--two">' +
-        `<div>${sectionHead('Made this week', 'Posts by type.')}<div class="card">${barsHtml(o.types7, TYPE_NAMES)}</div></div>` +
-        `<div>${sectionHead('Done this week', 'Every meaningful interaction, by kind.')}<div class="card">${barsHtml(o.kinds7, KIND_NAMES)}</div></div>` +
+        `<div>${sectionHead('Weekly active')}<div class="card" id="c-active"></div></div>` +
+        `<div>${sectionHead('New accounts')}<div class="card" id="c-joined"></div></div>` +
       '</div>' +
+      `<div class="section">${sectionHead('Word of mouth')}<div class="grid grid--tiles">` +
+        tile('From an invite', pctTxt(pct(invited, srcTotal)), `${fmt(invited)} of ${fmt(srcTotal)}, 30 days`, 'New accounts that redeemed an invite link') +
+        (x ? tile('Invites redeemed', fmt(x.invites?.last30), `${fmt(x.invites?.total)} all time`, 'Last 30 days') +
+          tile('On their own', fmt(x.friends?.alone), pctTxt(pct(x.friends?.alone, x.users)) + ' of everyone', 'No friend and no circle, so nobody sees their posts') +
+          tile('Median friends', fmt(Math.round((x.friends?.median ?? 0) * 10) / 10), 'mutual, each') : '') +
+      '</div>' +
+      (x ? '<div class="grid grid--two section-tight">' +
+          `<div>${sectionHead('Top inviters')}` + list((x.invites?.top || []).length
+            ? x.invites.top.map((p) => row({ title: `<a class="who" href="../#/u/${encodeURIComponent(p.handle)}">${esc(p.name)}</a>`, sub: '@' + esc(p.handle), val: `<b>${fmt(p.n)}</b>` }))
+            : [row({ title: 'None yet' })]) + '</div>' +
+          `<div>${sectionHead('Opened on', 'This week')}` + list(plats.length
+            ? plats.map(([k, v]) => row({ title: esc(PLATFORM[k] || k), meter: pct(v, platTotal), val: `<b>${fmt(v)}</b>` }))
+            : [row({ title: 'Nobody yet' })]) + '</div>' +
+        '</div>' : '<div class="callout">Run <b>supabase/admin-extras.sql</b> for invites and new people.</div>') +
+      '</div>' +
+      (x ? `<div class="section">${sectionHead('New people', 'Who to nudge')}${list(newest.length ? newest : [row({ title: 'Nobody yet' })])}</div>` : '') +
       '<div class="section grid grid--two">' +
-        `<div>${sectionHead('Around the place')}` + list([
-          row({ title: 'Friendships', val: `<b>${fmt(o.friendships)}</b>` }),
-          row({ title: 'Circles', val: `<b>${fmt(o.circles)}</b>` }),
-          row({ title: 'Moments live', sub: 'up in the last 24 hours', val: `<b>${fmt(o.momentsLive)}</b>` }),
-          row({ title: 'Installs this week', sub: 'the app or a home screen shortcut', val: `<b>${fmt(o.installs7)}</b>` }),
-          row({ title: 'Web visitors this week', sub: 'signed out, in a browser', val: `<b>${fmt(o.webVisitors7)}</b>` }),
-        ]) + '</div>' +
-        `<div>${sectionHead('Opened on', 'People, this week, by where.')}` + list(plats.length
-          ? plats.map(([k, v]) => row({ title: esc(PLATFORM[k] || k), meter: pct(v, platTotal), val: `<b>${fmt(v)}</b>` }))
-          : [row({ title: 'Nobody yet', sub: 'counts start with the open ping' })]) + '</div>' +
+        `<div>${sectionHead('Made this week')}<div class="card">${barsHtml(o.types7, TYPE_NAMES)}</div></div>` +
+        `<div>${sectionHead('Done this week')}<div class="card">${barsHtml(o.kinds7, KIND_NAMES)}</div></div>` +
       '</div>' +
-      `<p class="footnote">${SKIP_NOTE} Days are ${esc(o.tz)} days.</p>`;
-    chart.wire(main);
+      foot();
+
+    const ca = $('c-active'), cj = $('c-joined');
+    const chart = lineChart(s, chartW(ca));
+    ca.innerHTML = chart.html;
+    chart.wire(ca);
+    const W = chartW(cj);
+    cj.innerHTML = columns(s.map((w) => ({
+      n: w.joined, label: day(w.week),
+      tip: `<b>Week to ${esc(day(addDays(w.week, 6)))}</b><br>${fmt(w.joined)} new`,
+    })), W, { every: W < 420 ? 4 : W < 560 ? 3 : 2, label: 'New accounts a week, last 12 weeks' });
   }
 
   // ── Funnel ────────────────────────────────────────────────────────────────
   const STAGES = [
-    { name: 'Install', say: 'the app or a shortcut, first opened' },
-    { name: 'Account', say: 'an @handle claimed' },
-    { name: 'Profile complete', say: 'a photo or a bio' },
-    { name: 'Connected', say: 'added someone or joined a circle' },
-    { name: 'First action', say: 'a first post, comment, message…' },
-    { name: 'Returned', say: 'back within 7 days' },
+    { name: 'Install', say: 'First opened the app or a shortcut' },
+    { name: 'Account', say: 'Claimed an @handle' },
+    { name: 'Profile', say: 'Added a photo or bio' },
+    { name: 'Connected', say: 'Made a friend or joined a circle' },
+    { name: 'Posted', say: 'First post, comment, message, RSVP or vote' },
+    { name: 'Came back', say: 'Active again within 7 days' },
   ];
   const fstate = { basis: 'account', by: 'none', days: 90 };
   const groupName = (by, k) => (by === 'source' ? SOURCE[k] || k : by === 'platform' ? PLATFORM[k] || k : by === 'cohort' ? 'Week of ' + day(k) : 'Everyone');
@@ -425,68 +529,61 @@
     const overall = r0.groups?.[0] || { seq: [0, 0, 0, 0, 0, 0], any: [0, 0, 0, 0, 0, 0], young: 0, activated: 0 };
 
     const top = overall.seq[first] || 0;
-    let worst = -1, worstRate = 2;
-    for (let i = first + 1; i < 6; i++) {
-      const prev = overall.seq[i - 1];
-      if (!prev) continue;
-      const r = overall.seq[i] / prev;
-      if (r < worstRate) { worstRate = r; worst = i; }
-    }
+    const worst = worstDrop(overall.seq, first);
     let steps = '';
     for (let i = first; i < 6; i++) {
       const v = overall.seq[i], anyV = overall.any[i];
       if (i > first) {
-        steps += `<div class="gap${i === worst ? ' is-worst' : ''}"><span>↓ ${pctTxt(pct(v, overall.seq[i - 1]))} carry on${i === worst ? ', the biggest drop' : ''}</span></div>`;
+        steps += `<div class="gap${i === worst ? ' is-worst' : ''}"><span>↓ ${pctTxt(pct(v, overall.seq[i - 1]))}${i === worst ? ', biggest drop' : ''}</span></div>`;
       }
-      steps += `<div class="step" data-tip="<b>${esc(STAGES[i].name)}</b><br>${fmt(v)} in order, ${fmt(anyV)} at all<br>${pctTxt(pct(v, top))} of the top">` +
-        `<span class="step-n">${i + 1 - first}</span>` +
-        `<span class="step-name">${esc(STAGES[i].name)}<small>${esc(STAGES[i].say)}</small></span>` +
+      steps += `<div class="step" data-tip="<b>${esc(STAGES[i].name)}</b><br>${esc(STAGES[i].say)}<br>${fmt(v)} in order, ${fmt(anyV)} at all">` +
+        `<span class="step-name">${esc(STAGES[i].name)}</span>` +
         `<span class="barrow-track"><span class="barrow-ghost" style="width:${top ? (anyV / top) * 100 : 0}%"></span><span class="barrow-fill" style="width:${top ? (v / top) * 100 : 0}%"></span></span>` +
         `<span class="step-val"><b>${fmt(v)}</b><small>${pctTxt(pct(v, top))}</small></span></div>`;
     }
     const worstLine = worst > 0
-      ? `The biggest drop is <b>${esc(STAGES[worst - 1].name)} → ${esc(STAGES[worst].name)}</b>: ${pctTxt(100 - pct(overall.seq[worst], overall.seq[worst - 1]))} stop there (${fmt(overall.seq[worst - 1] - overall.seq[worst])} people).`
-      : 'Not enough people yet to see a drop.';
+      ? `<div class="callout"><span><b>${esc(STAGES[worst - 1].name)} → ${esc(STAGES[worst].name)}</b> loses the most: ${fmt(overall.seq[worst - 1] - overall.seq[worst])} people, ${pctTxt(100 - pct(overall.seq[worst], overall.seq[worst - 1]))}.</span></div>`
+      : '';
 
     let split = '';
     if (fstate.by !== 'none') {
-      const head = '<tr><th>' + esc({ cohort: 'Cohort', source: 'Source', platform: 'Platform' }[fstate.by]) + '</th>' +
-        STAGES.slice(first).map((s) => `<th>${esc(s.name)}</th>`).join('') + '<th>Activated</th><th>Median time</th></tr>';
-      const rows = groups.map((g) => {
-        const t = g.seq[first];
-        const cells = g.seq.slice(first).map((v, j) => (j === 0 ? `<td>${fmt(v)}</td>`
+      const head = '<tr><th>' + esc({ cohort: 'Joined', source: 'Source', platform: 'Platform' }[fstate.by]) + '</th>' +
+        STAGES.slice(first).map((s) => `<th>${esc(s.name)}</th>`).join('') + '<th>Activated</th><th>Median</th></tr>';
+      const rows = groups.map((gr) => {
+        const t = gr.seq[first];
+        const cells = gr.seq.slice(first).map((v, j) => (j === 0 ? `<td>${fmt(v)}</td>`
           : `<td>${pctTxt(pct(v, t))}<span class="sub">${fmt(v)}</span></td>`)).join('');
-        return `<tr><td>${esc(groupName(fstate.by, g.key))}</td>${cells}` +
-          `<td>${pctTxt(pct(g.activated, g.seq[1]))}<span class="sub">${fmt(g.activated)}</span></td><td>${esc(hours(g.actMedianH))}</td></tr>`;
+        return `<tr><td>${esc(groupName(fstate.by, gr.key))}</td>${cells}` +
+          `<td>${pctTxt(pct(gr.activated, gr.seq[1]))}<span class="sub">${fmt(gr.activated)}</span></td><td>${esc(hours(gr.actMedianH))}</td></tr>`;
       }).join('');
-      const actRows = groups.filter((g) => g.seq[1] > 0).map((g) => {
-        const name = groupName(fstate.by, g.key);
-        return row({ title: esc(name), sub: `${fmt(g.seq[1])} accounts, median ${esc(hours(g.actMedianH))}`,
-          meter: pct(g.activated, g.seq[1]), val: `<b>${pctTxt(pct(g.activated, g.seq[1]))}</b>`,
-          tipText: `<b>${esc(name)}</b><br>${fmt(g.activated)} of ${fmt(g.seq[1])} activated` });
+      const actRows = groups.filter((gr) => gr.seq[1] > 0).map((gr) => {
+        const name = groupName(fstate.by, gr.key);
+        return row({ title: esc(name), sub: `${fmt(gr.seq[1])} accounts`,
+          meter: pct(gr.activated, gr.seq[1]), val: `<b>${pctTxt(pct(gr.activated, gr.seq[1]))}</b>`,
+          tipText: `<b>${esc(name)}</b><br>${fmt(gr.activated)} of ${fmt(gr.seq[1])} activated<br>median ${esc(hours(gr.actMedianH))}` });
       });
-      split = `<div class="section">${sectionHead('Split', 'Each stage as a share of the group\'s first. Activated is a share of accounts.')}` +
-        `<div class="card"><div class="table-wrap"><table><thead>${head}</thead><tbody>${rows || '<tr><td>Nobody yet</td></tr>'}</tbody></table></div></div></div>` +
-        (actRows.length ? `<div class="section">${sectionHead('Activation rate')}${list(actRows)}</div>` : '');
+      split = (actRows.length ? `<div class="section">${sectionHead('Activated')}${list(actRows)}</div>` : '') +
+        `<div class="section">${sectionHead('Every stage')}` +
+        `<div class="card"><div class="table-wrap"><table><thead>${head}</thead><tbody>${rows || '<tr><td>Nobody yet</td></tr>'}</tbody></table></div></div></div>`;
     }
 
     main.innerHTML =
-      headHtml('Funnel', 'From the first open to coming back. Bars are people who reached each stage in order; the pale bar behind is everyone who reached it at all.') +
+      headHtml('Funnel') +
       '<div class="controls">' +
-        segmented('basis', [['account', 'Account'], ['install', 'Install']], fstate.basis, 'Start at') +
-        segmented('days', [[30, '30 days'], [90, '90 days'], [0, 'All time']], fstate.days, 'Who started in') +
-        segmented('by', [['none', 'None'], ['cohort', 'Cohort'], ['source', 'Source'], ['platform', 'Platform']], fstate.by, 'Split by') +
+        segmented('basis', [['account', 'Account'], ['install', 'Install']], fstate.basis, 'From') +
+        segmented('days', [[30, '30 days'], [90, '90 days'], [0, 'All']], fstate.days, 'Joined in') +
+        segmented('by', [['none', 'All'], ['cohort', 'Week'], ['source', 'Source'], ['platform', 'Platform']], fstate.by, 'Split') +
       '</div>' +
       `<div class="card"><div class="funnel">${steps}</div>` +
-        (overall.young ? `<p class="note">${fmt(overall.young)} of these accounts are under a week old and still inside their 7 days to return.</p>` : '') +
-        (first === 0 ? '<p class="note">Installs count from when the open ping shipped. A browser visit is not an install.</p>' : '') +
-      `<div class="callout">${worstLine}</div></div>` +
-      `<div class="section">${sectionHead('Activation', 'Connected and a first action, both within 7 days of the account.')}<div class="grid grid--tiles">` +
-        tile('Activated', pctTxt(pct(overall.activated, overall.seq[1])), `${fmt(overall.activated)} of ${fmt(overall.seq[1])} accounts`) +
-        tile('Time to activation', esc(hours(overall.actMedianH)), 'median') +
-        tile('Slower quarter', esc(hours(overall.actP75H)), 'three in four by then') +
-      '</div></div>' + split +
-      `<p class="footnote">${SKIP_NOTE}</p>`;
+        '<ul class="legend legend--foot"><li><span class="swatch swatch--fill"></span>In order</li><li><span class="swatch swatch--ghost"></span>At all</li></ul>' +
+        (overall.young ? `<p class="note">${fmt(overall.young)} are still in their first week.</p>` : '') +
+        (first === 0 ? '<p class="note">Installs count from when tracking began.</p>' : '') +
+      '</div>' + worstLine +
+      `<div class="section">${sectionHead('Activation')}<div class="grid grid--tiles">` +
+        tile('Activated', pctTxt(pct(overall.activated, overall.seq[1])), `${fmt(overall.activated)} of ${fmt(overall.seq[1])}`, 'Connected and posted, both within 7 days of joining') +
+        tile('Median time', esc(hours(overall.actMedianH)), 'to activate') +
+        tile('Slowest quarter', esc(hours(overall.actP75H)), '3 in 4 by then') +
+      '</div></div>' + split + foot();
 
     main.querySelectorAll('.segmented button').forEach((b) => {
       b.addEventListener('click', async () => {
@@ -504,23 +601,36 @@
   // ── Retention ─────────────────────────────────────────────────────────────
   async function renderRetention() {
     const r = await call('admin_retention');
-    const cohorts = (r.cohorts || []).slice().reverse();
-    const head = '<tr><th>Joined the week of</th><th>People</th>' +
-      [1, 2, 3, 4, 5, 6, 7, 8].map((k) => `<th>Week ${k}</th>`).join('') + '</tr>';
+    const all = r.cohorts || [];
+    // Weighted average back in week k, over every cohort old enough.
+    const avg = (k) => {
+      let a = 0, e = 0;
+      all.forEach((c) => { const w = c.weeks?.[k - 1]; if (w?.eligible) { a += w.alive; e += w.eligible; } });
+      return e ? pct(a, e) : null;
+    };
+    const cohorts = all.slice().reverse();
+    const head = '<tr><th>Joined</th><th>People</th>' +
+      [1, 2, 3, 4, 5, 6, 7, 8].map((k) => `<th>Wk ${k}</th>`).join('') + '</tr>';
     const rows = cohorts.map((c) => {
       const cells = (c.weeks || []).map((w) => {
         if (!w.eligible) return '<td class="cell is-empty">·</td>';
         const p = pct(w.alive, w.eligible);
         return `<td class="cell" style="background:color-mix(in srgb, var(--data) ${Math.round(8 + (p / 100) * 62)}%, transparent)" ` +
-          `data-tip="<b>Week of ${esc(day(c.week))}</b>, week ${w.k}<br>${fmt(w.alive)} of ${fmt(w.eligible)} came back">${pctTxt(p)}</td>`;
+          `data-tip="<b>Joined week of ${esc(day(c.week))}</b><br>Week ${w.k}: ${fmt(w.alive)} of ${fmt(w.eligible)} back">${pctTxt(p)}</td>`;
       }).join('');
       return `<tr><td>${esc(day(c.week))}</td><td>${fmt(c.size)}</td>${cells}</tr>`;
     }).join('');
     main.innerHTML =
-      headHtml('Retention', 'Each week\'s new accounts, and the share alive in each week after: opened Tria, or did something meaningful.') +
-      `<div class="card heat"><div class="table-wrap"><table><thead>${head}</thead><tbody>${rows || '<tr><td>Nobody yet</td></tr>'}</tbody></table></div>` +
-      '<p class="note">Week 1 is days 7 to 13 after the account. A dot is a week that hasn\'t happened yet.</p></div>' +
-      `<p class="footnote">${SKIP_NOTE}</p>`;
+      headHtml('Retention') +
+      '<div class="grid grid--kpi">' +
+        tile('Week 1', pctTxt(avg(1)), 'back', 'Active again 7 to 13 days after joining. Every signup week, weighted.') +
+        tile('Week 2', pctTxt(avg(2)), 'back') +
+        tile('Week 4', pctTxt(avg(4)), 'back') +
+        tile('Week 8', pctTxt(avg(8)), 'back') +
+      '</div>' +
+      `<div class="section">${sectionHead('By signup week', 'Share active each week after')}` +
+      `<div class="card heat"><div class="table-wrap"><table><thead>${head}</thead><tbody>${rows || '<tr><td>Nobody yet</td></tr>'}</tbody></table></div></div></div>` +
+      foot();
   }
 
   // ── Community (admin-extras.sql: no new tracking, only what Tria keeps) ──
@@ -532,22 +642,19 @@
   };
   const AUDIENCE = { public: 'Anyone', circle: 'My circle', list: 'Chosen people', community: 'A circle' };
   const ADOPTION = [
-    ['posted', 'Has posted'], ['photo', 'Has a photo'], ['bio', 'Wrote a bio'], ['circle', 'In a circle'],
-    ['moment', 'Shared a Moment'], ['daily', 'Answered a daily'], ['theme', 'Picked a theme'], ['pins', 'Pinned posts'],
-    ['charms', 'Wears a charm'], ['pronouns', 'Pronouns'], ['push', 'Push on'], ['private', 'Private account'],
+    ['posted', 'Posted'], ['photo', 'Photo'], ['bio', 'Bio'], ['circle', 'In a circle'],
+    ['moment', 'Shared a Moment'], ['daily', 'Answered a daily'], ['theme', 'Picked a theme'], ['push', 'Push on'],
+    ['pins', 'Pinned a post'], ['charms', 'Wears a charm'], ['pronouns', 'Pronouns'], ['private', 'Private'],
   ];
   const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   let showAllCircles = false;
 
   async function renderCommunity() {
-    let x;
-    try { x = await call('admin_extras'); } catch (err) {
-      if (err.code === 'PGRST202' || err.code === '42883') {
-        main.innerHTML = headHtml('Community') +
-          '<div class="callout">This section needs <b>supabase/admin-extras.sql</b> run in the Supabase SQL editor. It adds no tracking, only reads what Tria already keeps.</div>';
-        return;
-      }
-      throw err;
+    const x = await extras();
+    if (!x) {
+      main.innerHTML = headHtml('Community') +
+        '<div class="callout">Run <b>supabase/admin-extras.sql</b>. It adds no tracking.</div>';
+      return;
     }
     const u = x.users || 0;
     const ad = x.adoption || {};
@@ -555,15 +662,15 @@
     const shown = showAllCircles ? circles : circles.slice(0, 8);
     const themes = {};
     Object.entries(x.themes || {}).forEach(([k, v]) => {
-      const key = String(k).startsWith('p:') ? 'photo' : (THEME[k] ? k : 'photo');
+      const key = THEME[k] ? k : 'photo';
       themes[key] = (themes[key] || 0) + v;
     });
     const themeRows = Object.entries(themes).sort((a, b) => b[1] - a[1]).map(([k, v]) => row({
       lead: `<span class="swatch-dot" style="background:${THEME[k][1]}"></span>`,
-      title: esc(THEME[k][0]), meter: pct(v, u), val: `<b>${fmt(v)}</b> ${pctTxt(pct(v, u))}`,
+      title: esc(THEME[k][0]), meter: pct(v, u), val: `<b>${fmt(v)}</b>`,
     }));
     const aud = x.audiences || {};
-    const audTotal = Object.values(aud).reduce((s, v) => s + v, 0);
+    const audTotal = Object.values(aud).reduce((a, v) => a + v, 0);
 
     // The rhythm: 7 rows by 24 hours.
     const grid = Array.from({ length: 7 }, () => Array(24).fill(0));
@@ -572,61 +679,56 @@
     let peak = [0, 0, 0];
     grid.forEach((r, d) => r.forEach((n, h) => { if (n > peak[2]) peak = [d, h, n]; }));
     const hr = (h) => (h % 12 || 12) + (h < 12 ? 'am' : 'pm');
-    let rhythm = '<div class="rhythm" role="img" aria-label="Meaningful interactions by weekday and hour, last 28 days"><span></span>' +
+    let rhythm = '<div class="rhythm" role="img" aria-label="Activity by weekday and hour, last 28 days"><span></span>' +
       Array.from({ length: 24 }, (_, h) => `<span class="rh">${h % 6 === 0 ? hr(h) : ''}</span>`).join('');
     [1, 2, 3, 4, 5, 6, 0].forEach((d) => {
       rhythm += `<span class="rl">${DAYS[d]}</span>` + grid[d].map((n, h) =>
         `<span class="rc" style="${n ? `background:color-mix(in srgb, var(--data) ${Math.round(10 + (n / rmax) * 80)}%, transparent)` : ''}" ` +
-        `data-tip="<b>${DAYS[d]} ${hr(h)}</b><br>${fmt(n)} interactions"></span>`).join('');
+        `data-tip="<b>${DAYS[d]} ${hr(h)}</b><br>${fmt(n)}"></span>`).join('');
     });
     rhythm += '</div>';
 
-    const newest = (x.newest || []).map((p) => row({
-      title: `${esc(p.name)} <span class="row-sub" style="display:inline">@${esc(p.handle)}</span>`,
-      sub: `${esc(ago(p.joined))} · ${esc(SOURCE[p.source] || p.source)} · ${esc(PLATFORM[p.platform] || p.platform)}`,
-      val: `<span class="steps" aria-label="Profile ${p.profile ? 'done' : 'not yet'}, connected ${p.connected ? 'yes' : 'no'}, acted ${p.acted ? 'yes' : 'no'}, returned ${p.returned ? 'yes' : 'no'}">` +
-        ['profile', 'connected', 'acted', 'returned'].map((k) => `<i class="${p[k] ? 'on' : ''}"></i>`).join('') + '</span>',
-      tipText: `<b>${esc(p.name)}</b><br>Profile ${p.profile ? '✓' : '·'}  Connected ${p.connected ? '✓' : '·'}<br>First action ${p.acted ? '✓' : '·'}  Returned ${p.returned ? '✓' : '·'}`,
-    }));
-
     main.innerHTML =
-      headHtml('Community', 'How people are connected, what they\'ve set up, and where the life is. All read off what Tria already keeps: no extra tracking.', x.asOf) +
-      '<div class="grid grid--tiles">' +
-        tile('Median friends', fmt(Math.round((x.friends?.median ?? 0) * 10) / 10), 'mutual, per person') +
-        tile('On their own', fmt(x.friends?.alone), `${pctTxt(pct(x.friends?.alone, u))}: no friend, no circle`, 'Nobody to see their posts yet') +
-        tile('Invites redeemed', fmt(x.invites?.total), `${fmt(x.invites?.last30)} in the last 30 days`) +
-        tile('Blocks', fmt(x.blocks?.total), `${fmt(x.blocks?.last30)} in the last 30 days`) +
+      headHtml('Community') +
+      '<div class="grid grid--kpi">' +
+        tile('Median friends', fmt(Math.round((x.friends?.median ?? 0) * 10) / 10), 'mutual, each') +
+        tile('On their own', fmt(x.friends?.alone), pctTxt(pct(x.friends?.alone, u)) + ' of everyone', 'No friend and no circle') +
+        tile('Circles', fmt(circles.length), `${fmt(circles.reduce((a, c) => a + (c.posts7 || 0), 0))} posts this week`) +
+        tile('Blocks', fmt(x.blocks?.total), `${fmt(x.blocks?.last30)} in 30 days`) +
       '</div>' +
-      `<div class="section">${sectionHead('Friends each', 'Mutual friends per person.')}<div class="card">${columns(x.friends?.buckets || [])}</div></div>` +
-      `<div class="section">${sectionHead('Circles', 'By size, with this week\'s joins and posts.')}` +
+      `<div class="section">${sectionHead('Friends each')}<div class="card" id="c-friends"></div></div>` +
+      `<div class="section">${sectionHead('Circles')}` +
         list(shown.length ? shown.map((c) => row({
-          title: `${esc(c.name)}${c.inviteOnly ? svg('lock', 'i row-lock') : ''}`,
-          sub: `c/${esc(c.slug)} · ${fmt(c.joins7)} joined, ${fmt(c.posts7)} posts this week`,
-          val: `<b>${fmt(c.members)}</b> ${c.members === 1 ? 'member' : 'members'}`,
-        })) : [row({ title: 'No circles yet' })],
+          title: `<a class="who" href="../#/c/${encodeURIComponent(c.slug)}">${esc(c.name)}</a>${c.inviteOnly ? svg('lock', 'i row-lock') : ''}`,
+          sub: `c/${esc(c.slug)} · +${fmt(c.joins7)} joined, ${fmt(c.posts7)} posts this week`,
+          val: `<b>${fmt(c.members)}</b>`,
+          tipText: `<b>c/${esc(c.slug)}</b><br>${fmt(c.members)} members`,
+        })) : [row({ title: 'None yet' })],
         circles.length > 8 ? `<button class="more" type="button" id="more-circles">${showAllCircles ? 'Show fewer' : `Show all ${circles.length}`}</button>` : '') +
       '</div>' +
+      `<div class="section">${sectionHead('When', peak[2] ? `Busiest ${DAYS[peak[0]]} ${hr(peak[1])}` : '')}<div class="card">${rhythm}</div></div>` +
       '<div class="section grid grid--two">' +
-        `<div>${sectionHead('Set up', 'Shares of everyone.')}` + list(ADOPTION.map(([k, label]) =>
-          row({ title: esc(label), meter: pct(ad[k], u), val: `<b>${pctTxt(pct(ad[k], u))}</b>`, tipText: `<b>${esc(label)}</b><br>${fmt(ad[k])} of ${fmt(u)} people` }))) + '</div>' +
-        `<div>${sectionHead('Themes', 'Profile colours picked.')}` + list(themeRows.length ? themeRows : [row({ title: 'Nobody yet' })]) + '</div>' +
+        `<div>${sectionHead('Set up')}` + list(ADOPTION.map(([k, label]) =>
+          row({ title: esc(label), meter: pct(ad[k], u), val: `<b>${pctTxt(pct(ad[k], u))}</b>`, tipText: `<b>${esc(label)}</b><br>${fmt(ad[k])} of ${fmt(u)}` }))) + '</div>' +
+        `<div>${sectionHead('Themes')}` + list(themeRows.length ? themeRows : [row({ title: 'None yet' })]) + '</div>' +
       '</div>' +
-      `<div class="section">${sectionHead('When Tria is used', `Meaningful interactions over the last 28 days, by weekday and hour. Busiest: ${peak[2] ? `${DAYS[peak[0]]} at ${hr(peak[1])}` : 'not yet'}.`)}<div class="card">${rhythm}</div></div>` +
       '<div class="section grid grid--two">' +
-        `<div>${sectionHead('Dailies', 'The last two weeks, by answers.')}` + list((x.dailies || []).length
-          ? x.dailies.map((d) => row({ title: esc(d.slug), sub: esc(day(d.day)), val: `<b>${fmt(d.answers)}</b> ${d.answers === 1 ? 'answer' : 'answers'}` }))
-          : [row({ title: 'No answers yet' })]) + '</div>' +
-        `<div>${sectionHead('Who posts reach', 'Posts in the last 30 days, by audience.')}` + list(Object.keys(aud).length
+        `<div>${sectionHead('Dailies', 'Last 2 weeks')}` + list((x.dailies || []).length
+          ? x.dailies.map((d) => row({ title: esc(d.slug), sub: esc(day(d.day)), val: `<b>${fmt(d.answers)}</b>` }))
+          : [row({ title: 'None yet' })]) + '</div>' +
+        `<div>${sectionHead('Audiences', 'Posts, 30 days')}` + list(Object.keys(aud).length
           ? Object.entries(aud).sort((a, b) => b[1] - a[1]).map(([k, v]) => row({ title: esc(AUDIENCE[k] || k), meter: pct(v, audTotal), val: `<b>${pctTxt(pct(v, audTotal))}</b>` }))
-          : [row({ title: 'No posts yet' })]) +
-          `<div style="margin-top:36px">${sectionHead('Top inviters', 'Invite links redeemed. Admins count here: it\'s credit, not skew.')}` +
-          list((x.invites?.top || []).length
-            ? x.invites.top.map((p) => row({ title: esc(p.name), sub: '@' + esc(p.handle), val: `<b>${fmt(p.n)}</b>` }))
-            : [row({ title: 'No invites redeemed yet' })]) + '</div>' +
-        '</div>' +
+          : [row({ title: 'None yet' })]) + '</div>' +
       '</div>' +
-      `<div class="section">${sectionHead('Newest accounts', 'And how far each has come: profile, connected, first action, returned.')}${list(newest.length ? newest : [row({ title: 'Nobody yet' })])}</div>` +
-      `<p class="footnote">${SKIP_NOTE}</p>`;
+      foot();
+
+    const cf = $('c-friends');
+    const buckets = x.friends?.buckets || [];
+    const total = buckets.reduce((a, d) => a + d.n, 0);
+    cf.innerHTML = columns(buckets.map((d) => ({
+      n: d.n, label: d.label,
+      tip: `<b>${esc(d.label)} friend${d.label === '1' ? '' : 's'}</b><br>${fmt(d.n)} people, ${pctTxt(pct(d.n, total))}`,
+    })), chartW(cf), { label: 'People by number of friends' });
 
     $('more-circles')?.addEventListener('click', () => {
       showAllCircles = !showAllCircles;
@@ -639,11 +741,11 @@
   let dictQ = '', dictGroup = '';
   function renderDictionary() {
     const groups = window.TRIA_DICTIONARY || [];
-    const total = groups.reduce((s, g) => s + g.items.length, 0);
+    const total = groups.reduce((a, g) => a + g.items.length, 0);
     main.innerHTML =
-      headHtml('Dictionary', `What we call everything, so we always mean the same thing. ${total} terms.`) +
+      headHtml('Dictionary') +
       '<div class="search">' +
-        `<div class="search-box">${svg('search')}<input class="field" id="dict-q" type="search" placeholder="Search" aria-label="Search the dictionary" value="${esc(dictQ)}" autocomplete="off" /></div>` +
+        `<div class="search-box">${svg('search')}<input class="field" id="dict-q" type="search" placeholder="Search ${total} terms" aria-label="Search the dictionary" value="${esc(dictQ)}" autocomplete="off" /></div>` +
         `<div class="scopes" role="group" aria-label="Groups">${[['', 'All'], ...groups.map((g) => [g.group, g.group])].map(([v, l]) =>
           `<button class="pill-quiet${v === dictGroup ? ' is-on' : ''}" type="button" data-group="${esc(v)}" aria-pressed="${v === dictGroup}">${esc(l)}</button>`).join('')}</div>` +
       '</div><div id="dict-body"></div>';
@@ -670,11 +772,11 @@
         if (!items.length) return '';
         return `<section class="dict-group"><h2>${esc(g.group)}</h2>` + list(items.map((it) =>
           `<div class="row term"><div class="row-main"><div class="row-title">${esc(it.name)}</div>` +
-          (it.code ? `<div class="term-code">${esc(it.code)}</div>` : '') +
-          (it.where ? `<div class="term-where">${esc(it.where)}</div>` : '') +
-          `<p class="term-say">${esc(it.say)}</p></div></div>`)) + '</section>';
+          `<p class="term-say">${esc(it.say)}</p>` +
+          ((it.where || it.code) ? `<div class="term-meta">${it.where ? `<span class="term-where">${esc(it.where)}</span>` : ''}${it.code ? `<code>${esc(it.code)}</code>` : ''}</div>` : '') +
+          '</div></div>')) + '</section>';
       }).join('');
-    body.innerHTML = html || `<p class="empty">Nothing called "${esc(dictQ)}" yet.</p>`;
+    body.innerHTML = html || `<p class="empty">Nothing called "${esc(dictQ)}".</p>`;
   }
 
   // ── Sample numbers (?demo) ────────────────────────────────────────────────
@@ -756,6 +858,5 @@
     },
   };
 
-  sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_OUT' && !DEMO) renderSignIn(); });
   boot();
 })();

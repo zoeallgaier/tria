@@ -517,6 +517,7 @@
     // No-entry circle — Block a user.
     block:   '<circle cx="12" cy="12" r="8"/><path d="M6.3 6.3l11.4 11.4"/>',
     // A doorway with an arrow stepping out — Log out.
+    chart:   '<path d="M5 20v-6M12 20V5M19 20v-10"/>',
     signout: '<path d="M13.5 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7.5"/><path d="M10 12h9.5"/><path d="m16 8 4 4-4 4"/>',
     // Circled i — About Tria, in the profile sheet. The dot is filled rather
     // than a 0.5-radius stroke, which at 20px renders as a smudge on the stem.
@@ -11801,6 +11802,9 @@
           `<div class="pf-account"${welcome ? ' hidden' : ''}>` +
             `<button type="button" class="pf-account-btn pill-quiet pf-delete" id="pf-delete">` +
               svgIcon('trash') + `Delete account</button>` +
+            // Between the two, for Tria's team only (shown once is_admin answers).
+            `<a class="pf-account-btn pill-quiet pf-admin" id="pf-admin" href="/admin/" hidden>` +
+              svgIcon('chart') + `Admin</a>` +
             `<button type="button" class="pf-account-btn pill-quiet pf-logout" id="pf-logout">` +
               svgIcon('signout') + `Log out</button>` +
           `</div>` +
@@ -12151,6 +12155,17 @@
 
     // Account controls: the notifications toggle and Log out, now homed here.
     wirePushToggle();
+    // Admin: the dashboard at triaonline.com/admin, a page of its own, so it is
+    // never in the iOS bundle: the app opens it on the site.
+    if (!welcome) {
+      Store.isAdmin().then((yes) => {
+        const a = view.querySelector('#pf-admin');
+        if (yes && a) {
+          a.hidden = false;
+          if (nativeShell()) { a.href = 'https://triaonline.com/admin/'; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.dataset.out = 'system'; }
+        }
+      });
+    }
     view.querySelector('#pf-logout').addEventListener('click', async () => {
       await Store.logout();
       // Where you had scrolled to is part of the world that just got thrown

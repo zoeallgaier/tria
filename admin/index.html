@@ -6,10 +6,10 @@
   <meta name="robots" content="noindex, nofollow" />
   <meta name="color-scheme" content="light dark" />
   <title>Tria admin</title>
-  <link rel="icon" href="../icons/icon-32.png?v=1248" />
-  <link rel="apple-touch-icon" href="../icons/icon-180.png?v=1248" />
-  <link rel="stylesheet" href="../css/tokens.css?v=1248" />
-  <link rel="stylesheet" href="admin.css?v=1248" />
+  <link rel="icon" href="../icons/icon-32.png?v=1249" />
+  <link rel="apple-touch-icon" href="../icons/icon-180.png?v=1249" />
+  <link rel="stylesheet" href="../css/tokens.css?v=1249" />
+  <link rel="stylesheet" href="admin.css?v=1249" />
 </head>
 <body>
   <!-- The admin dashboard. Not the app: never bundled into iOS (ios-sync.sh
@@ -18,40 +18,33 @@
        supabase/admin-dashboard.sql and admin-extras.sql's admin_* functions,
        which refuse anyone not in public.admins.
 
-       Laid out to Apple's HIG in Tria's materials: a large title that hands
-       over to the bar's inline one as it scrolls under, a tab bar on a phone
-       and a sidebar from 900px, segmented controls, inset grouped lists,
-       44pt targets. -->
+       Tria's own layout (Zoe): the inset glass rail on a desktop, the floating
+       glass capsule and a top bar with a back chevron on a phone. -->
   <div class="wash" aria-hidden="true"></div>
 
-  <aside class="side" id="side" aria-label="Sections" hidden>
-    <a class="side-mark" href="../" aria-label="Tria"><span class="wordmark"></span><span class="mark-sub">admin</span></a>
-    <nav class="side-list" id="side-list"></nav>
-    <div class="side-foot">
-      <p class="side-asof" id="side-asof"></p>
-      <button class="side-row" id="side-out" type="button"></button>
+  <aside class="rail" id="rail" aria-label="Sections" hidden>
+    <a class="brand" href="../#/profile" aria-label="Back to Tria"><span class="wordmark"></span><span class="brand-sub">admin</span></a>
+    <nav class="rail-list" id="rail-list"></nav>
+    <div class="rail-foot">
+      <p class="asof" id="asof"></p>
+      <a class="pill-quiet rail-back" href="../#/profile"><span class="face" id="face" aria-hidden="true"></span><span>Back to Tria</span></a>
     </div>
   </aside>
 
-  <header class="nav" id="nav">
-    <div class="nav-row">
-      <a class="nav-mark" href="../" aria-label="Tria"><span class="wordmark"></span></a>
-      <p class="nav-title" id="nav-title" aria-hidden="true"></p>
-      <div class="nav-acts">
-        <button class="nav-btn" id="refresh" type="button" aria-label="Refresh" title="Refresh" hidden></button>
-        <button class="nav-btn nav-out" id="sign-out" type="button" aria-label="Log out" title="Log out" hidden></button>
-      </div>
-    </div>
+  <header class="bar" id="bar">
+    <a class="bar-btn bar-back" id="bar-back" href="../#/profile" aria-label="Back to Tria"></a>
+    <p class="bar-title" id="bar-title" aria-hidden="true"></p>
+    <button class="bar-btn" id="refresh" type="button" aria-label="Refresh" title="Refresh" hidden></button>
   </header>
 
   <main id="main" class="main" aria-live="polite"></main>
 
-  <nav class="tabbar" id="tabbar" aria-label="Sections" hidden></nav>
+  <nav class="dock" id="dock" aria-label="Sections" hidden><div class="dock-pill" id="dock-pill"></div></nav>
   <div class="hovercard" id="tooltip" role="status" hidden></div>
 
-  <script src="../js/vendor/supabase-js-2.110.9.min.js?v=1248"></script>
-  <script src="../js/config.js?v=1248"></script>
-  <script src="dictionary.js?v=1248"></script>
-  <script src="admin.js?v=1248"></script>
+  <script src="../js/vendor/supabase-js-2.110.9.min.js?v=1249"></script>
+  <script src="../js/config.js?v=1249"></script>
+  <script src="dictionary.js?v=1249"></script>
+  <script src="admin.js?v=1249"></script>
 </body>
 </html>

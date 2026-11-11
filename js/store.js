@@ -1758,6 +1758,17 @@ const Store = (() => {
     } catch { return null; }
   }
 
+  /* Whether this account is on Tria's team (supabase/admin-dashboard.sql's
+     public.admins), so Edit profile can offer the admin page. Anyone else, or a
+     database without the file, answers false; asked once a session. */
+  let adminAsked = null;
+  function isAdmin() {
+    if (!adminAsked) {
+      adminAsked = sb.rpc('is_admin').then(({ data, error }) => !error && data === true, () => false);
+    }
+    return adminAsked;
+  }
+
   async function claimProfile({ name, username }) {
     username = String(username || '').trim().toLowerCase();
     name = String(name || '').trim() || username;   // the handle stands in, as at signup
@@ -4476,7 +4487,7 @@ const Store = (() => {
     session, isAuthed, signup, login, logout, loadGuest, deleteAccount,
     requestPasswordReset, updatePassword, resendConfirmation,
     isRecovering, onRecovery,
-    signInWithProvider, pendingProfile, claimProfile, usernameFree,
+    signInWithProvider, pendingProfile, claimProfile, usernameFree, isAdmin,
     // Friends
     isFriend, areFriends, addFriend, removeFriend, following, followers,
     requestsSent, requestsReceived, friendStatus,

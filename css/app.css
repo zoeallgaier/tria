@@ -11453,6 +11453,11 @@ body[data-ambient="none"] .pf-row-swatch {
 }
 .pf-account-btn svg { width: 18px; height: 18px; }
 .pf-delete { color: var(--danger); }
+/* Admin is a link, so it drops the underline; three halves wrap on a narrow phone. */
+.pf-admin { text-decoration: none; }
+.pf-account { flex-wrap: wrap; }
+.pf-account-btn { min-width: 8.5rem; }
+.pf-admin[hidden] { display: none; }
 
 /* Toast — a brief, quiet notice; sits above the mobile bottom nav + home bar,
    and tops the whole stack (above the filter layer at 400) so a confirmation
