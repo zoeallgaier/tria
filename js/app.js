@@ -3421,7 +3421,41 @@
       highlight(0);
     };
 
-    field.addEventListener('input', update);
+    /* Return while the list is up picks the highlighted friend, the first one
+       unless the arrows moved it. A key Enter is caught in keydown below, but a
+       phone's keyboard doesn't always say so: WebKit can send the Return only
+       as a `beforeinput` (mid-composition, a predictive word), and the app's
+       NATIVE comment bar never sends a key at all, it mirrors its text in with
+       the newline already typed (NativeChrome.postBarHooks.text). The first is
+       stopped before it lands; the second is taken back out and picked. The
+       pick waits a microtask so it runs outside that mirror, and its `input`
+       carries the finished "@handle " home to the native field. */
+    field.addEventListener('beforeinput', (e) => {
+      if (list.hidden || !items.length) return;
+      if (e.inputType !== 'insertParagraph' && e.inputType !== 'insertLineBreak') return;
+      e.preventDefault();
+      pick(active < 0 ? 0 : active);
+    });
+    let lastValue = '';
+    field.addEventListener('input', () => {
+      if (!isCE && !list.hidden && items.length) {
+        const v = field.value, caret = field.selectionStart;
+        if (caret > 0 && v.charAt(caret - 1) === '\n' && v.length === lastValue.length + 1) {
+          const was = items[active < 0 ? 0 : active];
+          field.value = v.slice(0, caret - 1) + v.slice(caret);
+          try { field.setSelectionRange(caret - 1, caret - 1); } catch { /* not selectable */ }
+          queueMicrotask(() => {
+            update();
+            if (list.hidden || !items.length) return;
+            const i = items.findIndex(u => u.username === was?.username);
+            pick(i < 0 ? 0 : i);
+          });
+          return;
+        }
+      }
+      update();
+      lastValue = isCE ? '' : field.value;
+    });
     field.addEventListener('click', update);
     field.addEventListener('blur', () => setTimeout(close, 100));
     field.addEventListener('keydown', (e) => {
