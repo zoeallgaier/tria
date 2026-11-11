@@ -852,6 +852,16 @@
      Attribute, not class, and stamped on <html> rather than <body>: the same
      shape data-shell already uses, so the stylesheet reads one gate the same way
      twice. */
+  /* HOW LONG A SCHEME CHANGE TAKES TO LAND (2026-11-11, Zoe: switching light
+     and dark left messages and icons in the old scheme). The paper tokens
+     (--bg, --surface, --surface-2, --rule) are registered and EASE over
+     --dur-move (0.36s, tokens.css), so a read inside the media query's
+     `change` handler gets the OLD paper, while --text and --muted have already
+     flipped: measured in WebKit, light paper beside dark scheme ink. Anything
+     that resolves a colour off the page for somewhere CSS can't reach (native,
+     a canvas) reads again once this has passed. */
+  const SCHEME_SETTLE = 450;
+
   const NativeChrome = (() => {
     let live = false;      // the plugin answered; the native bars are up
     let asked = false;     // …and we only ever ask once
@@ -2457,10 +2467,28 @@
        ever tell it. Sunset on a phone set to Automatic is the common case, and
        until this listed the scheme the native + kept the other scheme's colours
        until the next colour pick. */
+    /* AND EVERY PAYLOAD IS SENT AGAIN, settled, whether or not it reads any
+       different. Two ways native kept the old scheme (Zoe, 2026-11-11): a bare
+       glyph sends no ink and native bakes it in `.label` as it is drawn, so its
+       payload is the SAME in both schemes, toldBar swallowed the resend and the
+       icon kept the other scheme's ink; and the comment and message bar's
+       colours were read at the `change` event, mid-tween (SCHEME_SETTLE), so it
+       kept the old paper's monogram fill beside the new ink. Native's own key
+       holds the scheme, so a resend redraws. */
+    let settle = 0;
+    const afresh = () => {
+      repaint();
+      clearTimeout(settle);
+      settle = setTimeout(() => {
+        toldBar = '';
+        toldPostBar = '';
+        repaint();
+      }, SCHEME_SETTLE);
+    };
     ['(prefers-reduced-transparency: reduce)', '(prefers-contrast: more)',
      '(prefers-color-scheme: dark)'].forEach((q) => {
       const mq = window.matchMedia(q);
-      const again = () => repaint();
+      const again = () => afresh();
       if (mq.addEventListener) mq.addEventListener('change', again);
       else if (mq.addListener) mq.addListener(again);   // older WebKit
     });
@@ -19308,9 +19336,16 @@
       wake();
     };
     window.addEventListener('resize', onResize);
-    // A scheme change: the inks and the hairline are re-lit for the new paper.
+    // A scheme change: the inks and the hairline are re-lit for the new paper,
+    // once it has landed (SCHEME_SETTLE: read at the event, --bg is still the
+    // old scheme's, and every disc was laid solid on the wrong paper).
     let mq = null;
-    const onScheme = () => inkAll();
+    let schemeWait = 0;
+    const onScheme = () => {
+      inkAll();
+      clearTimeout(schemeWait);
+      schemeWait = setTimeout(() => { if (world.isConnected) inkAll(); }, SCHEME_SETTLE);
+    };
     try {
       mq = window.matchMedia('(prefers-color-scheme: dark)');
       mq.addEventListener?.('change', onScheme);

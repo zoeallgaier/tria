@@ -2144,6 +2144,17 @@ final class TriaToolbarButton: UIVisualEffectView {
             button.topAnchor.constraint(equalTo: contentView.topAnchor),
             button.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
         ])
+        /* A SCHEME CHANGE REDRAWS THE GLYPH HERE TOO (2026-11-11, Zoe: icons
+           kept the old scheme after a switch). A bare control's ink is `.label`,
+           baked into a non-template image as it is drawn, and its payload is
+           the same in both schemes, so nothing from the web would ever ask
+           again. `drawn` holds the scheme, so the last spec simply draws anew.
+           app.js resends everything once the paper settles as well. */
+        registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitAccessibilityContrast.self]) {
+            (control: TriaToolbarButton, _: UITraitCollection) in
+            guard !control.lastSpec.isEmpty else { return }
+            control.update(spec: control.lastSpec, animated: false)
+        }
     }
 
     @available(*, unavailable)
