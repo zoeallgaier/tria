@@ -2224,7 +2224,25 @@
             { eventName: 'postBarLift' }, (ev) => {
               const lift = Number(ev && ev.lift);
               if (Number.isFinite(lift) && lift > 0) {
+                barLift = lift;
                 document.documentElement.style.setProperty('--native-postbar-lift', lift + 'px');
+              }
+            });
+          /* AND WHILE A DRAG CARRIES THE KEYS (2026-11-10, Zoe: a reply's chip
+             "floats away" on a swipe up and then down). Native holds the lift
+             above mid-drag, since each one restyled the whole page under the
+             finger, but the pill rides the keys down with it and what hangs
+             off the pill (a reply's chip, a waiting photo, the mention list)
+             was left in the air. So the drag's figure moves those alone, as a
+             transform off the last settled lift, and -1 (the finger off, the
+             lift above already sent) lets them go. */
+          window.Capacitor.nativeCallback('TriaChrome', 'addListener',
+            { eventName: 'postBarDrag' }, (ev) => {
+              const lift = Number(ev && ev.lift);
+              const by = Number.isFinite(lift) && lift >= 0 && barLift > 0
+                ? Math.round(barLift - lift) : 0;
+              for (const el of document.querySelectorAll('.postbar .postbar-attach, .postbar .mention-list')) {
+                el.style.transform = by ? `translateY(${by}px)` : '';
               }
             });
         } catch { /* the bars are up but inert; better than no bars */ }
@@ -12836,6 +12854,9 @@
      its foot moves exactly far enough to put its last line back where it was:
      the same clearance over the bar it had at rest. */
   let kbInset = 0;
+  /* The native pill's last settled lift (postBarLift), which a drag's figure
+     is measured off (postBarDrag). */
+  let barLift = 0;
   /* Set while a field of OURS holds the caret — the comment bar, a chat's
      message bar, a circle's find bar, native or web. Discover's search capsule
      never sets it: its results are a grid with no foot to keep, so it takes the
@@ -22857,10 +22878,6 @@
         `<span class="postbar-reply-text">Replying to <strong>${esc(who)}’s</strong> ${what}${said ? ': ' + esc(said) : ''}</span>` +
         `<button class="postbar-reply-x" type="button" aria-label="Don’t attach the ${what}">${svgIcon('close')}</button>` +
       `</div>`;
-    // Its rise ends and is gone: an animation left live keeps the chip on its
-    // own layer, which iOS scrolled away with the keys up (.postbar-song-chip).
-    const chip = tray.querySelector('.postbar-song-chip');
-    chip.addEventListener('animationend', () => chip.classList.add('is-in'), { once: true });
     const x = tray.querySelector('.postbar-reply-x');
     x.addEventListener('mousedown', (e) => e.preventDefault());
     x.addEventListener('click', () => setChatSong(null));

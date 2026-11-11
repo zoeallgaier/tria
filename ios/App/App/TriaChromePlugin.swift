@@ -501,6 +501,9 @@ public class TriaChromePlugin: CAPPlugin, CAPBridgedPlugin {
                 bar.onLift = { [weak self] lift in
                     self?.notifyListeners("postBarLift", data: ["lift": lift])
                 }
+                bar.onDrag = { [weak self] lift in
+                    self?.notifyListeners("postBarDrag", data: ["lift": lift])
+                }
                 bar.onDiscard = { [weak self] in
                     self?.notifyListeners("postBarDiscard", data: [:])
                 }
@@ -2676,6 +2679,9 @@ final class TriaPostBar: UIView, TriaPostBarControl {
     /// Window bottom to the top of the pill, so the web can hang the mention
     /// list off a bar it no longer draws.
     var onLift: ((CGFloat) -> Void)?
+    /// The same figure while a drag carries the keys (and the pill) with it,
+    /// then -1 once the finger is off. See `layoutSubviews`.
+    var onDrag: ((CGFloat) -> Void)?
     /// The face was tapped while typing: the words are gone and the keyboard is
     /// down, and the web's copy has to catch up.
     var onDiscard: (() -> Void)?
@@ -2709,6 +2715,8 @@ final class TriaPostBar: UIView, TriaPostBarControl {
 
     private var keyboardUp = false
     private var lastLift: CGFloat = -1
+    /// The lift last sent mid-drag, -1 while no finger is carrying the pill.
+    private var lastDrag: CGFloat = -1
     private weak var scroller: UIScrollView?
     private var live = false
     /// The last spec, so a push that changes nothing costs no relayout. The text
@@ -2799,6 +2807,7 @@ final class TriaPostBar: UIView, TriaPostBarControl {
             pill.stopEditing()
             isHidden = true
             lastLift = -1
+            lastDrag = -1
             return
         }
 
@@ -2852,14 +2861,30 @@ final class TriaPostBar: UIView, TriaPostBarControl {
     override func layoutSubviews() {
         super.layoutSubviews()
         guard live else { return }
+        let lift = max(0, bounds.height - pill.frame.minY)
         // Not mid-drag: a drag that carries the keys moves the pill every
         // frame, and each lift restyled the whole page under the finger.
         // `pagePanned` lays out again once it lifts.
-        if scroller?.isTracking == true { return }
-        let lift = max(0, bounds.height - pill.frame.minY)
-        guard abs(lift - lastLift) > 0.5 else { return }
-        lastLift = lift
-        onLift?(lift)
+        // BUT WHAT HANGS OFF THE PILL HAS TO RIDE IT (2026-11-10, Zoe: a
+        // reply's chip "floats away" on a swipe up and then down). The drag
+        // crossing the keys carries them and the pill down, and the chip, web,
+        // stayed at the last lift it was told. So mid-drag the figure goes on
+        // its own channel, which the web spends as a transform on the trays
+        // alone (nothing restyled), and a settle (-1) once the finger is off.
+        if scroller?.isTracking == true {
+            guard abs(lift - lastDrag) > 0.5 else { return }
+            lastDrag = lift
+            onDrag?(lift)
+            return
+        }
+        if abs(lift - lastLift) > 0.5 {
+            lastLift = lift
+            onLift?(lift)
+        }
+        if lastDrag >= 0 {
+            lastDrag = -1
+            onDrag?(-1)
+        }
     }
 
     /// Only the pill is a control. Everything around it is the page, which still

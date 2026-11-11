@@ -9508,20 +9508,12 @@ body.chat-answering .msg-list { padding-bottom: calc(1rem + 44px + 1.4rem + 2px)
 }
 .postbar-reply-x svg { width: 14px; height: 14px; }
 /* The song a reply answers (setChatSong): the same chip, led by its sleeve,
-   rising onto the bar on the spring as the thread opens.
-   BACKWARDS, NEVER BOTH (2026-11-10, Zoe: "if I reply to a moment and scroll
-   with my keyboard open at all, the reply floats away"). A fill that holds
-   after the end keeps the transform animation live for good, so WebKit keeps
-   the chip on a composited layer of its own inside the fixed bar, and with the
-   keys up iOS scrolled that layer with the page rather than with the bar. A
-   message's reply chip has no animation and never drifted. setChatSong also
-   drops the animation on its end, so nothing is left running. */
+   rising onto the bar on the spring as the thread opens. */
 .postbar-song-chip {
   gap: 0.65rem;
   padding-left: 0.4rem;
-  animation: postbar-song-in 0.5s var(--spring) backwards;
+  animation: postbar-song-in 0.5s var(--spring) both;
 }
-.postbar-song-chip.is-in { animation: none; }
 .postbar-song-art {
   flex: 0 0 auto;
   width: 44px;
