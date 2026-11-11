@@ -13172,6 +13172,17 @@ html[data-chrome="native"] .statusbar-scrim { display: none; }
 html[data-chrome="native"] .postbar .postbar-form {
   visibility: hidden;
 }
+/* AND THE BAR IS A LAYER OF ITS OWN (2026-11-10, Zoe: a Moment's reply chip
+   "gets stuck on the page position" after a scroll up and back down with the
+   keys up, and floats off). With its form hidden the fixed bar paints nothing,
+   so WebKit need not composite it, while the chip under it always is (its
+   glass blur). A composited child of a fixed box that is not one hangs off the
+   page's own layer, which the UI process scrolls with the content: the
+   scrolling tree never learns the chip is pinned to the viewport. Composited,
+   the bar is a viewport-constrained node and carries every tray with it. */
+html[data-chrome="native"] .postbar {
+  will-change: transform;
+}
 
 /* The mentions popover opens upward out of a bar the web is no longer drawing,
    so "above the form" has to become "above the glass". --native-postbar-lift is
