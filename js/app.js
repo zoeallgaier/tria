@@ -7014,7 +7014,10 @@
     // EVERY CHAT PAGE, the list, Requests and New chat as well as a thread
     // (2026-11-10, Zoe: "back button goes missing on chats"): none has a tab
     // bar, so a read down the list took the chevron, its only way out.
+    // A circle's page as a profile's (2026-11-11): its type tabs join the
+    // header once they reach it, so the header has to stay for them.
     return headerHeld || h.startsWith('#/chat') || h.startsWith('#/u/') || h === '#/profile' || h.startsWith('#/profile?')
+      || /^#\/c\/[^/?]+(\?|$)/.test(h)
       || h === '#/welcome/circles' || h === '#/circles';
   }
   function holdHeader(on) {
@@ -10510,7 +10513,50 @@
      a tap on the tab you're on goes back there. Every pane is held at least
      the screen under the strip tall, so the page never runs out under a short
      one: the strip never jumps, stuck or not. */
+  /* The tabs a list of posts earns, a profile's or a circle's (2026-11-11,
+     Zoe: "swipable filters in circle feeds the way we do ... on profiles").
+     FOUR AT MOST: All, Frames, Takes, Reposts (Zoe, 2026-11-07: "far too
+     many options"). A tab earns its place by changing what the page IS:
+     Frames is the wall, Takes the shelf, Reposts another axis. Notes, Finds,
+     Polls and Activities only narrowed the same feed, so they live in All.
+     Reposts are APPENDED, not slotted into the run of types: a repost is a
+     different axis (not what was made, but what was passed on), and it is
+     filtered on the ROW's own type, so a quoted photo isn't also a Frame.
+     `show` is false when nothing narrows (one type only, unless it's Frames,
+     the wall): someone with nothing but takes gets no strip. */
+  function typeTabsFor(list) {
+    const types = new Set(list.map(p => p.type));
+    const filters = [FILTERS[0], ...['photo', 'take'].filter(k => types.has(k))
+      .map(k => FILTERS.find(f => f.key === k))];
+    if (types.has('repost')) filters.push({ key: 'repost', label: 'Reposts', ico: 'repost' });
+    return { filters, show: filters.length > 1 && (types.size > 1 || types.has('photo')) };
+  }
+  function typeTabsHtml(id, filters, current, label) {
+    return `<div class="profile-tabs" id="${id}" role="tablist" ` +
+        `aria-label="${esc(label)}" style="--tabs:${filters.length}">` +
+        filters.map(f =>
+          `<button type="button" class="profile-tab" role="tab" data-key="${f.key}" ` +
+            `aria-selected="${f.key === current}" aria-label="${esc(f.label)}" title="${esc(f.label)}">` +
+            (f.key === 'all' ? ICON_ALL : svgIcon(f.ico || TYPE_GLYPH[f.key])) +
+          `</button>`).join('') +
+        `<span class="profile-tabs-line" aria-hidden="true"></span>` +
+      `</div>`;
+  }
+  /* A Frames tab's tile: the face and nothing else, a link to the post's own
+     page (see the frame wall in renderUser). */
+  function frameTileHtml(p) {
+    const cap = notePlain(p.note) || p.title || '';
+    return `<a class="ptile ptile--frame" href="${postRoute(p)}" ` +
+        `aria-label="${esc(cap || 'Frame')}">` +
+        mediaFaceEl(p, cap) +
+      `</a>`;
+  }
+
   function wireProfileTabs(tabsEl, feedEl, keys, current, pick) {
+    // Every listener goes with profileTabsOff, so a strip wired again (a
+    // circle's, when what it holds changes) never doubles a drag on the posts.
+    const ac = new AbortController();
+    const signal = ac.signal;
     const line = tabsEl.querySelector('.profile-tabs-line');
     const tabs = [...tabsEl.querySelectorAll('.profile-tab')];
     const idx = () => Math.max(0, keys.indexOf(current()));
@@ -10551,6 +10597,7 @@
     document.body.classList.add('tabs-live');
     profileTabsOff = () => {
       cancelAnimationFrame(frame); frame = 0;
+      ac.abort();
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
       document.body.classList.remove('tabs-live', 'tabs-stuck');
@@ -10618,7 +10665,7 @@
       const tab = e.target.closest('.profile-tab');
       if (!tab || performance.now() - dragEnded < 400) return;
       go(keys.indexOf(tab.dataset.key));
-    });
+    }, { signal });
     tabsEl.addEventListener('keydown', (e) => {
       const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
       if (!step) return;
@@ -10627,7 +10674,7 @@
       e.preventDefault();
       go(to);
       tabs[to].focus();
-    });
+    }, { signal });
 
     // The drag, on the posts and on the strip alike.
     const ownsSideways = (el, root) => {
@@ -10657,7 +10704,7 @@
         const p = e.touches[0];
         if (p.clientX < 24 || ownsSideways(e.target, root)) return;
         t = { x: p.clientX, y: p.clientY, dx: 0, axis: '', lx: p.clientX, lt: e.timeStamp, vx: 0 };
-      }, { passive: true });
+      }, { passive: true, signal });
       root.addEventListener('touchmove', (e) => {
         if (!t) return;
         const p = e.touches[0];
@@ -10678,9 +10725,9 @@
         t.lx = p.clientX; t.lt = e.timeStamp;
         pane(t.dx);
         place(Math.min(keys.length - 1, Math.max(0, i - t.dx / w)), false);
-      }, { passive: false });
-      root.addEventListener('touchend', lift);
-      root.addEventListener('touchcancel', lift);
+      }, { passive: false, signal });
+      root.addEventListener('touchend', lift, { signal });
+      root.addEventListener('touchcancel', lift, { signal });
     }
   }
   // The pin drag holds three listeners on the DOCUMENT (a gesture that starts on
@@ -10724,34 +10771,8 @@
     const friendStatus = isSelf ? null : Store.friendStatus(u.username);
     const areFriends = friendStatus === 'friends';
 
-    // The dial's rows: All, then only the types this person has actually posted,
-    // in FILTERS order. There's no People row here (a profile is one person) and
-    // no dead ends, which is the whole reason the dial takes its list as an
-    // argument. A profile with nothing but notes gets no control at all — one
-    // type and one layout isn't a choice — but a single photo earns one on its
-    // own, because Frames isn't a narrowing, it's the wall.
-    const types = new Set(list.map(p => p.type));
-    // FOUR TABS AT MOST: All, Frames, Takes, Reposts (Zoe, 2026-11-07: "far
-    // too many options"). A tab earns its place by changing what the page IS:
-    // Frames is the wall, Takes the shelf, Reposts another axis. Notes, Finds,
-    // Polls and Activities only narrowed the same feed, so they live in All.
-    const tabTypes = ['photo', 'take'];
-    const filters = [FILTERS[0], ...tabTypes.filter(k => types.has(k))
-      .map(k => FILTERS.find(f => f.key === k))];
-    // Reposts get a row of their own, APPENDED rather than slotted into the
-    // ladder. All → the five types reads as one run from widest to narrowest, and
-    // a repost is a different axis (not what they made, but what they passed on),
-    // so putting it inside that run would stop it halfway to answer a different
-    // question — which is exactly the mistake People made on Discover until 1.3.
-    // It takes no pastel for the same reason People doesn't: the quintet is
-    // reserved for post types, and this isn't one. Note the profile filters on the
-    // ROW's own type, unlike the home feed, which filters on the subject: here the
-    // two rows would otherwise overlap and the dial's checkmark would be lying.
-    if (types.has('repost'))
-      filters.push({ key: 'repost', label: 'Reposts', ico: 'repost' });
-    // A strip only when a tab narrows something (they've posted more than its
-    // one type) or is the wall: someone with nothing but takes gets none.
-    const canFilter = filters.length > 1 && (types.size > 1 || types.has('photo'));
+    // The strip's tabs, only the types this person has actually posted, Frames the wall (typeTabsFor, shared with a circle's).
+    const { filters, show: canFilter } = typeTabsFor(list);
     if (profileFilterFor !== u.username) { profileFilter = 'all'; profileFilterFor = u.username; }
     // The world moves under a held filter (their last frame gets deleted while
     // you're standing in the wall), so re-check rather than trust it.
@@ -10896,15 +10917,7 @@
        posts goes to the next type (wireProfileSwipe). Absent when there is
        nothing to narrow, as the disc was. */
     const tabsHtml = canFilter
-      ? `<div class="profile-tabs" id="profile-tabs" role="tablist" ` +
-          `aria-label="${esc(isSelf ? 'Your posts' : `${u.name}’s posts`)}" style="--tabs:${filters.length}">` +
-          filters.map(f =>
-            `<button type="button" class="profile-tab" role="tab" data-key="${f.key}" ` +
-              `aria-selected="${f.key === profileFilter}" aria-label="${esc(f.label)}" title="${esc(f.label)}">` +
-              (f.key === 'all' ? ICON_ALL : svgIcon(f.ico || TYPE_GLYPH[f.key])) +
-            `</button>`).join('') +
-          `<span class="profile-tabs-line" aria-hidden="true"></span>` +
-        `</div>`
+      ? typeTabsHtml('profile-tabs', filters, profileFilter, isSelf ? 'Your posts' : `${u.name}’s posts`)
       : '';
     mountToolbar({
       // Your own profile wore My Circle's + from 2026-10-23, then the filter
@@ -11061,13 +11074,7 @@
        attached. It used to drop back into the profile COLUMN with the card
        spotlighted, which meant teleporting the window down somebody's archive to
        show you one post. */
-    const frameTile = (p) => {
-      const cap = notePlain(p.note) || p.title || '';
-      return `<a class="ptile ptile--frame" href="${postRoute(p)}" ` +
-          `aria-label="${esc(cap || 'Frame')}">` +
-          mediaFaceEl(p, cap) +
-        `</a>`;
-    };
+    const frameTile = frameTileHtml;
 
     /* Paint the posts pane for the current filter, in place. The identity card
        above never rebuilds, so picking a filter doesn't flash the photograph or
@@ -19626,6 +19633,10 @@
   // The page's in-place repaint, for a join, a leave, a removal or a pull that
   // lands while it is up. False once the page it painted has gone.
   let communityRepaint = null;
+  // The circle page's type tab, kept for the circle it was picked on (a
+  // profile's rule: another circle starts on All).
+  let circleFilter = 'all';
+  let circleFilterFor = null;
 
   // A CIRCLE'S HEAD, the profile's identity block worn by a room: a mark where the
   // photo goes, the name, the handle, who is in it, what it is for, and the one
@@ -19782,6 +19793,8 @@
     const rise = [{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'none' }];
     const ease = { duration: 460, delay: 140, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'backwards' };
     feedEl?.animate?.(rise, ease);
+    // Its type tabs (circleTabs) come up with the posts they sit over.
+    view.querySelector('#circle-tabs')?.animate?.(rise, ease);
     const acts = headEl.querySelector('.account-actions');
     if (acts && !clone.querySelector('.account-actions')) {
       // Out of the hidden head, so it rises while the copy is still flying.
@@ -19827,22 +19840,57 @@
         `<div class="account community-head" id="community-head"></div>` +
         // What a circle is, told once, between its head and its posts.
         `<div class="tip-host community-tip" id="community-tip" hidden></div>` +
+        // The type tabs, a profile's (Zoe, 2026-11-11: "swipable filters in
+        // circle feeds the way we do under pins on profiles"), drawn by
+        // paintTabs once there are posts to narrow.
         `<div class="feed" id="feed"></div>` +
       `</section>`;
     const headEl = view.querySelector('#community-head');
     const feedEl = view.querySelector('#feed');
     const tipEl = view.querySelector('#community-tip');
     const headHtml = communityHeadHtml;
+    if (circleFilterFor !== slug) { circleFilter = 'all'; circleFilterFor = slug; }
+    // A post just shared here is sparkled in the column, so it opens on All.
+    if (justPostedId != null) circleFilter = 'all';
 
     // A tag on a circle's card is a search of the whole room, the way a tag
     // anywhere off My Circle is: there is no filter of this page to narrow.
     const wireCard = (card) => card.querySelectorAll('.tag[data-tag]').forEach(btn =>
       btn.addEventListener('click', () => { discoverQuery = btn.dataset.tag; go('#/discover'); }));
 
+    /* THE TABS. Built again only when the set of them changes (a first frame
+       posted, the last take deleted), so a repaint never resets the line or a
+       drag. `still` is a pick: the pane slides in whole, so no card rises. */
+    let tabsKeys = '';
+    let still = false;
+    const paintTabs = (c, list) => {
+      const { filters, show } = list ? typeTabsFor(list) : { filters: [], show: false };
+      if (!show || !filters.some(f => f.key === circleFilter)) circleFilter = 'all';
+      const keys = show ? filters.map(f => f.key).join(',') : '';
+      if (keys === tabsKeys) return;
+      tabsKeys = keys;
+      view.querySelector('#circle-tabs')?.remove();
+      profileTabsOff?.();
+      if (!show) return;
+      feedEl.insertAdjacentHTML('beforebegin',
+        typeTabsHtml('circle-tabs', filters, circleFilter, `Posts in ${communityHandle(c)}`));
+      wireProfileTabs(view.querySelector('#circle-tabs'), feedEl, filters.map(f => f.key),
+        () => circleFilter,
+        (key) => {
+          circleFilter = key;
+          circleFilterFor = slug;
+          if (!tipSeen('tabs')) spendTip('tabs');
+          still = true;
+          paint();
+          still = false;
+        });
+    };
+
     // A public circle is read by anyone (circle-public-posts.sql); an
     // invite-only one by its members.
     const paintFeed = (c) => {
       if (c.inviteOnly && !Store.inCommunity(c.id)) {
+        paintTabs(c, null);
         dropCards();
         feedEl.innerHTML =
           `<div class="profile-locked">` +
@@ -19856,7 +19904,22 @@
           `</div>`;
         return;
       }
-      const list = Store.communityPosts(c.id).filter(p => !Blocks.has(p.author));
+      const all = Store.communityPosts(c.id).filter(p => !Blocks.has(p.author));
+      paintTabs(c, all);
+      const list = circleFilter === 'all' ? all : all.filter(p => p.type === circleFilter);
+      // Frames is the wall, as on a profile. Dealt again only when its frames
+      // change, so a like landing elsewhere doesn't reshuffle it.
+      if (circleFilter === 'photo') {
+        const sig = list.map(p => p.id).join(',');
+        if (feedEl.dataset.wall === sig && feedEl.querySelector('.pgrid')) return;
+        dropCards();
+        feedEl.dataset.wall = sig;
+        feedEl.innerHTML = `<div class="pgrid pgrid--frames">${list.map(frameTileHtml).join('')}</div>`;
+        dealMasonry(feedEl.querySelector('.pgrid'), !still);
+        wireFrameFades(feedEl);
+        return;
+      }
+      delete feedEl.dataset.wall;
       // An empty public circle, to someone outside it: nothing to read, and
       // the first post is a member's to write.
       if (!list.length && !Store.inCommunity(c.id)) {
@@ -19892,8 +19955,9 @@
           openCommunityInvite(Store.community(c.id) || c));
         return;
       }
-      // The column Circle reads in, built as far as it is read (lazy).
-      syncCards(feedEl, list, wireCard, null, true);
+      // The column Circle reads in, built as far as it is read (lazy). A tab
+      // picked slides the pane in whole, so its cards don't rise as well.
+      syncCards(feedEl, list, wireCard, still ? (card) => { card.style.animation = 'none'; } : null, true);
       // A post in a circle lands here, not on My Circle, so the circle
       // sparkles it in the way the home feed does (Zoe), and takes the flag so
       // My Circle doesn't sparkle it again later.
@@ -19931,11 +19995,12 @@
           wireHead(c);
         }
       }
-      // Told to someone who can join: in it already, or held at an invite
-      // only fence, it has nothing to say.
-      paintTipHost(tipEl, Store.isAuthed() && !c.inviteOnly && !Store.inCommunity(c.id)
-        ? firstTip(['circle']) : null);
       paintFeed(c);
+      // Told to someone who can join: in it already, or held at an invite
+      // only fence, it has nothing to say. The tabs' swipe after it, over them.
+      paintTipHost(tipEl, !Store.isAuthed() ? null
+        : firstTip([...(!c.inviteOnly && !Store.inCommunity(c.id) ? ['circle'] : []),
+            ...(tabsKeys ? ['tabs'] : [])]));
       return true;
     };
 
@@ -19990,6 +20055,25 @@
     communityRepaint = () => {
       if (!feedEl.isConnected) return false;
       return paint();
+    };
+    // The Frames wall is dealt by JS, so a WIDTH change is ours to answer, on
+    // the profile's own listener slot (route() drops it on the way out).
+    profileResizeOff?.();
+    let sizeTimer = 0, lastW = window.innerWidth;
+    const onResize = () => {
+      if (window.innerWidth === lastW) return;
+      lastW = window.innerWidth;
+      clearTimeout(sizeTimer);
+      sizeTimer = setTimeout(() => {
+        const grid = feedEl.isConnected && feedEl.querySelector('.pgrid');
+        if (grid) dealMasonry(grid, false);
+      }, 120);
+    };
+    window.addEventListener('resize', onResize, { passive: true });
+    profileResizeOff = () => {
+      clearTimeout(sizeTimer);
+      window.removeEventListener('resize', onResize);
+      profileResizeOff = null;
     };
     paint();
     landHeadOver(headEl, feedEl, first.slug);

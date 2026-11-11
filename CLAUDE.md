@@ -372,6 +372,17 @@ posts). A type picked while stuck opens at its own top under the
 strip, a tap on the tab you're on goes back there, and every switch holds the
 pane a screen tall, so the strip never jumps. `profileTabsOff` drops the
 scroll watch in route().
+**A circle's page has the same strip** (2026-11-11, Zoe: "swipable filters in
+circle feeds the way we do under pins on profiles"): `#circle-tabs` between
+its head (and tip) and its posts, the same four on the same rule
+(`typeTabsFor`, `typeTabsHtml`, `frameTileHtml`, shared with the profile),
+Frames the wall. It is drawn by `paintTabs` inside the circle's repaint and
+rebuilt only when the set of tabs changes; `wireProfileTabs` hangs every
+listener on an AbortController so a rewire never doubles the drag. A pick is
+kept per circle (`circleFilter`), and a post just shared there opens on All.
+**A circle's page now holds its header** (`holdsHeader`, `#/c/<slug>`), as a
+profile does, so the stuck strip has a header to join. The tabs tip shows
+there too, after the circle tip.
 
 ## A circle has a theme, picked as a profile's is (2026-11-07)
 

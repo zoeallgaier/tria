@@ -6025,7 +6025,8 @@ button.poll-option:disabled { cursor: default; }
 .pf-tip { margin: 1.1rem 0 0.35rem; }
 /* Under a tip the tabs come up by the 12px their glyphs already stand in
    from the strip's edge, so the gap under the tip reads as the gap over it. */
-.profile-tip:not([hidden]) + .profile-tabs { margin-top: calc(var(--account-gap, 1.5rem) - 12px); }
+.profile-tip:not([hidden]) + .profile-tabs,
+.community-tip:not([hidden]) + .profile-tabs { margin-top: calc(var(--account-gap, 1.5rem) - 12px); }
 /* Explore circles' floats at the field's foot, over the discs, so it takes
    the sheet's solid paper under its dashed edge. */
 .cx-tip {
