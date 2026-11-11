@@ -17244,7 +17244,8 @@
     const rich = (!pic || wide) && said ? cardNoteHtml(p, true) : '';
     return card({
       cls: link.unread ? ' pin--unread' : '', type: p.type, pic,
-      say: rich ? p.title || '' : head, gist, rich, meta, tags: shownTags(p),
+      // Tags are for words cards only (Zoe: "no tags on images either").
+      say: rich ? p.title || '' : head, gist, rich, meta, tags: pic ? [] : shownTags(p),
       open: `<a class="pin-open" href="${postRoute(p)}" aria-label="${esc(head || 'Open this post')}"></a>`,
     });
   }

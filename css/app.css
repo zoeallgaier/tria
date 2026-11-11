@@ -8373,10 +8373,6 @@ button.card-song-play:active { transform: scale(0.9); }
   padding: 0.12rem 0.5rem;
   white-space: nowrap;
 }
-.pin--pic:not(.pin--wide) .pin-tags .tag {
-  color: rgba(255, 255, 255, 0.9);
-  border-color: rgba(255, 255, 255, 0.42);
-}
 
 .pin-foot {
   flex: 0 0 auto;
@@ -8458,7 +8454,7 @@ button.card-song-play:active { transform: scale(0.9); }
 }
 :is(.pin--pic:not(.pin--wide), .pin--bare) .pin-more svg { position: relative; width: 18px; height: 18px; }
 /* A picture with nothing to say over it is only the picture. */
-.pin--pic .pin-body:not(:has(.pin-say, .pin-meta, .take-stars, .pin-tags)) { display: none; }
+.pin--pic .pin-body:not(:has(.pin-say, .pin-meta, .take-stars)) { display: none; }
 
 /* The wide card's picture is one square on its leading side, on the grid's
    line, and its words take the rest on the card's own paper. */
