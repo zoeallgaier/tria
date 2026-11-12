@@ -36,7 +36,6 @@
     dailies: '<circle cx="12" cy="12" r="4"/><path d="M12 2.8v2.2M12 19v2.2M2.8 12H5M19 12h2.2M5.5 5.5l1.6 1.6M16.9 16.9l1.6 1.6M5.5 18.5l1.6-1.6M16.9 7.1l1.6-1.6"/>',
     // They asked us to stop: a struck envelope.
     stop: '<rect x="3" y="5.5" width="18" height="13" rx="3"/><path d="m3.8 7.2 8.2 6 8.2-6"/><path d="M4 3.5 20 20.5"/>',
-    retention: '<rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/>',
     // The app's own friends mark (ICONS.friends in app.js).
     community: '<circle cx="8.3" cy="9" r="2.7"/><circle cx="15.7" cy="9" r="2.7"/><path d="M3.5 19.5a4.8 4.8 0 0 1 9.6 0"/><path d="M10.9 19.5a4.8 4.8 0 0 1 9.6 0"/>',
     dictionary: '<path d="M5 19.5v-15A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5 1.5 1.5 0 0 0 6.5 21H19"/>',
@@ -49,12 +48,12 @@
 
   // Settling in (the funnel) lives in the Overview since 2026-11-11 (Zoe:
   // "settling in can be in overview"); Who to nudge and the dailies have pages
-  // of their own.
+  // of their own. Retention went on 2026-11-12 (Zoe: "remove"); its week 1
+  // figure stays on the Overview, so admin_retention is still read there.
   const TABS = [
     { key: 'overview', label: 'Overview' },
     { key: 'activity', label: 'Activity' },
     { key: 'nudge', label: 'Nudge' },
-    { key: 'retention', label: 'Retention' },
     { key: 'community', label: 'Community' },
     { key: 'dailies', label: 'Dailies' },
     { key: 'dictionary', label: 'Dictionary' },
@@ -200,6 +199,7 @@
     extrasWhy = '';
     nudgeOk = true;
     nudgeWhy = '';
+    sender = null;
     refreshBtn.classList.add('is-spinning');
     const y = window.scrollY;
     await render(false);
@@ -217,7 +217,6 @@
       if (t === 'overview') await renderOverview();
       else if (t === 'activity') await renderActivity();
       else if (t === 'nudge') await renderNudge();
-      else if (t === 'retention') await renderRetention();
       else if (t === 'community') await renderCommunity();
       else if (t === 'dailies') await renderDailies();
       else renderDictionary();
@@ -313,11 +312,11 @@
   // A row of small figures in one card.
   const strip = (items) => '<div class="card strip">' + items.map(([label, value, tipText]) =>
     `<div class="strip-item"${tipText ? ` data-tip="${esc(tipText)}"` : ''}><div class="strip-value">${value}</div><div class="strip-label">${esc(label)}</div></div>`).join('') + '</div>';
-  // An inset grouped list row: title (and sub), then a meter and/or a value.
-  function row({ title, sub, val, meter, lead, tipText, cls }) {
+  // An inset grouped list row: title (and sub), then a value. A list is for
+  // records (people, days); a number across kinds is bars.
+  function row({ title, sub, val, lead, tipText, cls }) {
     return `<div class="row${cls ? ' ' + cls : ''}"${tipText ? ` data-tip="${esc(tipText)}"` : ''}>${lead || ''}` +
       `<div class="row-main"><div class="row-title">${title}</div>${sub ? `<div class="row-sub">${sub}</div>` : ''}</div>` +
-      (meter != null ? `<div class="row-meter" aria-hidden="true"><span style="width:${Math.max(0, Math.min(100, meter))}%"></span></div>` : '') +
       (val != null ? `<div class="row-val">${val}</div>` : '') + '</div>';
   }
   const list = (rows, more) => `<div class="list">${rows.join('')}${more || ''}</div>`;
@@ -328,19 +327,56 @@
       '</div></div>';
   }
 
-  function barsHtml(obj, names) {
-    const rows = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]);
-    if (!rows.length) return '<p class="empty">Nothing yet.</p>';
-    const max = Math.max(...rows.map((r) => r[1]));
-    const sum = rows.reduce((s, r) => s + r[1], 0);
-    return '<div class="bars">' + rows.map(([k, v]) => {
-      const name = names[k] || k;
-      return `<div class="barrow" data-tip="<b>${esc(name)}</b><br>${fmt(v)}, ${pctTxt(pct(v, sum))}">` +
-        `<span class="barrow-name">${esc(name)}</span>` +
-        `<span class="barrow-track"><span class="barrow-fill" style="width:${(v / max) * 100}%"></span></span>` +
-        `<span class="barrow-val">${fmt(v)}</span></div>`;
+  // ── The three chart styles (Zoe, 2026-11-12: "use like max 3 styles of
+  //    charts for data, picking the best options for the type of data") ──────
+  //   THE LINE, anything over time (lineChart, mountLine).
+  //   THE BARS, anything across kinds: counts, shares, a distribution, a
+  //     ranking (barChart).
+  //   THE HEATMAP, weekday by hour, the one two-way grid (rhythmHtml).
+  // Columns and the lists' little meters are gone; a list is for records.
+  // One hue (--data) everywhere; a second line is dashed in muted ink.
+
+  // THE BARS. Each row is its name over its bar, the value to its right. With
+  // `total`, a bar is its share of that whole and the value is the percent
+  // over the count; without, bars are against the longest and the value is
+  // the number. `sort: false` keeps an order that means something (friends
+  // each, weekdays). `max` sets the scale (two charts read side by side).
+  // `pick` ({ on }) makes each row a way to show just that.
+  // A row: { key, n, name (html), lead, sub, val, small, tip, cls }.
+  function barChart(rows, { total, max: scale, sort = true, pick, empty = 'Nothing yet.' } = {}) {
+    let rs = rows.filter((r) => r.n > 0 || r.keep);
+    if (sort) rs = rs.slice().sort((a, b) => b.n - a.n);
+    if (!rs.length) return `<p class="empty">${empty}</p>`;
+    const max = total || scale || Math.max(1, ...rs.map((r) => r.n));
+    const hasOn = pick && rs.some((r) => r.key === pick.on);
+    return `<div class="bars${hasOn ? ' has-on' : ''}">` + rs.map((r) => {
+      const val = r.val ?? (total ? pctTxt(pct(r.n, total)) : fmt(r.n));
+      const small = r.small ?? (total ? fmt(r.n) : '');
+      const tipText = (r.tip ?? `<b>${r.name}</b><br>${fmt(r.n)}${total ? ` of ${fmt(total)}, ${pctTxt(pct(r.n, total))}` : ''}`) +
+        (pick ? `<br>${pick.on === r.key ? 'Tap to show everything' : 'Tap to show just this'}` : '');
+      return `<div class="barrow${r.cls ? ' ' + r.cls : ''}${pick ? ' is-pick' + (pick.on === r.key ? ' is-on' : '') : ''}" data-tip="${esc(tipText)}"${pick ? pickAttrs(r.key, pick.on) : ''}>` +
+        `<span class="barrow-name">${r.lead || ''}<span>${r.name}</span></span>` +
+        `<span class="barrow-val"><b>${val}</b>${small ? `<small>${small}</small>` : ''}</span>` +
+        `<span class="barrow-track" aria-hidden="true"><span class="barrow-fill" style="width:${Math.min(100, (r.n / max) * 100)}%"></span></span>` +
+        (r.sub ? `<span class="barrow-sub">${r.sub}</span>` : '') + '</div>';
     }).join('') + '</div>';
   }
+  // Rows off { key: n } or { key: { n, people, prev } }: the change on the
+  // window before as the small line, and who in the tip.
+  function countRows(obj, names, before) {
+    return Object.entries(obj || {}).map(([k, v]) => {
+      v = typeof v === 'number' ? { n: v } : v;
+      const name = esc(names[k] || k);
+      const ch = v.prev != null && v.prev !== v.n
+        ? `<span class="${v.n > v.prev ? 'is-up' : 'is-down'}">${v.n > v.prev ? '↑' : '↓'} ${fmt(Math.abs(v.n - v.prev))}</span>` : '';
+      return { key: k, n: v.n || 0, name, small: ch,
+        tip: `<b>${name}</b><br>${fmt(v.n)}` + (v.people != null ? `, by ${fmt(v.people)} ${v.people === 1 ? 'person' : 'people'}` : '') +
+          (v.prev != null ? `<br>${fmt(v.prev)} ${esc(before || '')}` : '') };
+    });
+  }
+  // Rows off { key: n } as shares of a whole.
+  const shareRows = (obj, names) => Object.entries(obj || {}).map(([k, n]) => ({ key: k, n: n || 0, name: esc(names[k] || k) }));
+  const sumOf = (obj) => Object.values(obj || {}).reduce((a, v) => a + (Number(v) || 0), 0);
   // A chart is drawn at its card's own width, so its words are their real size.
   const chartW = (el) => Math.round(Math.max(260, Math.min(980, (el?.clientWidth || main.clientWidth) - 36))) || 600;
   function niceMax(v) {
@@ -349,85 +385,83 @@
     return 10 * p;
   }
 
-  // A line chart a point a week: meaningful actives (`a`), and opens (`b`)
-  // once the ping exists. `span` is the window each point counts: 7 for
-  // weekly active, 30 for monthly. `names` label the two lines; `tipHead`
-  // heads a point's tip (the All time chart's lines are both actives).
-  function lineChart(rows, W, { a = 'active', b = 'opened', span = 7, names = ['Active', 'Opened'], label, tipHead } = {}) {
-    const series = rows.map((s) => ({ week: s.week, active: s[a] || 0, opened: s[b] || 0 }));
+  // THE LINE. `points` in time order; `lines` one or two { key, name, late }:
+  // the first solid over its area, the second dashed in muted ink, both on
+  // ONE axis; a `late` line starts at its first point above zero (the open
+  // ping's lines). `at` names each point's date. `head(p, i)` heads a point's
+  // hover card and `more(p, i)` follows its numbers. `soFar`: the last point
+  // is still going (today, this week), so the first line's last stretch is
+  // dotted rather than read as a fall.
+  function lineChart(points, W, { lines, at = 'week', head, more, soFar = false, label = '' }) {
+    const n = points.length;
+    if (!n) return { html: '<p class="empty">Nothing yet.</p>', wire() {} };
     const H = W < 480 ? 190 : 220, L = 34, R = 10, T = 12, B = 26;
-    const n = series.length;
-    const nice = niceMax(Math.max(1, ...series.map((s) => Math.max(s.active, s.opened))));
-    const x = (i) => L + (n === 1 ? 0 : (i / (n - 1)) * (W - L - R));
-    const y = (v) => T + (1 - v / nice) * (H - T - B);
-    const from = Math.max(0, series.findIndex((s) => s.opened > 0));
-    const hasOpened = series.some((s) => s.opened > 0);
-    const path = (k) => series.map((s, i) => (k === 'opened' && i < from) ? ''
-      : `${(k === 'opened' ? i === from : !i) ? 'M' : 'L'}${x(i).toFixed(1)},${y(s[k]).toFixed(1)}`).join('');
-    let g = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label || `${span === 7 ? 'Weekly' : 'Monthly'} active people, last 12 weeks`)}">`;
+    const v = (p, l) => Number(p[l.key]) || 0;
+    const nice = niceMax(Math.max(1, ...points.map((p) => Math.max(...lines.map((l) => v(p, l))))));
+    const x = (i) => L + (n === 1 ? (W - L - R) / 2 : (i / (n - 1)) * (W - L - R));
+    const y = (val) => T + (1 - val / nice) * (H - T - B);
+    const from = lines.map((l) => (l.late ? points.findIndex((p) => v(p, l) > 0) : 0));
+    const drawn = from.map((f) => f >= 0);
+    const path = (l, j, a, b) => {
+      let d = '';
+      for (let i = Math.max(a, from[j]); i <= b; i++) d += `${d ? 'L' : 'M'}${x(i).toFixed(1)},${y(v(points[i], l)).toFixed(1)}`;
+      return d;
+    };
+    const cut = soFar && n > 2 ? n - 2 : n - 1;   // where the first line's solid stretch ends
+    let g = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">`;
     [0, nice / 2, nice].forEach((t) => {
       g += `<line class="${t ? 'gridline' : 'baseline'}" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/>` +
         `<text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${fmt(t)}</text>`;
     });
-    // A date label every ~64px, whatever the number of weeks.
+    // A date label every ~64px, whatever the number of points, the last always.
     const every = Math.max(1, Math.ceil(n / Math.max(1, Math.floor((W - L - R) / 64))));
-    series.forEach((s, i) => {
-      if ((n - 1 - i) % every === 0) g += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${esc(day(s.week))}</text>`;
+    points.forEach((p, i) => {
+      if ((n - 1 - i) % every === 0) g += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${esc(day(p[at]))}</text>`;
     });
-    g += `<path class="area" d="${path('active')}L${x(n - 1)},${y(0)}L${x(0)},${y(0)}Z"/>`;
-    if (hasOpened) g += `<path class="line line--b" d="${path('opened')}"/>`;
-    g += `<path class="line line--a" d="${path('active')}"/>`;
+    const solid = path(lines[0], 0, 0, cut);
+    g += `<path class="area" d="${solid}L${x(cut)},${y(0)}L${x(0)},${y(0)}Z"/>`;
+    lines.forEach((l, j) => { if (j && drawn[j]) g += `<path class="line line--b" d="${path(l, j, 0, n - 1)}"/>`; });
+    g += `<path class="line line--a" d="${solid}"/>`;
+    if (cut < n - 1) g += `<path class="line line--a line--sofar" d="${path(lines[0], 0, cut, n - 1)}"/>`;
     g += `<line class="cross" x1="0" x2="0" y1="${T}" y2="${H - B}" visibility="hidden"/>`;
-    g += '<circle class="dot dot--a" r="4" visibility="hidden"/>';
-    if (hasOpened) g += '<circle class="dot dot--b" r="4" visibility="hidden"/>';
+    lines.forEach((l, j) => { g += `<circle class="dot dot--${j ? 'b' : 'a'}" r="4" visibility="hidden"/>`; });
     g += `<rect class="hit" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></svg>`;
-    const legend = hasOpened
-      ? `<ul class="legend"><li><span class="swatch"></span>${esc(names[0])}</li><li><span class="swatch swatch--b"></span>${esc(names[1])}</li></ul>` : '';
+    const legend = lines.length > 1 && drawn[1]
+      ? '<ul class="legend">' + lines.map((l, j) => `<li><span class="swatch${j ? ' swatch--b' : ''}"></span>${esc(l.name)}</li>`).join('') + '</ul>' : '';
     return { html: legend + g, wire(root) {
       const el = root.querySelector('svg.chart');
-      const cross = el.querySelector('.cross'), da = el.querySelector('.dot--a'), db = el.querySelector('.dot--b');
-      const at = (e) => {
+      const cross = el.querySelector('.cross'), dots = [...el.querySelectorAll('.dot')];
+      const at_ = (e) => {
         const r = el.getBoundingClientRect();
         const vx = ((e.clientX - r.left) / r.width) * W;
-        const i = Math.max(0, Math.min(n - 1, Math.round(((vx - L) / (W - L - R)) * (n - 1))));
-        const s = series[i];
+        const i = n === 1 ? 0 : Math.max(0, Math.min(n - 1, Math.round(((vx - L) / (W - L - R)) * (n - 1))));
+        const p = points[i];
         cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
-        da.setAttribute('cx', x(i)); da.setAttribute('cy', y(s.active)); da.setAttribute('visibility', 'visible');
-        if (db) { db.setAttribute('cx', x(i)); db.setAttribute('cy', y(s.opened)); db.setAttribute('visibility', i >= from ? 'visible' : 'hidden'); }
-        showTip(`<b>${tipHead || (span === 7 ? 'Week' : '30 days')} to ${esc(day(addDays(s.week, 6)))}</b><br><span class="k"></span>${esc(names[0])} ${fmt(s.active)}` +
-          (hasOpened && i >= from ? `<br><span class="k k--b"></span>${esc(names[1])} ${fmt(s.opened)}` : ''), e.clientX, e.clientY);
+        let t = head ? head(p, i) : `<b>${esc(day(p[at]))}</b>`;
+        lines.forEach((l, j) => {
+          const on = drawn[j] && i >= from[j];
+          dots[j].setAttribute('cx', x(i)); dots[j].setAttribute('cy', y(v(p, l)));
+          dots[j].setAttribute('visibility', on ? 'visible' : 'hidden');
+          if (on) t += `<br><span class="k${j ? ' k--b' : ''}"></span>${esc(l.name)} ${fmt(v(p, l))}`;
+        });
+        if (more) t += more(p, i);
+        showTip(t, e.clientX, e.clientY);
       };
       const hit = el.querySelector('.hit');
-      hit.addEventListener('pointermove', at);
-      hit.addEventListener('pointerdown', at);
-      hit.addEventListener('pointerleave', () => { hideTip(); [cross, da, db].forEach((d) => d?.setAttribute('visibility', 'hidden')); });
+      hit.addEventListener('pointermove', at_);
+      hit.addEventListener('pointerdown', at_);
+      hit.addEventListener('pointerleave', () => { hideTip(); [cross, ...dots].forEach((d) => d.setAttribute('visibility', 'hidden')); });
     } };
   }
-  const addDays = (iso, n) => { const d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString(); };
-
-  // Vertical columns: a distribution, or a count a week.
-  function columns(items, W, { every = 1, label = '' } = {}) {
-    const H = 190, L = 4, R = 4, T = 22, B = 26;
-    // The gap gives way to the bars when there are many (90 days on a phone).
-    const n = items.length, gap = Math.min(n > 8 ? 6 : 10, ((W - L - R) / Math.max(1, n)) * 0.3);
-    const bw = (W - L - R - gap * (n - 1)) / n;
-    const max = Math.max(1, ...items.map((d) => d.n));
-    let g = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">`;
-    g += `<line class="baseline" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>`;
-    items.forEach((d, i) => {
-      const h = (d.n / max) * (H - T - B);
-      const x0 = L + i * (bw + gap);
-      const y0 = H - B - h;
-      const r = Math.min(4, h, bw / 2);   // 4px round at the value end, square at the baseline
-      const showX = (n - 1 - i) % every === 0;
-      g += `<g data-tip="${esc(d.tip)}">` +
-        `<rect class="hit" x="${x0}" y="${T - 20}" width="${bw}" height="${H - B - T + 20}"/>` +
-        (h > 0 ? `<path class="col" d="M${x0},${H - B}V${y0 + r}Q${x0},${y0} ${x0 + r},${y0}H${x0 + bw - r}Q${x0 + bw},${y0} ${x0 + bw},${y0 + r}V${H - B}Z"/>` : '') +
-        (bw >= 18 || i === n - 1 ? `<text class="col-label" x="${x0 + bw / 2}" y="${y0 - 6}" text-anchor="middle">${fmt(d.n)}</text>` : '') +
-        (showX ? `<text x="${x0 + bw / 2}" y="${H - 8}" text-anchor="middle">${esc(d.label)}</text>` : '') + '</g>';
-    });
-    return g + '</svg>';
+  // Draw a line chart into its card, at the card's width.
+  function mountLine(el, points, opts) {
+    if (!el) return;
+    const c = lineChart(points, chartW(el), opts);
+    el.innerHTML = c.html;
+    c.wire(el);
   }
+  const addDays = (iso, n) => { const d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString(); };
+  const weekTo = (p) => `<b>Week to ${esc(day(addDays(p.week, 6)))}</b>`;
 
   // ── Names ─────────────────────────────────────────────────────────────────
   const TYPE_NAMES = {
@@ -497,15 +531,18 @@
 
     main.innerHTML =
       headHtml('Overview') +
+      // Active today is a top card and Settled in a small figure (Zoe,
+      // 2026-11-12: "make active today a top card, swap it for settled in").
       '<div class="grid grid--kpi">' +
+        tile('Active today', fmt(o.dau), o.avgDau28 != null ? `${fmt(o.avgDau28)} a day on average` : '', 'Created or connected today, so far. The average is the last 28 days. Likes don\'t count.') +
         tile('Weekly active', fmt(o.wau), delta(cur?.active, prev?.active), 'Created or connected in the last 7 days. Likes don\'t count.') +
         tile('Monthly active', fmt(o.mau), delta(o.mau, o.mauPrev, '', 'last month'), 'Created or connected in the last 30 days, against the 30 before. Likes don\'t count.') +
         tile('New this week', fmt(o.new7), delta(cur?.joined, prev?.joined), 'Accounts made in the last 7 days') +
-        tile('Settled in', st?.people ? pctTxt(pct(st.settled, st.people)) : '–', st?.people ? `${fmt(st.settled)} of ${fmt(st.people)} in their first week` : '', 'Made a friend (or joined a circle) and shared something, both in their first week. Joined in the last 30 days, a week old or more.') +
       '</div>' +
       strip([
         ['Everyone', fmt(o.users), 'Every account, yours left out'],
-        ['Today', fmt(o.dau), 'Created or connected today'],
+        ['Settled in', st?.people ? pctTxt(pct(st.settled, st.people)) : '–', 'Made a friend (or joined a circle) and shared something, both in their first week. Joined in the last 30 days, a week old or more' +
+          (st?.people ? `: ${fmt(st.settled)} of ${fmt(st.people)}` : '')],
         ['Back in week 1, last month', pctTxt(w1), 'Of the people who joined in the last month (the last 4 signup weeks old enough to tell), the share active again 7 to 13 days after joining'],
         ['Opened, week', fmt(o.openedWau), 'Opened Tria in the last 7 days, doing something or not'],
         ['Opened, month', fmt(o.openedMau), 'Opened Tria in the last 30 days, doing something or not'],
@@ -535,27 +572,13 @@
       '</div></div>' +
       foot();
 
-    const ca = $('c-active'), cm = $('c-monthly'), cj = $('c-joined');
-    const wk = lineChart(s, chartW(ca));
-    ca.innerHTML = wk.html;
-    wk.wire(ca);
-    if (hasMonthly) {
-      const mo = lineChart(s, chartW(cm), { a: 'monthly', b: 'monthlyOpened', span: 30 });
-      cm.innerHTML = mo.html;
-      mo.wire(cm);
-    }
-    const ch = $('c-history');
-    if (hist.length > 1) {
-      const al = lineChart(hist, chartW(ch), { a: 'monthly', b: 'weekly', span: 7, names: ['Monthly active', 'Weekly active'],
-        label: 'Monthly and weekly active people, all time', tipHead: 'Week' });
-      ch.innerHTML = al.html;
-      al.wire(ch);
-    }
-    const W = chartW(cj);
-    cj.innerHTML = columns(s.map((w) => ({
-      n: w.joined, label: day(w.week),
-      tip: `<b>Week to ${esc(day(addDays(w.week, 6)))}</b><br>${fmt(w.joined)} new`,
-    })), W, { every: W < 420 ? 4 : W < 560 ? 3 : 2, label: 'New accounts a week, last 12 weeks' });
+    mountLine($('c-active'), s, { lines: [{ key: 'active', name: 'Active' }, { key: 'opened', name: 'Opened', late: true }],
+      head: weekTo, label: 'Weekly active people, last 12 weeks' });
+    if (hasMonthly) mountLine($('c-monthly'), s, { lines: [{ key: 'monthly', name: 'Active' }, { key: 'monthlyOpened', name: 'Opened', late: true }],
+      head: (p) => `<b>30 days to ${esc(day(addDays(p.week, 6)))}</b>`, label: 'Monthly active people, last 12 weeks' });
+    if (hist.length > 1) mountLine($('c-history'), hist, { lines: [{ key: 'monthly', name: 'Monthly active' }, { key: 'weekly', name: 'Weekly active' }],
+      head: weekTo, label: 'Monthly and weekly active people, all time' });
+    mountLine($('c-joined'), s, { lines: [{ key: 'joined', name: 'New' }], head: weekTo, label: 'New accounts a week, last 12 weeks' });
     paintSettling($('funnel'), sstate.days === 30 ? st : null);
   }
 
@@ -593,26 +616,6 @@
   const PICK_NAMES = { ...TYPE_NAMES, ...KIND_NAMES, made: 'Made' };
   const pickAttrs = (k, on) => ` data-af="${esc(k ?? '')}" role="button" tabindex="0" aria-pressed="${on === k}"`;
 
-  // Bars whose rows carry {n, people, prev}: the count, and in the tip who
-  // and the window before.
-  // With `pick` ({ on }), each row is a way to show just that (pickAttrs).
-  function richBars(obj, names, before, pick) {
-    const rows = Object.entries(obj || {}).map(([k, v]) => [k, typeof v === 'number' ? { n: v } : v])
-      .filter(([, v]) => v.n > 0).sort((a, b) => b[1].n - a[1].n);
-    if (!rows.length) return '<p class="empty">Nothing yet.</p>';
-    const max = rows[0][1].n;
-    const hasOn = pick && rows.some(([k]) => k === pick.on);
-    return `<div class="bars${hasOn ? ' has-on' : ''}">` + rows.map(([k, v]) => {
-      const name = names[k] || k;
-      const tipText = `<b>${esc(name)}</b><br>${fmt(v.n)}` + (v.people != null ? `, by ${fmt(v.people)} ${v.people === 1 ? 'person' : 'people'}` : '') +
-        (v.prev != null ? `<br>${fmt(v.prev)} ${esc(before)}` : '') + (pick ? `<br>${pick.on === k ? 'Tap to show everything' : 'Tap to show just this'}` : '');
-      const ch = v.prev != null && v.prev !== v.n ? `<small class="${v.n > v.prev ? 'is-up' : 'is-down'}">${v.n > v.prev ? '↑' : '↓'}${fmt(Math.abs(v.n - v.prev))}</small>` : '';
-      return `<div class="barrow barrow--rich${pick ? ' is-pick' + (pick.on === k ? ' is-on' : '') : ''}" data-tip="${tipText}"${pick ? pickAttrs(k, pick.on) : ''}><span class="barrow-name">${esc(name)}</span>` +
-        `<span class="barrow-track"><span class="barrow-fill" style="width:${(v.n / max) * 100}%"></span></span>` +
-        `<span class="barrow-val">${fmt(v.n)}${ch}</span></div>`;
-    }).join('') + '</div>';
-  }
-
   async function renderActivity() {
     let a = null, why = '';
     try { a = await call('admin_activity', { p_days: astate.days }); } catch (err) {
@@ -629,15 +632,11 @@
 
     if (!a) {
       const o = await call('admin_overview');
-      const plats = Object.entries(o.platforms7 || {}).sort((x, y) => y[1] - x[1]);
-      const tot = plats.reduce((x, p) => x + p[1], 0);
       main.innerHTML = headHtml('Activity') + `<div class="callout">${why}</div>` +
         '<div class="section grid grid--three">' +
-          `<div>${sectionHead('Made', 'Last 7 days')}<div class="card">${barsHtml(o.types7, TYPE_NAMES)}</div></div>` +
-          `<div>${sectionHead('Done', 'Last 7 days')}<div class="card">${barsHtml(o.kinds7, KIND_NAMES)}</div></div>` +
-          `<div>${sectionHead('Opened on', 'Last 7 days')}` + list(plats.length
-            ? plats.map(([k, v]) => row({ title: esc(PLATFORM[k] || k), meter: pct(v, tot), val: `<b>${fmt(v)}</b>` }))
-            : [row({ title: 'Nobody yet' })]) + '</div>' +
+          `<div>${sectionHead('Made', 'Last 7 days')}<div class="card">${barChart(countRows(o.types7, TYPE_NAMES))}</div></div>` +
+          `<div>${sectionHead('Done', 'Last 7 days')}<div class="card">${barChart(countRows(o.kinds7, KIND_NAMES))}</div></div>` +
+          `<div>${sectionHead('Opened on', 'Last 7 days')}<div class="card">${barChart(shareRows(o.platforms7, PLATFORM), { total: sumOf(o.platforms7), empty: 'Nobody yet.' })}</div></div>` +
         '</div>' + foot();
       return;
     }
@@ -657,10 +656,9 @@
     const doneAll = Object.values(K).reduce((x, v) => x + (v.n || 0), 0);
     const cv = a.conversation || {};
     const ser = a.series || [];
-    const plats = Object.entries(a.platforms || {}).sort((x, y) => y[1] - x[1]);
-    const platTot = plats.reduce((x, p) => x + p[1], 0);
-    const oss = Object.entries(a.os || {}).sort((x, y) => y[1] - x[1]);
-    const osTot = oss.reduce((x, p) => x + p[1], 0);
+    // Opened on and Devices are shares of the people who opened Tria (someone
+    // on two counts in both); App versions, of the people on iOS.
+    const seen = opened || sumOf(a.platforms);
     const vers = a.versions || [];
     const verTot = vers.reduce((x, v) => x + v.n, 0);
     const chats = Object.entries(a.chats || {}).sort((x, y) => y[1].messages - x[1].messages);
@@ -678,8 +676,6 @@
     // Posted to and the conversation are posts: one type's own, or all of them.
     const fcv = !f || f === 'made' ? cv : oneType ? a.conversationBy?.[f] || null : null;
     const audSrc = oneType ? a.audiencesBy?.[f] || {} : a.audiences || {};
-    const auds = Object.entries(audSrc).sort((x, y) => y[1] - x[1]);
-    const audTot = auds.reduce((x, p) => x + p[1], 0);
     const audSub = oneType ? fName : f && !isPost ? 'All posts' : '';
     // Busiest circles: by the type picked, by joins for Circle joins.
     let circ = (a.circles || []).map((c) => ({ ...c, v: oneType ? c.types?.[f] || 0 : f === 'circle' ? c.joins : c.posts }));
@@ -729,46 +725,36 @@
       figures +
       `<div class="section">${sectionHead(chartTitle, f ? 'How many, and by how many people' : 'People who created or connected')}<div class="card" id="c-act"></div></div>` +
       '<div class="section grid grid--three">' +
-        `<div>${sectionHead('Made', 'By type')}<div class="card">${richBars(a.types, TYPE_NAMES, before, canPick && { on: f })}</div></div>` +
-        `<div>${sectionHead('Interactions', 'Besides making')}<div class="card">${richBars(talk, KIND_NAMES, before, canPick && { on: f })}</div></div>` +
-        `<div>${sectionHead('Posted to', audSub)}` + list(auds.length
-          ? auds.map(([k, v]) => row({ title: esc(AUD[k] || k), meter: pct(v, audTot), val: `<b>${fmt(v)}</b>`, tipText: `<b>${esc(AUD[k] || k)}</b><br>${fmt(v)} ${oneType ? esc(fName.toLowerCase()) : 'posts'}, ${pctTxt(pct(v, audTot))}` }))
-          : [row({ title: f === 'moment' ? 'Moments aren\'t counted here' : 'Nothing yet' })]) + '</div>' +
+        `<div>${sectionHead('Made', 'By type')}<div class="card">${barChart(countRows(a.types, TYPE_NAMES, before), { pick: canPick && { on: f } })}</div></div>` +
+        `<div>${sectionHead('Interactions', 'Besides making')}<div class="card">${barChart(countRows(talk, KIND_NAMES, before), { pick: canPick && { on: f } })}</div></div>` +
+        `<div>${sectionHead('Posted to', audSub)}<div class="card">${barChart(shareRows(audSrc, AUD), { total: sumOf(audSrc), empty: f === 'moment' ? 'Moments aren\'t counted here.' : 'Nothing yet.' })}</div></div>` +
       '</div>' +
       '<div class="section grid grid--two">' +
-        `<div>${sectionHead('Chats')}` + list(chats.length
-          ? chats.map(([k, v]) => row({ title: esc(CHAT[k] || k), sub: `${fmt(v.chats)} ${v.chats === 1 ? 'chat' : 'chats'}, ${fmt(v.people)} ${v.people === 1 ? 'person' : 'people'} writing`, val: `<b>${fmt(v.messages)}</b>` }))
-          : [row({ title: 'No messages' })]) + '</div>' +
-        `<div>${sectionHead('Busiest circles', circSub)}` + list(circ.length
-          ? circ.map((c) => row({ title: `<a class="who" href="../#/c/${encodeURIComponent(c.slug)}">${esc(c.name)}</a>`,
-              sub: `c/${esc(c.slug)} · ${fmt(c.posts)} ${oneType ? 'posts in all' : 'posts'} · ${fmt(c.people)} posting · ${fmt(c.joins)} joined`, val: `<b>${fmt(c.v)}</b>`,
-              tipText: `<b>${esc(c.name)}</b>` + (oneType ? `<br>${fmt(c.v)} ${esc(fName.toLowerCase())}` : '') + `<br>${fmt(c.posts)} posts by ${fmt(c.people)}<br>${fmt(c.joins)} joined` }))
-          : [row({ title: 'Quiet' })]) + '</div>' +
+        `<div>${sectionHead('Chats', 'Messages')}<div class="card">${barChart(chats.map(([k, v]) => ({
+          key: k, n: v.messages, name: esc(CHAT[k] || k),
+          sub: `${fmt(v.chats)} ${v.chats === 1 ? 'chat' : 'chats'}, ${fmt(v.people)} ${v.people === 1 ? 'person' : 'people'} writing`,
+        })), { empty: 'No messages.' })}</div></div>` +
+        `<div>${sectionHead('Busiest circles', circSub || 'Posts')}<div class="card">${barChart(circ.map((c) => ({
+          key: c.slug, n: c.v, name: `<a class="who" href="../#/c/${encodeURIComponent(c.slug)}">${esc(c.name)}</a>`,
+          sub: `c/${esc(c.slug)} · ${fmt(c.people)} posting · ${fmt(c.joins)} joined`,
+          tip: `<b>${esc(c.name)}</b>` + (oneType ? `<br>${fmt(c.v)} ${esc(fName.toLowerCase())}` : '') + `<br>${fmt(c.posts)} posts by ${fmt(c.people)}<br>${fmt(c.joins)} joined`,
+        })), { sort: false, empty: 'Quiet.' })}</div></div>` +
       '</div>' +
       '<div class="section grid grid--three">' +
-        `<div>${sectionHead('Opened on', opened != null ? `Of ${fmt(opened)} people` : 'People')}` + list(plats.length
-          ? plats.map(([k, v]) => row({ title: esc(PLATFORM[k] || k), meter: pct(v, platTot), val: `<b>${fmt(v)}</b>` }))
-          : [row({ title: 'Nobody yet' })]) + '</div>' +
-        `<div>${sectionHead('Devices', 'People')}` + list(oss.length
-          ? oss.map(([k, v]) => row({ title: esc(OS[k] || k), meter: pct(v, osTot), val: `<b>${fmt(v)}</b>` }))
-          : [row({ title: 'None seen' })]) + '</div>' +
-        `<div>${sectionHead('App versions', 'People on iOS')}` + list(vers.length
-          ? vers.map((v) => row({ title: esc(v.v), meter: pct(v.n, verTot), val: `<b>${fmt(v.n)}</b>` }))
-          : [row({ title: 'None seen' })]) + '</div>' +
+        `<div>${sectionHead('Opened on', seen ? `Of ${fmt(seen)} people` : 'People')}<div class="card">${barChart(shareRows(a.platforms, PLATFORM), { total: seen, empty: 'Nobody yet.' })}</div></div>` +
+        `<div>${sectionHead('Devices', 'People')}<div class="card">${barChart(shareRows(a.os, OS), { total: seen, empty: 'None seen.' })}</div></div>` +
+        `<div>${sectionHead('App versions', 'People on iOS')}<div class="card">${barChart(vers.map((v) => ({ key: v.v, n: v.n, name: esc(v.v) })), { total: verTot, empty: 'None seen.' })}</div></div>` +
       '</div>';
 
-    const box = $('c-act');
-    if (box) {
-      const W = chartW(box);
-      // People, the unit of the Active tile; a pick, its own count. The last
-      // point is still going.
-      box.innerHTML = columns(ser.map((p, i) => {
-        const head = `<b>${a.byWeek ? 'Week of ' : ''}${esc(day(p.at))}${i === ser.length - 1 ? ', so far' : ''}</b>`;
-        if (!f) return { n: p.people, label: day(p.at), tip: `${head}<br>${fmt(p.people)} active<br>${fmt(p.posts)} made<br>${fmt(p.events)} things made or done` };
-        const [n, ppl] = p.by?.[f] || [0, 0];
-        return { n, label: day(p.at), tip: `${head}<br>${esc(fName)}: ${fmt(n)}<br>By ${fmt(ppl)} ${ppl === 1 ? 'person' : 'people'}` };
-      }), W, { every: Math.max(1, Math.ceil(ser.length / Math.max(1, Math.floor(W / 64)))), label: chartTitle });
-    }
+    // The Overview's line (Zoe, 2026-11-12: "I don't like the bar graph. use
+    // the same style as overview"): people, the Active tile's unit; with a
+    // pick, its count and the people behind it. The last point is still going.
+    const n = ser.length;
+    const head = (p, i) => `<b>${a.byWeek ? 'Week of ' : ''}${esc(day(p.at))}${i === n - 1 ? ', so far' : ''}</b>`;
+    mountLine($('c-act'), f ? ser.map((p) => ({ at: p.at, n: (p.by?.[f] || [0, 0])[0], ppl: (p.by?.[f] || [0, 0])[1] })) : ser, f
+      ? { at: 'at', lines: [{ key: 'n', name: fName }, { key: 'ppl', name: 'People' }], head, soFar: true, label: chartTitle }
+      : { at: 'at', lines: [{ key: 'people', name: 'Active' }], head, soFar: true, label: chartTitle,
+          more: (p) => `<br>${fmt(p.posts)} made<br>${fmt(p.events)} things made or done` });
     wire();
     main.querySelectorAll('[data-af]').forEach((el) => {
       const go = () => {
@@ -816,13 +802,11 @@
     const n = r.people || 0;
     const joinedIn = sstate.days ? `joined in the last ${sstate.days} days` : 'ever joined';
     const low = n ? SETTLE.reduce((m, st) => ((r[st.k] || 0) < (r[m.k] || 0) ? st : m), SETTLE[0]) : null;
-    const bars = SETTLE.map((st) => {
-      const v = r[st.k] || 0;
-      return `<div class="settle-row${st === low ? ' is-low' : ''}" data-tip="<b>${esc(st.name)}</b><br>${esc(st.tip)}<br>${fmt(v)} of ${fmt(n)}">` +
-        `<span class="settle-name">${esc(st.name)}</span>` +
-        `<span class="barrow-track"><span class="barrow-fill" style="width:${pct(v, n) || 0}%"></span></span>` +
-        `<span class="settle-val"><b>${pctTxt(pct(v, n))}</b><small>${fmt(v)}</small></span></div>`;
-    }).join('');
+    // In their own order (the order a first week goes), the fewest in bold.
+    const bars = barChart(SETTLE.map((st) => ({
+      key: st.k, n: r[st.k] || 0, keep: true, name: esc(st.name), cls: st === low ? 'is-strong' : '',
+      tip: `<b>${esc(st.name)}</b><br>${esc(st.tip)}<br>${fmt(r[st.k] || 0)} of ${fmt(n)}`,
+    })), { total: n, sort: false });
     box.innerHTML =
       sectionHead('Settling in', 'What people did in their first week') +
       '<div class="controls">' + segmented('sdays', [[30, '30 days'], [90, '90 days'], [0, 'All time']], sstate.days, 'Joined in') + '</div>' +
@@ -830,7 +814,7 @@
           `<div class="settle-head"><div class="tile-value">${pctTxt(pct(r.settled, n))}</div>` +
           `<p><b>Settled in.</b> ${fmt(r.settled)} of the ${fmt(n)} who ${joinedIn} made a friend and shared something in their first week` +
           (r.medianH != null ? `, typically within ${esc(hours(r.medianH)).replace(' ', '&nbsp;')}` : '') + '.</p></div>' +
-          `<div class="settle-bars">${bars}</div>` +
+          bars +
           (r.young ? `<p class="note">${fmt(r.young)} more joined this past week and count once their week is up.</p>` : '') +
           (r.pingSince ? `<p class="note">Opening Tria counts as coming back since ${esc(day(r.pingSince))}; before that only doing something did.</p>`
             : '<p class="note">Coming back counts only doing something until the open ping has data.</p>') +
@@ -882,8 +866,53 @@
     ['profile', 'connected', 'acted', 'returned'].map((k) => `<i class="${p[k] ? 'on' : ''}"></i>`).join('') + '</span>';
   const stepTip = (p) => `<b>${esc(p.name)}</b><br>Profile ${p.profile ? '✓' : '·'}  Connected ${p.connected ? '✓' : '·'}<br>Posted ${p.acted ? '✓' : '·'}  Came back ${p.returned ? '✓' : '·'}`;
 
+  // What a nudge looks like (Zoe, 2026-11-12: "where is the email sent from
+  // and what does it look like?"): drawn under the letter as it's written,
+  // under who it's from. letterHtml is functions/nudge's html(), its font link
+  // left out (this page has the fonts): KEEP THE TWO EQUAL BY HAND.
+  const NUDGE_FROM = 'Tria <hello@triaonline.com>';
+  const MAIL_SANS = "'Oxygen',-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif";
+  const MAIL_SERIF = "'Instrument Serif',Georgia,'Times New Roman',serif";
+  function letterHtml(message) {
+    const paras = message.trim().split(/\n\s*\n/).filter(Boolean).map((p) =>
+      `<p style="font-family:${MAIL_SANS};font-size:15px;line-height:1.6;color:#14171a;margin:16px 0 0 0;">` +
+      esc(p.trim()).replace(/\n/g, '<br>') + '</p>').join('');
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0;padding:0;background-color:#edeef0;">
+  <tr><td align="center" style="padding:32px 16px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:440px;width:100%;background-color:#f6f7f8;border:1px solid #dadde1;border-radius:20px;">
+      <tr><td style="padding:40px 36px 36px 36px;">
+        <div style="font-family:${MAIL_SERIF};font-style:italic;font-size:30px;line-height:1;color:#14171a;">tria</div>
+        ${paras}
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 0 0;"><tr>
+          <td align="center" bgcolor="#00cbb6" style="border-radius:999px;background:linear-gradient(115deg,#00c9ce,#00cc9e);">
+            <a href="https://triaonline.com/" target="_blank" rel="noopener" style="display:inline-block;padding:14px 30px;font-family:${MAIL_SANS};font-size:15px;font-weight:700;color:#14171a;text-decoration:none;border-radius:999px;">Open Tria</a>
+          </td></tr></table>
+        <div style="border-top:1px solid #dadde1;margin:32px 0 0 0;"></div>
+        <p style="font-family:${MAIL_SANS};font-size:12px;line-height:1.6;color:#5c636b;margin:20px 0 0 0;">You're getting this because you have a Tria account. Reply "stop" and we won't email you again.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>`;
+  }
+  // Whether sending is set up: the nudge function's GET says who it sends
+  // from and whether its secrets are set. Asked once a visit (refresh asks
+  // again); no answer in 5s, or none at all, is "not deployed".
+  let sender = null;
+  async function senderState() {
+    if (sender) return sender;
+    if (DEMO) return (sender = { from: NUDGE_FROM, ready: false, live: false });
+    const ask = sb.functions.invoke('nudge', { method: 'GET' }).then(({ data, error }) => {
+      if (error) throw error;
+      return { from: data?.from || NUDGE_FROM, ready: !!data?.ready, live: true };
+    });
+    const late = new Promise((res) => setTimeout(() => res(null), 5000));
+    try { sender = (await Promise.race([ask, late])) || { from: NUDGE_FROM, ready: false, live: false }; }
+    catch { sender = { from: NUDGE_FROM, ready: false, live: false }; }
+    return sender;
+  }
+
   async function renderNudge() {
-    const z = await nudgeData();
+    const [z, snd] = await Promise.all([nudgeData(), senderState()]);
     if (!z) {
       // Before admin-nudge.sql: the newest accounts, as the Overview had them.
       const x = await extras();
@@ -945,6 +974,10 @@
           '</div>' +
           `<p class="note" id="n-status" role="status">${nstate.marked ? `Sent it from Mail? <button class="linkish" type="button" id="n-mark">Mark ${fmt(nstate.marked.ids.length)} as nudged</button>` : ''}</p>` +
         '</div></div>' +
+      `<div class="section">${sectionHead('What they get', snd.live && snd.ready ? 'Sent through Resend, one email each. Replies come to the reply address on the nudge function.'
+          : snd.live ? 'Not sending yet: set <b>RESEND_API_KEY</b> and <b>NUDGE_REPLY_TO</b> on the nudge function.'
+          : 'Not sending yet: the nudge function isn\'t deployed. Open in Mail sends it from your own address, as plain words.')}` +
+        '<div class="mail-preview" id="n-preview"></div></div>' +
       (stopped.length ? `<div class="section">${sectionHead('Asked us to stop', 'Never emailed')}` + list(stopped.map((p) => row({
         title: who(p), sub: esc(p.email || ''),
         val: `<button class="linkish" type="button" data-unstop="${esc(p.id)}">Undo</button>`,
@@ -966,8 +999,26 @@
       again();
     }));
     const subj = $('n-subject'), msg = $('n-message');
-    subj.addEventListener('input', () => { nstate.subject = subj.value; nstate.edited = true; });
-    msg.addEventListener('input', () => { nstate.message = msg.value; nstate.edited = true; });
+    // The preview: the first person picked (else the first listed) by name.
+    const paintPreview = () => {
+      const ps = shown.filter((p) => nstate.picked.has(p.id) && p.email);
+      const eg = ps[0] || shown.find((p) => p.email);
+      const name = eg ? firstName(eg) : 'there';
+      const fill = (s) => s.replace(/\{name\}/g, name);
+      const to = !eg ? 'Pick people above'
+        : ps.length > 1 ? `${esc(eg.email)} <span class="mail-k">and ${fmt(ps.length - 1)} more, one email each</span>`
+        : esc(eg.email) + (ps.length ? '' : ' <span class="mail-k">for example</span>');
+      $('n-preview').innerHTML =
+        '<div class="mail-head">' +
+          `<div class="mail-line"><span class="mail-k">From</span><span>${esc(snd.from)}</span></div>` +
+          `<div class="mail-line"><span class="mail-k">To</span><span>${to}</span></div>` +
+          `<div class="mail-subject">${esc(fill(nstate.subject.trim())) || '<span class="mail-k">No subject</span>'}</div>` +
+        '</div>' +
+        `<div class="mail-body">${letterHtml(fill(nstate.message))}</div>`;
+    };
+    paintPreview();
+    subj.addEventListener('input', () => { nstate.subject = subj.value; nstate.edited = true; paintPreview(); });
+    msg.addEventListener('input', () => { nstate.message = msg.value; nstate.edited = true; paintPreview(); });
 
     const picked = () => shown.filter((p) => nstate.picked.has(p.id) && p.email);
     const stepOf = () => (nstate.step === 'all' ? 'other' : nstate.step);
@@ -1056,42 +1107,11 @@
     main.querySelectorAll('[data-unstop]').forEach((b) => b.addEventListener('click', () => setStop(b.dataset.unstop, false)));
   }
 
-  // ── Retention ─────────────────────────────────────────────────────────────
-  async function renderRetention() {
-    const r = await call('admin_retention');
-    const all = r.cohorts || [];
-    // Weighted average back in week k, over every cohort old enough.
-    const avg = (k) => {
-      let a = 0, e = 0;
-      all.forEach((c) => { const w = c.weeks?.[k - 1]; if (w?.eligible) { a += w.alive; e += w.eligible; } });
-      return e ? pct(a, e) : null;
-    };
-    const cohorts = all.slice().reverse();
-    const head = '<tr><th>Joined</th><th>People</th>' +
-      [1, 2, 3, 4, 5, 6, 7, 8].map((k) => `<th>Wk ${k}</th>`).join('') + '</tr>';
-    const rows = cohorts.map((c) => {
-      const cells = (c.weeks || []).map((w) => {
-        if (!w.eligible) return '<td class="cell is-empty">·</td>';
-        const p = pct(w.alive, w.eligible);
-        return `<td class="cell" style="background:color-mix(in srgb, var(--data) ${Math.round(8 + (p / 100) * 62)}%, transparent)" ` +
-          `data-tip="<b>Joined week of ${esc(day(c.week))}</b><br>Week ${w.k}: ${fmt(w.alive)} of ${fmt(w.eligible)} back">${pctTxt(p)}</td>`;
-      }).join('');
-      return `<tr><td>${esc(day(c.week))}</td><td>${fmt(c.size)}</td>${cells}</tr>`;
-    }).join('');
-    main.innerHTML =
-      headHtml('Retention') +
-      '<div class="grid grid--kpi">' +
-        tile('Week 1', pctTxt(avg(1)), 'back', 'Active again 7 to 13 days after joining. Every signup week, weighted.') +
-        tile('Week 2', pctTxt(avg(2)), 'back') +
-        tile('Week 4', pctTxt(avg(4)), 'back') +
-        tile('Week 8', pctTxt(avg(8)), 'back') +
-      '</div>' +
-      `<div class="section">${sectionHead('By signup week', 'Share active each week after')}` +
-      `<div class="card heat"><div class="table-wrap"><table><thead>${head}</thead><tbody>${rows || '<tr><td>Nobody yet</td></tr>'}</tbody></table></div></div></div>` +
-      foot();
-  }
-
   // ── Community (admin-extras.sql: no new tracking, only what Tria keeps) ──
+  // Every number here is bars since 2026-11-12 (Zoe: "use better style charts
+  // for the data at hand"): friends each in its own order, where posts go and
+  // what people set up as shares, the circles by members. Bio and pronouns
+  // aren't counted (Zoe: "bio doesn't need to be tracked, same for pronouns").
   const THEME = {
     ruby: ['Ruby', '#df2a48'], rose: ['Blush', '#ef6bbf'], coral: ['Coral', '#fb7c46'], amber: ['Amber', '#fdb435'],
     lime: ['Lime', '#abe64c'], jade: ['Jade', '#54e89c'], cyan: ['Cyan', '#52def4'], ocean: ['Ocean', '#367df8'],
@@ -1100,10 +1120,11 @@
   };
   const AUDIENCE = { public: 'Anyone', circle: 'My circle', list: 'Chosen people', community: 'A circle' };
   const ADOPTION = [
-    ['posted', 'Posted'], ['photo', 'Photo'], ['bio', 'Bio'], ['circle', 'In a circle'],
+    ['posted', 'Posted'], ['photo', 'Profile photo'], ['circle', 'In a circle'],
     ['moment', 'Shared a Moment'], ['daily', 'Answered a daily'], ['theme', 'Picked a theme'], ['push', 'Push on'],
-    ['pins', 'Pinned a post'], ['charms', 'Wears a charm'], ['pronouns', 'Pronouns'], ['private', 'Private'],
+    ['pins', 'Pinned a post'], ['charms', 'Wears a charm'], ['private', 'Private account'],
   ];
+  const FRIENDS = { 0: 'No friends', 1: '1 friend' };
   let showAllCircles = false;
 
   async function renderCommunity() {
@@ -1121,12 +1142,8 @@
       const key = THEME[k] ? k : 'photo';
       themes[key] = (themes[key] || 0) + v;
     });
-    const themeRows = Object.entries(themes).sort((a, b) => b[1] - a[1]).map(([k, v]) => row({
-      lead: `<span class="swatch-dot" style="background:${THEME[k][1]}"></span>`,
-      title: esc(THEME[k][0]), meter: pct(v, u), val: `<b>${fmt(v)}</b>`,
-    }));
+    const buckets = x.friends?.buckets || [];
     const aud = x.audiences || {};
-    const audTotal = Object.values(aud).reduce((a, v) => a + v, 0);
 
     main.innerHTML =
       headHtml('Community') +
@@ -1136,33 +1153,29 @@
         tile('Circles', fmt(circles.length), `${fmt(circles.reduce((a, c) => a + (c.posts7 || 0), 0))} posts this week`) +
         tile('Blocks', fmt(x.blocks?.total), `${fmt(x.blocks?.last30)} in 30 days`) +
       '</div>' +
-      `<div class="section">${sectionHead('Friends each')}<div class="card" id="c-friends"></div></div>` +
-      `<div class="section">${sectionHead('Circles')}` +
-        list(shown.length ? shown.map((c) => row({
-          title: `<a class="who" href="../#/c/${encodeURIComponent(c.slug)}">${esc(c.name)}</a>${c.inviteOnly ? svg('lock', 'i row-lock') : ''}`,
-          sub: `c/${esc(c.slug)} · +${fmt(c.joins7)} joined, ${fmt(c.posts7)} posts this week`,
-          val: `<b>${fmt(c.members)}</b>`,
-          tipText: `<b>c/${esc(c.slug)}</b><br>${fmt(c.members)} members`,
-        })) : [row({ title: 'None yet' })],
-        circles.length > 8 ? `<button class="more" type="button" id="more-circles">${showAllCircles ? 'Show fewer' : `Show all ${circles.length}`}</button>` : '') +
+      '<div class="section grid grid--two">' +
+        `<div>${sectionHead('Friends each', 'Mutual')}<div class="card">${barChart(buckets.map((b) => ({
+          key: b.label, n: b.n, keep: true, name: esc(FRIENDS[b.label] || `${b.label} friends`),
+        })), { total: buckets.reduce((a, b) => a + b.n, 0), sort: false })}</div></div>` +
+        `<div>${sectionHead('Posted to', 'Posts, 30 days')}<div class="card">${barChart(shareRows(aud, AUDIENCE), { total: sumOf(aud) })}</div></div>` +
       '</div>' +
       '<div class="section grid grid--two">' +
-        `<div>${sectionHead('Set up')}` + list(ADOPTION.map(([k, label]) =>
-          row({ title: esc(label), meter: pct(ad[k], u), val: `<b>${pctTxt(pct(ad[k], u))}</b>`, tipText: `<b>${esc(label)}</b><br>${fmt(ad[k])} of ${fmt(u)}` }))) + '</div>' +
-        `<div>${sectionHead('Themes')}` + list(themeRows.length ? themeRows : [row({ title: 'None yet' })]) + '</div>' +
+        `<div>${sectionHead('Set up', 'Of everyone')}<div class="card">${barChart(ADOPTION.map(([k, label]) => ({
+          key: k, n: ad[k] || 0, keep: true, name: esc(label),
+        })), { total: u })}</div></div>` +
+        `<div>${sectionHead('Themes', 'Of everyone')}<div class="card">${barChart(Object.entries(themes).map(([k, v]) => ({
+          key: k, n: v, name: esc(THEME[k][0]), lead: `<span class="swatch-dot" style="background:${THEME[k][1]}"></span>`,
+        })), { total: u, empty: 'None yet.' })}</div></div>` +
       '</div>' +
-      `<div class="section">${sectionHead('Audiences', 'Posts, 30 days')}` + list(Object.keys(aud).length
-        ? Object.entries(aud).sort((a, b) => b[1] - a[1]).map(([k, v]) => row({ title: esc(AUDIENCE[k] || k), meter: pct(v, audTotal), val: `<b>${pctTxt(pct(v, audTotal))}</b>` }))
-        : [row({ title: 'None yet' })]) + '</div>' +
+      `<div class="section">${sectionHead('Circles', 'By members')}<div class="card">${barChart(shown.map((c) => ({
+          key: c.slug, n: c.members, keep: true,
+          name: `<a class="who" href="../#/c/${encodeURIComponent(c.slug)}">${esc(c.name)}</a>${c.inviteOnly ? svg('lock', 'i row-lock') : ''}`,
+          sub: `c/${esc(c.slug)} · +${fmt(c.joins7)} joined, ${fmt(c.posts7)} ${c.posts7 === 1 ? 'post' : 'posts'} this week`,
+          tip: `<b>c/${esc(c.slug)}</b><br>${fmt(c.members)} members<br>+${fmt(c.joins7)} joined this week<br>${fmt(c.posts7)} posts this week`,
+        })), { sort: false, max: circles[0]?.members, empty: 'None yet.' })}</div>` +
+        (circles.length > 8 ? `<p class="note note--page"><button class="linkish" type="button" id="more-circles">${showAllCircles ? 'Show fewer' : `Show all ${circles.length}`}</button></p>` : '') +
+      '</div>' +
       foot();
-
-    const cf = $('c-friends');
-    const buckets = x.friends?.buckets || [];
-    const total = buckets.reduce((a, d) => a + d.n, 0);
-    cf.innerHTML = columns(buckets.map((d) => ({
-      n: d.n, label: d.label,
-      tip: `<b>${esc(d.label)} friend${d.label === '1' ? '' : 's'}</b><br>${fmt(d.n)} people, ${pctTxt(pct(d.n, total))}`,
-    })), chartW(cf), { label: 'People by number of friends' });
 
     $('more-circles')?.addEventListener('click', () => {
       showAllCircles = !showAllCircles;
@@ -1175,7 +1188,13 @@
   // Zoe, 2026-11-11: "daily stats should also be its own page". People per
   // day against who was around that week, replies from others, the prompts
   // that land and the ones that don't. Likes are never read.
+  // Laid out again on 2026-11-12 (Zoe: "format the data more cleanly", "best
+  // and least on top after today same for answered with"): today, then the
+  // prompts that land best and least and what people answer with, then the
+  // figures and the charts, then the days themselves, the last week until
+  // asked for more.
   const ASKS = { photo: 'Frame', note: 'Note', find: 'Find', poll: 'Poll' };
+  let showAllDays = false;
   async function renderDailies() {
     let d;
     try { d = await call('admin_dailies'); } catch (err) {
@@ -1194,64 +1213,82 @@
     const rate = pct(sum(done, 'people'), sum(done, 'around'));
     const replied = pct(sum(days, 'replied'), sum(days, 'answers'));
     const prompts = (d.prompts || []).filter((p) => p.runs > 0);
-    const best = prompts.slice().sort((a, b) => b.avgPeople - a.avgPeople || b.answers - a.answers).slice(0, 6);
-    const quiet = prompts.slice().sort((a, b) => a.avgPeople - b.avgPeople || a.answers - b.answers).slice(0, 6);
+    // Best and least never name the same prompt: with fewer than twelve run,
+    // the top half is best and the rest least.
+    const best = prompts.slice().sort((a, b) => b.avgPeople - a.avgPeople || b.answers - a.answers)
+      .slice(0, Math.min(6, Math.ceil(prompts.length / 2)));
+    const quiet = prompts.filter((p) => !best.includes(p)).sort((a, b) => a.avgPeople - b.avgPeople || a.answers - b.answers).slice(0, 6);
     // Zoe, 2026-11-11: "dailies need graphs". Every week since the first daily,
     // and the weekdays, since the rotation is planned by weekday.
     const weeks = d.weeks || [];
     const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const DOW_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const dows = DOW.map((name, i) => (d.weekdays || []).find((w) => w.dow === i + 1) || { dow: i + 1, avgPeople: 0, days: 0 });
-    const promptRow = (p) => row({
-      title: esc(p.prompt), sub: `${esc(ASKS[p.type] || p.type)} · ran ${fmt(p.runs)}×`,
-      val: `<b>${fmt(p.avgPeople)}</b>`, tipText: `<b>${esc(p.slug)}</b><br>${fmt(p.avgPeople)} people a run, ${fmt(p.answers)} answers in all`,
-    });
+    // Best and least share one scale, so a quiet prompt looks quiet.
+    const top = Math.max(1, ...prompts.map((p) => p.avgPeople || 0));
+    const promptBars = (ps) => barChart(ps.map((p) => ({
+      key: p.slug, n: p.avgPeople || 0, keep: true, name: esc(p.prompt), val: fmt(p.avgPeople),
+      sub: `${esc(ASKS[p.type] || p.type)} · ran ${fmt(p.runs)} ${p.runs === 1 ? 'time' : 'times'} · ${fmt(p.answers)} ${p.answers === 1 ? 'answer' : 'answers'}`,
+      tip: `<b>${esc(p.prompt)}</b><br>${fmt(p.avgPeople)} people a run<br>${fmt(p.answers)} answers over ${fmt(p.runs)} ${p.runs === 1 ? 'run' : 'runs'}`,
+    })), { sort: false, max: top, empty: 'None yet.' });
+    // A day: its date as a little calendar page, the prompt, then how it went.
+    const dayRow = (r) => {
+      const dt = new Date(String(r.day).slice(0, 10) + 'T12:00:00');
+      const isToday = r === today;
+      return row({
+        lead: `<span class="day-chip" aria-hidden="true"><small>${esc(dt.toLocaleDateString('en-US', { weekday: 'short' }))}</small><b>${dt.getDate()}</b></span>`,
+        title: esc(r.prompt),
+        sub: [esc(ASKS[r.type] || r.type), isToday ? 'so far' : `${pctTxt(pct(r.people, r.around))} of ${fmt(r.around)} around`,
+          `${fmt(r.replied)} got a reply`].join(' · '),
+        val: `<b>${fmt(r.people)}</b>`,
+        tipText: `<b>${esc(day(r.day))}</b><br>${fmt(r.people)} of ${fmt(r.around)} around answered (${pctTxt(pct(r.people, r.around))})<br>${fmt(r.answers)} answers, ${fmt(r.replied)} got a reply`,
+      });
+    };
+    const listed = showAllDays ? days : days.slice(0, 7);
 
     main.innerHTML =
       headHtml('Dailies') +
       (today ? `<div class="card daily-now"><div class="tile-label">Today · ${esc(ASKS[today.type] || today.type)}</div>` +
         `<p class="daily-prompt">${esc(today.prompt)}</p>` +
-        `<p class="tile-note">${fmt(today.people)} ${today.people === 1 ? 'person has' : 'people have'} answered so far</p></div>` : '') +
-      `<div class="grid grid--kpi${today ? ' section-tight' : ''}">` +
-        tile('A day', fmt(perDay), 'people answer, 4 weeks', 'Average people answering a finished day, last 28 days') +
-        tile('Answer rate', pctTxt(rate), 'of those around', 'People who answered, out of those who opened Tria or did something in the 7 days to that day') +
+        `<p class="tile-note">${fmt(today.people)} ${today.people === 1 ? 'person has' : 'people have'} answered so far` +
+          (perDay != null ? `. A day averages ${fmt(perDay)}.` : '.') + '</p></div>' : '') +
+      `<div class="${today ? 'section ' : ''}grid grid--three">` +
+        `<div>${sectionHead('Land best', 'People a run')}<div class="card">${promptBars(best)}</div></div>` +
+        `<div>${sectionHead('Land least', 'People a run')}<div class="card">${promptBars(quiet)}</div></div>` +
+        `<div>${sectionHead('Answered with', '4 weeks')}<div class="card">${barChart(shareRows(d.types, TYPE_NAMES), { total: sumOf(d.types) })}</div></div>` +
+      '</div>' +
+      '<div class="section grid grid--kpi">' +
+        tile('People a day', fmt(perDay), 'last 4 weeks', 'Average people answering a finished day, last 28 days') +
+        tile('Answer rate', pctTxt(rate), 'of people around', 'People who answered, out of those who opened Tria or did something in the 7 days to that day') +
         tile('Got a reply', pctTxt(replied), 'of answers', 'Answers with a comment from someone other than the author. Likes aren\'t counted.') +
         tile('Regulars', fmt(d.regulars), `of ${fmt(d.answerers)} who answered`, 'Answered on 4 or more days in the last 28') +
       '</div>' +
       `<div class="section">${sectionHead('People a day', '4 weeks')}<div class="card" id="c-daily"></div></div>` +
-      (weeks.length > 1 ? `<div class="section">${sectionHead('All time', 'Since ' + esc(day(weeks[0].week)) + ', a point a week')}<div class="card" id="c-daily-all"></div></div>` : '') +
-      (dows.some((w) => w.days) ? `<div class="section">${sectionHead('By weekday', 'People a day, on average')}<div class="card" id="c-daily-dow"></div></div>` : '') +
-      `<div class="section">${sectionHead('Every day')}` + list(days.length ? days.map((r) => row({
-        title: esc(r.prompt),
-        sub: `${esc(day(r.day))} · ${esc(ASKS[r.type] || r.type)} · ${fmt(r.answers)} ${r.answers === 1 ? 'answer' : 'answers'}, ${fmt(r.replied)} replied to`,
-        meter: pct(r.people, r.around), val: `<b>${fmt(r.people)}</b>`,
-        tipText: `<b>${esc(day(r.day))}</b><br>${fmt(r.people)} of ${fmt(r.around)} around answered (${pctTxt(pct(r.people, r.around))})`,
-      })) : [row({ title: 'None yet' })]) + '</div>' +
       '<div class="section grid grid--two">' +
-        `<div>${sectionHead('Land best', 'People a run')}` + list(best.length ? best.map(promptRow) : [row({ title: 'None yet' })]) + '</div>' +
-        `<div>${sectionHead('Land least', 'People a run')}` + list(quiet.length ? quiet.map(promptRow) : [row({ title: 'None yet' })]) + '</div>' +
+        (weeks.length > 1 ? `<div>${sectionHead('All time', 'Since ' + esc(day(weeks[0].week)) + ', a week at a time')}<div class="card" id="c-daily-all"></div></div>` : '') +
+        (dows.some((w) => w.days) ? `<div>${sectionHead('By weekday', 'People a day, on average')}<div class="card">${barChart(dows.map((w, i) => ({
+          key: DOW[i], n: w.avgPeople || 0, keep: true, name: DOW_NAMES[i], val: fmt(w.avgPeople),
+          tip: `<b>${DOW_NAMES[i]}</b><br>${fmt(w.avgPeople)} people a day, over ${fmt(w.days)} ${w.days === 1 ? 'day' : 'days'}`,
+        })), { sort: false })}</div></div>` : '') +
       '</div>' +
-      `<div class="section">${sectionHead('Answered with', '4 weeks')}<div class="card">${barsHtml(d.types, TYPE_NAMES)}</div></div>` +
+      `<div class="section">${sectionHead('Every day', 'People who answered')}` + list(listed.length ? listed.map(dayRow) : [row({ title: 'None yet' })]) +
+        (days.length > 7 ? `<p class="note note--page"><button class="linkish" type="button" id="more-days">${showAllDays ? 'Show the last week' : `Show all ${days.length}`}</button></p>` : '') +
+      '</div>' +
       foot();
 
-    const cd = $('c-daily');
-    const W = chartW(cd);
     const chron = days.slice().reverse();
-    cd.innerHTML = columns(chron.map((r) => ({
-      n: r.people, label: day(r.day),
-      tip: `<b>${esc(day(r.day))}</b><br>${esc(r.prompt)}<br>${fmt(r.people)} people, ${fmt(r.answers)} answers`,
-    })), W, { every: W < 420 ? 7 : W < 700 ? 4 : 2, label: 'People answering the daily, last 28 days' });
-    const ca = $('c-daily-all');
-    if (ca) {
-      const al = lineChart(weeks, chartW(ca), { a: 'people', b: 'answers', names: ['People', 'Answers'],
-        label: 'People answering the daily and answers, a week at a time, all time', tipHead: 'Week' });
-      ca.innerHTML = al.html;
-      al.wire(ca);
-    }
-    const cw = $('c-daily-dow');
-    if (cw) cw.innerHTML = columns(dows.map((w, i) => ({
-      n: w.avgPeople, label: DOW[i],
-      tip: `<b>${DOW[i]}</b><br>${fmt(w.avgPeople)} people a day, over ${fmt(w.days)} ${w.days === 1 ? 'day' : 'days'}`,
-    })), chartW(cw), { label: 'People answering the daily on each weekday, on average' });
+    mountLine($('c-daily'), chron, { at: 'day', lines: [{ key: 'people', name: 'People' }], soFar: !!today,
+      head: (p) => `<b>${esc(day(p.day))}${p === today ? ', so far' : ''}</b><br>${esc(p.prompt)}`,
+      more: (p) => `<br>${fmt(p.answers)} answers, ${pctTxt(pct(p.people, p.around))} of those around`,
+      label: 'People answering the daily, last 28 days' });
+    if (weeks.length > 1) mountLine($('c-daily-all'), weeks, { lines: [{ key: 'people', name: 'People' }, { key: 'answers', name: 'Answers' }], soFar: true,
+      head: (p, i) => `<b>Week of ${esc(day(p.week))}${i === weeks.length - 1 ? ', so far' : ''}</b>`,
+      label: 'People answering the daily and answers, a week at a time, all time' });
+    $('more-days')?.addEventListener('click', () => {
+      showAllDays = !showAllDays;
+      const y = window.scrollY;
+      renderDailies().then(() => { watchTitle('Dailies'); window.scrollTo(0, y); });
+    });
   }
 
   // ── Dictionary ────────────────────────────────────────────────────────────
@@ -1462,7 +1499,7 @@
         }),
         rhythm,
         invites: { total: 64, last30: 19, top: [{ name: 'Ana', handle: 'ana', n: 12 }, { name: 'Ben', handle: 'ben', n: 8 }, { name: 'Cat', handle: 'cat', n: 5 }] },
-        adoption: { photo: 171, bio: 132, pronouns: 61, private: 150, charms: 48, pins: 39, theme: 97, push: 120, posted: 166, moment: 88, circle: 102, daily: 94 },
+        adoption: { photo: 171, private: 150, charms: 48, pins: 39, theme: 97, push: 120, posted: 166, moment: 88, circle: 102, daily: 94 },
         themes: { photo: 90, default: 41, ocean: 21, lavender: 17, rose: 14, jade: 11, coral: 8, none: 7, amber: 5 },
         audiences: { circle: 310, public: 120, community: 96, list: 22 },
         newest: [['Mina', 'mina', 0, 'invite', 'ios', [1, 1, 1, 0]], ['Theo', 'theo', 1, 'circle', 'ios', [1, 1, 0, 1]], ['Ivy', 'ivy', 2, 'direct', 'pwa', [0, 0, 0, 0]],

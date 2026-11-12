@@ -13,8 +13,10 @@
    off, the way back to your profile. The page wears the large serif title;
    the bar's small one crossfades in once that has gone under.
 
-   Charts are one hue, Tria's green, with words in ink. No dashed cards:
-   dashed means a tip. */
+   Three chart styles, no more (Zoe, 2026-11-12): THE LINE for anything over
+   time, THE BARS for anything across kinds, THE HEATMAP for weekday by hour.
+   One hue, Tria's green, with words in ink. No dashed cards: dashed means a
+   tip. */
 
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }   /* components set display */
@@ -280,7 +282,7 @@ h2 { font-size: 1.5rem; line-height: 1.15; }
 .tile.is-pick.is-on { box-shadow: inset 0 0 0 2px var(--data); }
 @media (hover: hover) { .tile.is-pick:not(.is-on):hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--data) 50%, transparent); } }
 .tile.is-pick:active { transform: scale(0.99); }
-.barrow.is-pick { margin: -3px -6px; padding: 3px 6px; border-radius: 6px; }
+.barrow.is-pick { margin: -6px -8px; padding: 6px 8px; border-radius: 12px; }
 @media (hover: hover) { .barrow.is-pick:hover { background: var(--fill); } }
 .barrow.is-on .barrow-name { font-weight: 700; }
 .bars.has-on .barrow:not(.is-on) { opacity: 0.4; }
@@ -308,8 +310,6 @@ h2 { font-size: 1.5rem; line-height: 1.15; }
 .row-sub { font-size: 0.78rem; color: var(--muted); margin-top: 1px; overflow-wrap: anywhere; }
 .row-val { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.92rem; text-align: right; white-space: nowrap; display: flex; align-items: center; gap: 10px; }
 .row-val b { color: var(--text); font-weight: 700; }
-.row-meter { flex: 0 0 30%; max-width: 200px; height: 6px; border-radius: 3px; background: var(--fill); position: relative; }
-.row-meter > span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--data); }
 .row-lock { width: 13px; height: 13px; vertical-align: -1px; margin-left: 4px; color: var(--muted); stroke-width: 2.2; }
 .who { text-decoration: none; font-weight: 700; }
 @media (hover: hover) { .who:hover { text-decoration: underline; text-underline-offset: 2px; } }
@@ -369,8 +369,7 @@ h2 { font-size: 1.5rem; line-height: 1.15; }
 .chart .dot--b { fill: var(--data-2); }
 .chart .cross { stroke: var(--text); stroke-opacity: 0.25; }
 .chart .hit { fill: transparent; cursor: crosshair; }
-.chart .col { fill: var(--data); }
-.chart .col-label { fill: var(--text); font-size: 11px; font-weight: 700; }
+.chart .line--sofar { stroke-dasharray: 1 5; }
 
 .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); margin: 0 0 10px; padding: 0; list-style: none; }
 .legend li { display: inline-flex; align-items: center; gap: 6px; }
@@ -378,31 +377,31 @@ h2 { font-size: 1.5rem; line-height: 1.15; }
 .swatch { width: 14px; height: 3px; border-radius: 2px; background: var(--data); }
 .swatch--b { background: repeating-linear-gradient(90deg, var(--data-2) 0 4px, transparent 4px 7px); }
 
-.bars { display: grid; gap: 10px; }
-.barrow { display: grid; grid-template-columns: minmax(84px, 8.5rem) minmax(0, 1fr) 3rem; gap: 12px; align-items: center; min-height: 26px; }
-.barrow-name { font-size: 0.88rem; }
-.barrow-track { position: relative; height: 20px; border-radius: 4px; background: var(--fill); }
+/* THE BARS: every number across kinds. A row is its name over its bar (so
+   a long name never squeezes the bar on a phone), the value to the right of
+   both, a detail line under. Square at the baseline, 4px round at the value
+   end. */
+.bars { display: grid; gap: 16px; }
+.barrow {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name val" "bar val";
+  column-gap: 14px; row-gap: 6px; align-items: center;
+}
+.barrow-name { grid-area: name; display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 0.92rem; overflow-wrap: anywhere; }
+.barrow-track { grid-area: bar; position: relative; height: 10px; border-radius: 0 4px 4px 0; background: var(--fill); }
 .barrow-fill { position: absolute; inset: 0 auto 0 0; border-radius: 0 4px 4px 0; background: var(--data); min-width: 2px; }
-.barrow-val { font-variant-numeric: tabular-nums; font-size: 0.88rem; text-align: right; }
-.barrow--rich { grid-template-columns: minmax(84px, 8.5rem) minmax(0, 1fr) 3.4rem; }
-.barrow--rich .barrow-val { line-height: 1.15; }
-.barrow-val small { display: block; font-size: 0.7rem; font-weight: 700; }
-.barrow-val small.is-up { color: var(--up); }
-.barrow-val small.is-down { color: var(--danger); }
+.barrow-val { grid-area: val; min-width: 3.2rem; text-align: right; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; }
+.barrow-val b { font-size: 1rem; font-weight: 700; }
+.barrow-val small { display: block; color: var(--muted); font-size: 0.74rem; }
+.barrow-val .is-up { color: var(--up); font-weight: 700; }
+.barrow-val .is-down { color: var(--danger); font-weight: 700; }
+.barrow-sub { grid-column: 1; font-size: 0.76rem; color: var(--muted); margin-top: -2px; overflow-wrap: anywhere; }
+.barrow.is-strong .barrow-name { font-weight: 700; }
 
-/* Settling in: a headline, then four bars out of the same people. The name
-   sits over its bar so long names never squeeze it on a phone. */
+/* Settling in: a headline, then four bars out of the same people. */
 .settle-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
 .settle-head p { margin: 0; flex: 1 1 16rem; color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
 .settle-head p b { color: var(--text); }
-.settle-bars { display: grid; gap: 14px; }
-.settle-row { display: grid; grid-template-columns: minmax(0, 1fr) 3.6rem; grid-template-areas: "name val" "bar val"; column-gap: 12px; row-gap: 6px; align-items: center; }
-.settle-name { grid-area: name; font-size: 0.92rem; }
-.settle-row .barrow-track { grid-area: bar; height: 14px; }
-.settle-row.is-low .settle-name { font-weight: 700; }
-.settle-val { grid-area: val; text-align: right; font-variant-numeric: tabular-nums; line-height: 1.2; }
-.settle-val b { font-size: 1.05rem; }
-.settle-val small { display: block; color: var(--muted); font-size: 0.76rem; }
 .settle .note { margin-top: 14px; }
 
 .callout {
@@ -417,16 +416,6 @@ a.callout--go { color: var(--text); text-decoration: none; min-height: 44px; }
 a.callout--go .i--go { transform: scaleX(-1); color: var(--muted); width: 18px; height: 18px; }
 @media (hover: hover) { a.callout--go:hover .i--go { color: var(--heart); } }
 .callout a { flex: none; font-weight: 700; color: var(--heart); text-decoration: none; min-height: 32px; display: inline-flex; align-items: center; }
-
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: -6px -18px; padding: 0 18px; }
-table { border-collapse: collapse; width: 100%; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
-th, td { padding: 9px 8px; text-align: right; border-bottom: 0.5px solid var(--sep); white-space: nowrap; }
-th:first-child, td:first-child { text-align: left; position: sticky; left: -18px; background: var(--surface); padding-left: 0; }
-th { font-weight: 400; color: var(--muted); font-size: 0.76rem; }
-tr:last-child td { border-bottom: 0; }
-td .sub { color: var(--muted); font-size: 0.74rem; margin-left: 4px; }
-.heat td.cell { text-align: center; min-width: 50px; border: 2px solid var(--surface); border-radius: 6px; }
-.heat td.cell.is-empty { color: var(--muted); opacity: 0.5; }
 
 /* The week's rhythm: 7 rows of 24 hours, one hue light to dark. */
 .rhythm { display: grid; grid-template-columns: 2.2rem repeat(24, minmax(0, 1fr)); gap: 2px; font-size: 0.68rem; color: var(--muted); }
@@ -471,9 +460,28 @@ td .sub { color: var(--muted); font-size: 0.74rem; margin-left: 4px; }
 .letter-acts .pill-quiet { min-height: 52px; padding: 0 20px; font-size: 0.95rem; }
 .publish-fill:disabled, .pill-quiet:disabled { opacity: 0.45; cursor: default; transform: none; }
 
+/* What they get: the email as it lands, its From, To and Subject over the
+   email's own canvas. The email is drawn light, as it is sent. */
+.mail-preview { border-radius: var(--radius-soft); overflow: hidden; border: 0.5px solid var(--sep); background: var(--surface); }
+.mail-head { padding: 14px 18px 13px; display: grid; gap: 3px; font-size: 0.86rem; border-bottom: 0.5px solid var(--sep); }
+.mail-line { display: flex; gap: 10px; min-width: 0; overflow-wrap: anywhere; }
+.mail-k { color: var(--muted); }
+.mail-line > .mail-k:first-child { flex: none; width: 2.6rem; }
+.mail-subject { font-weight: 700; font-size: 1rem; margin-top: 4px; overflow-wrap: anywhere; }
+.mail-body { color-scheme: light; }
+.mail-body table { border-collapse: separate; }
+
 /* ── Dailies ──────────────────────────────────────────────────────────────── */
 .daily-now { padding: 18px 20px; }
 .daily-prompt { font-family: 'Instrument Serif', serif; font-size: 1.85rem; line-height: 1.12; margin: 6px 0 0; }
+/* A day in the list: its weekday over its date, a little calendar page. */
+.day-chip {
+  flex: none; width: 2.6rem; display: grid; justify-items: center; line-height: 1.05;
+  padding: 5px 0 6px; border-radius: 10px; background: var(--fill);
+}
+.day-chip small { font-size: 0.66rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.day-chip b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.row .day-chip + .row-main { margin-left: 2px; }
 
 /* ── The Dictionary ───────────────────────────────────────────────────────── */
 .search {

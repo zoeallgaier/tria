@@ -94,11 +94,10 @@ begin
         ) s)
     ),
 
-    -- What people have set up, as shares of everyone.
+    -- What people have set up, as shares of everyone. Not a bio or pronouns
+    -- (Zoe, 2026-11-12: "bio doesn't need to be tracked, same for pronouns").
     'adoption', jsonb_build_object(
       'photo',    (select count(*) from metrics.people where avatar is not null),
-      'bio',      (select count(*) from metrics.people where btrim(bio) <> ''),
-      'pronouns', (select count(*) from metrics.people where coalesce(btrim(pronouns), '') <> ''),
       'private',  (select count(*) from metrics.people where private),
       'charms',   (select count(*) from metrics.people where cardinality(coalesce(charms, '{}')) > 0),
       'pins',     (select count(*) from metrics.people where pinned is not null and jsonb_array_length(pinned) > 0),

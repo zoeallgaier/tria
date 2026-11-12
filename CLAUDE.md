@@ -29,8 +29,19 @@ always talking about the same thing ... I also want to see metrics."**
 own on the site, in the app's tokens and type, **never bundled into iOS**
 (ios-sync.sh copies only the root index.html) and a real folder, so Pages
 never hands it 404.html's app. Same origin, so a session made on the site is
-its session too; `bump.sh` stamps it with the app. Seven pages since
-2026-11-11 (Zoe): **Overview** (Weekly and Monthly active tiles and charts,
+its session too; `bump.sh` stamps it with the app. Six pages since
+2026-11-12 (**Retention went**, Zoe: "remove."; its week 1 figure stays on the
+Overview, so `admin_retention` is still read, and an old `#retention` lands on
+the Overview). **Three chart styles, no more** (Zoe, 2026-11-12: "use like max
+3 styles of charts for data, picking the best options for the type of data"):
+THE LINE for anything over time (`lineChart`/`mountLine`, one or two lines on
+one axis, a dotted last stretch while a day or week is still going), THE BARS
+for anything across kinds (`barChart`: the name over its bar, the value right;
+with `total` a share as a percent over its count), THE HEATMAP for weekday by
+hour (`rhythmHtml`). Columns and the lists' little meters are gone; a list is
+for people and days. **Overview** (top cards **Active today**, Weekly active,
+Monthly active, New this week since 2026-11-12, Zoe: "make active today a top
+card, swap it for settled in", so Settled in is a small figure; the charts,
 Monthly's change on the 30 days before (`mauPrev`), an **All time** chart
 (`history`, weekly and monthly active a point a week since the first sign of
 life), **Settling in** (`paintSettling`, `admin_settling`; an old `#funnel`
@@ -63,7 +74,7 @@ circles follow (`series[].by`, `audiencesBy`, `conversationBy`, circles'
 (Zoe: "remove activity from tria reviewer as well, I use that to test"):
 `metrics_ignore`, seeded by "review" in a handle, name or email, folded into
 `metrics.skip`, so every page and Nudge drop it; the SQL's check row lists
-who is left out. **Nudge**, Retention,
+who is left out. **Nudge**,
 Community, **Dailies**, Dictionary. `?demo` draws sample numbers, flagged.
 **Nudge** (Zoe: "an email for users who haven't really been in the funnel"):
 `supabase/admin-nudge.sql` (**confirmed run** 2026-11-11: anon `rpc/admin_nudge`
@@ -75,13 +86,22 @@ keeps `nudge_stop`. Sending is the `nudge` Edge Function
 `RESEND_API_KEY` and `NUDGE_REPLY_TO`, `NUDGE_FROM` optional; refuses without
 a reply-to, since "reply stop" is the way out), two taps to send; **Open in
 Mail** works without it (mailto, Bcc for several) and "Mark as nudged" logs
-it. **Dailies** is `supabase/admin-dailies.sql` (**confirmed run**, anon
+it. **What they get** (Zoe, 2026-11-12: "where is the email sent from and what
+does it look like?"): under the letter, the email as it lands, From (`Tria
+<hello@triaonline.com>`, the function's GET says its `from`, never the reply
+address), To, Subject and the card itself, redrawn as you type, with whether
+sending is set up under its title; `letterHtml` in admin.js is the function's
+`html()` and **the two are kept equal by hand**. **Dailies** is `supabase/admin-dailies.sql` (**confirmed run**, anon
 answers its 42501; needs daily-analytics.sql's views, which **know the
 season since 2026-11-11**: `metrics.daily_season`, written out of app.js's
 SEASON by script, is consulted before the rotation as `dailyOn` does; without
 it every day since 2026-09-14 matched a prompt nobody saw and read zero, Zoe:
-"its all 0s rn". **Regenerate it if SEASON changes.** The page has All time
-and By weekday charts), never reading likes. The Monthly chart needs
+"its all 0s rn". **Regenerate it if SEASON changes.** Since 2026-11-12 (Zoe:
+"format the data more cleanly", "best and least on top after today same for
+answered with") the page is Today, then Land best, Land least (never the same
+prompt twice, one scale) and Answered with, then the four figures, People a
+day, All time and By weekday, then Every day as a calendar list, its last week
+until asked), never reading likes. The Monthly chart needs
 admin-dashboard.sql re-run (`series.monthly`).
 **The Dictionary is `admin/dictionary.js`: a new feature adds its entry in
 the same commit.** Its names are the ones to use with Zoe.
@@ -98,7 +118,9 @@ number** (Zoe: "exclude my metrics? I post a lot and probably skew data"):
 `metrics.people`, `.posts`, `.days`, `.devices`, `meaningful_events`,
 `journeys` all drop them; only Top inviters keeps them (credit, not skew).
 **Community adds no tracking** (Zoe: "goodies (without adding any tracking)"):
-friends each, people on their own, circles by size, what people have set up,
+friends each, people on their own, circles by size, what people have set up
+(**never a bio or pronouns**, Zoe, 2026-11-12: "bio doesn't need to be tracked,
+same for pronouns"; Settling in's "a photo or bio" is `profile_done` and stays),
 themes, when Tria is used (weekday by hour), dailies, audiences, top
 inviters, the newest accounts' progress, blocks. **The page is laid out to
 the HIG** (Zoe): a large title handing over to the bar's inline title, a

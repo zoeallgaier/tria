@@ -26,7 +26,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const REV = '2026-11-11';
+const REV = '2026-11-12';
 const URL_ = Deno.env.get('SUPABASE_URL')!;
 const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -53,7 +53,9 @@ const fill = (s: string, name: string) => s.replace(/\{name\}/g, name);
 const SANS = "'Oxygen',-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif";
 const SERIF = "'Instrument Serif',Georgia,'Times New Roman',serif";
 
-// The auth mail's card (email-templates/), Tria's ramp on the button.
+// The auth mail's card (email-templates/), Tria's ramp on the button. The
+// admin page draws this as its preview (letterHtml in admin/admin.js, Zoe,
+// 2026-11-12: "what does it look like?"): KEEP THE TWO EQUAL BY HAND.
 function html(message: string) {
   const paras = message.trim().split(/\n\s*\n/).map((p) =>
     `<p style="font-family:${SANS};font-size:15px;line-height:1.6;color:#14171a;margin:16px 0 0 0;">` +
@@ -81,7 +83,9 @@ const text = (message: string) =>
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  if (req.method === 'GET') return json({ ok: true, rev: REV, ready: !!(RESEND && REPLY_TO) });
+  // GET says who it sends from (that is in every email anyway) and whether the
+  // secrets are set; never the reply address. The admin page reads it.
+  if (req.method === 'GET') return json({ ok: true, rev: REV, from: FROM, ready: !!(RESEND && REPLY_TO) });
   if (req.method !== 'POST') return json({ error: 'method' }, 405);
 
   // Asked as the caller: only Tria's team.
