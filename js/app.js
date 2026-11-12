@@ -2755,6 +2755,7 @@
           `</span>` +
         `</a>` +
         takeStarsHtml(post) +
+        headLockHtml(post) +
       `</header>`;
   }
 
@@ -2769,16 +2770,52 @@
     if (!post.communityId) return '';
     const c = Store.community(post.communityId);
     if (!c) return '';
-    return `<a class="card-community" href="${communityRoute(c)}">` +
+    const tag = `<a class="card-community" href="${communityRoute(c)}">` +
       svgIcon('circle', 'card-community-ico') +
       `<span>Posted in <b>${esc(communityHandle(c))}</b></span></a>`;
+    // A locked post's lock rides the top line's right, so here it is this one.
+    const lock = privateMarkHtml(post);
+    return lock ? `<div class="card-community-line">${tag}${lock}</div>` : tag;
   }
+
+  /* A post not everyone can read wears a lock in its top right corner (Zoe,
+     2026-11-11: "if a post is posted on a private circle, include a lock icon
+     ... or privately to select people"): said in an INVITE-ONLY circle, or
+     shared with chosen people ('list'). Not My circle: that is most posts, and
+     a lock on nearly everything says nothing. It rides the card's first line
+     (the circle line when there is one, else the byline or a profile's date
+     line), after a Take's stars, and on the Frames wall the tile's corner. A
+     circle's own page hides it (.view--community), where every post would wear
+     it and the bar's c/slug already does. */
+  function isPrivatePost(post) {
+    if (!post) return false;
+    if (post.audience === 'list') return true;
+    if (!post.communityId) return false;
+    const c = Store.community(post.communityId);
+    return !!(c && c.inviteOnly);
+  }
+  function privateLabel(post) {
+    if (post.audience !== 'list') return 'Invite only circle';
+    return post.author === Store.session()
+      ? `Shared with ${audienceCountLabel(Store.audienceCount(post.id))}`
+      : 'Shared privately';
+  }
+  function privateMarkHtml(post, cls) {
+    if (!isPrivatePost(post)) return '';
+    const label = esc(privateLabel(post));
+    return `<span class="${cls || 'card-private'}" title="${label}">` +
+      svgIcon('lock', 'card-private-ico') +
+      `<span class="visually-hidden">${label}</span></span>`;
+  }
+  // The byline and the date line wear it only when no circle line is over them.
+  const headLockHtml = (post) => post.communityId && Store.community(post.communityId)
+    ? '' : privateMarkHtml(post);
 
   // A slim single-author meta line that stands in for the byline on a profile,
   // where the header already establishes whose column this is. Just the date
   // — no repeated avatar + name down the page.
   function soloMetaEl(post) {
-    return `<p class="card-solometa"><span>${esc(niceAgo(post._ts, post.date))}</span>${takeStarsHtml(post)}</p>`;
+    return `<p class="card-solometa"><span>${esc(niceAgo(post._ts, post.date))}</span>${takeStarsHtml(post)}${headLockHtml(post)}</p>`;
   }
 
   // ── Long notes → "Read more" ───────────────────────────────────────────────
@@ -4378,17 +4415,9 @@
           `target="_blank" rel="noopener noreferrer">${svgIcon('pin', 'card-location-ico')}` +
           `<span>${esc(post.location)}</span></a></p>`
       : '';
-    // Targeted post ('list', any type): a quiet lock line. The author sees the
-    // headcount they picked (feed + their profile); an invited viewer just sees
-    // that it's private (they can't read the full allowlist anyway — RLS hands
-    // them only their row).
-    const iAmAuthor = post.author === Store.session();
-    const audienceHtml = post.audience === 'list'
-      ? `<p class="card-location card-audience">${svgIcon('lock', 'card-location-ico')}` +
-          `<span>${iAmAuthor
-            ? `Shared with ${audienceCountLabel(Store.audienceCount(post.id))}`
-            : 'Shared privately'}</span></p>`
-      : '';
+    // A post shared with chosen people says so with the lock in its top right
+    // corner now (privateMarkHtml, Zoe 2026-11-11), its label holding what this
+    // line said: the author's headcount, or "Shared privately".
 
     // A post's tags sit over its link tiles (Zoe, 2026-10-26, of a YouTube
     // video), with the words they label, not under the tile.
@@ -4404,7 +4433,6 @@
         pollWidgetHtml(post) +
         locationHtml +
         whenHtml +
-        audienceHtml +
         (tiles ? '' : tagChips(post)) +
         actions +
       `</div>` +
@@ -10659,6 +10687,7 @@
     return `<a class="ptile ptile--frame" href="${postRoute(p)}" ` +
         `aria-label="${esc(cap || 'Frame')}">` +
         mediaFaceEl(p, cap, '3 / 4') +
+        privateMarkHtml(p, 'ptile-private') +
       `</a>`;
   }
 

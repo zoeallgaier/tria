@@ -11865,6 +11865,7 @@ body[data-ambient="none"] .pf-row-swatch {
   /* Tighter inset to the phone text column. Tap still opens full-screen. */
   .photo { padding-inline: var(--gutter); }
   .card--photo .card-community,
+  .card--photo .card-community-line,
   .card--photo .byline,
   .card--photo .card-solometa,
   .card--photo .card-passed,
@@ -13002,6 +13003,57 @@ a.daily-answer { text-decoration: none; }
 @media (hover: hover) { .card-community:hover { color: var(--text); } }
 .view--community .card-community,
 .view--community .card-passed-room { display: none; }
+
+/* A post not everyone can read: a lock in its top right corner (Zoe,
+   2026-11-11), an invite-only circle's or one shared with chosen people
+   (privateMarkHtml). It ends the card's first line, the circle line's when
+   there is one, else the byline's or a profile's date line, after a Take's
+   stars, in the line's own muted ink at the circle mark's size. The circle
+   line takes a row of its own only when it wears one, so its margin moves out
+   to the row. */
+.card-private {
+  flex: 0 0 auto;
+  display: inline-flex;
+  margin-inline-start: auto;
+  /* The stars' own step in from the column's edge. */
+  margin-inline-end: 6px;
+  color: var(--muted);
+}
+.take-stars + .card-private { margin-inline-start: 0.1rem; }
+.card-private-ico { display: block; width: 15px; height: 15px; }
+.card-community-line {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.card-community-line .card-community { margin-bottom: 0; min-width: 0; }
+.card--photo .card-community-line { padding-inline: var(--inset); }
+.card--photo .card-community-line .card-community { padding-inline: 0; }
+.view--community .card-community-line,
+.view--community .card-private,
+.view--community .ptile-private { display: none; }
+/* On the Frames wall, the tile's top right corner, in the carousel count's
+   material so it reads on any photo. */
+.ptile--frame { position: relative; }
+.ptile-private {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  pointer-events: none;
+}
+.ptile-private .card-private-ico { width: 13px; height: 13px; }
 
 /* The circle's page: the profile's identity block, with its photo where a
    face goes, or the triad when it has none. */

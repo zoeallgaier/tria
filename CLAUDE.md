@@ -124,6 +124,20 @@ of the three tables has a select policy. **App Store Connect's privacy label
 needs "Product Interaction, linked to user" before a build with the ping
 ships.**
 
+## A private post wears a lock (2026-11-11)
+
+**Zoe: "if a post is posted on a private circle, include a lock icon on the
+post in feed and profile feeds ... or privately to select people ... top
+right corner is best".** `privateMarkHtml` (`isPrivatePost`: audience `list`,
+or a post in an INVITE-ONLY circle; never My circle, which is most posts)
+ends the card's first line: the circle line when there is one (it becomes
+`.card-community-line` only then), else the byline or a profile's date line
+(`headLockHtml`), after a Take's stars, in muted ink. A Frames tile wears it
+in its top right corner in the carousel count's material (`.ptile-private`).
+**The old "Shared privately" / "Shared with N" line at a card's foot is
+gone**: the lock's label holds those words. A circle's own page hides every
+lock (`.view--community`), where the bar's c/slug already wears one.
+
 ## Drafts: the composer saves as you write (2026-11-11)
 
 **Zoe: "Draft posts and autosave ... I want people to be able to come back to
