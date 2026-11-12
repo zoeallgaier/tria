@@ -492,6 +492,13 @@
         tile('New this week', fmt(o.new7), delta(cur?.joined, prev?.joined), 'Accounts made in the last 7 days') +
         tile('Settled in', st?.people ? pctTxt(pct(st.settled, st.people)) : '–', st?.people ? `${fmt(st.settled)} of ${fmt(st.people)} in their first week` : '', 'Made a friend (or joined a circle) and shared something, both in their first week. Joined in the last 30 days, a week old or more.') +
       '</div>' +
+      strip([
+        ['Everyone', fmt(o.users), 'Every account, yours left out'],
+        ['Today', fmt(o.dau), 'Created or connected today'],
+        ['Back in week 1, last month', pctTxt(w1), 'Of the people who joined in the last month (the last 4 signup weeks old enough to tell), the share active again 7 to 13 days after joining'],
+        ['Opened, week', fmt(o.openedWau), 'Opened Tria in the last 7 days, doing something or not'],
+        ['Opened, month', fmt(o.openedMau), 'Opened Tria in the last 30 days, doing something or not'],
+      ]) +
       nudgeLine +
       '<div class="section grid grid--two">' +
         `<div>${sectionHead('Weekly active', '12 weeks')}<div class="card" id="c-active"></div></div>` +
@@ -500,14 +507,6 @@
       '</div>' +
       `<div class="section">${sectionHead('All time', hist.length ? 'Since ' + esc(day(hist[0].week)) + ', a point a week' : '')}<div class="card" id="c-history">` +
         (hist.length > 1 ? '' : '<p class="empty">Re-run <b>supabase/admin-dashboard.sql</b> to draw this.</p>') + '</div></div>' +
-      strip([
-        ['Everyone', fmt(o.users), 'Every account, yours left out'],
-        ['Today', fmt(o.dau), 'Created or connected today'],
-        ['Back in week 1', pctTxt(w1), 'Active again 7 to 13 days after joining, the last 4 signup weeks'],
-        ['Stickiness', pctTxt(o.mau28 ? pct(o.avgDau28, o.mau28) : null), 'Average day ÷ month, 28 days. 20% is healthy for a social app.'],
-        ['Opened, week', fmt(o.openedWau), 'Opened Tria in the last 7 days, doing something or not'],
-        ['Opened, month', fmt(o.openedMau), 'Opened Tria in the last 30 days, doing something or not'],
-      ]) +
       `<div class="section" id="funnel"></div>` +
       `<div class="section">${sectionHead('When', rh?.peak ? `Busiest ${rh.peak}` : 'Last 4 weeks')}` +
         (rh ? `<div class="card">${rh.html}</div>` : `<div class="callout">${extrasWhy}</div>`) + '</div>' +

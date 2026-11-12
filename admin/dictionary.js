@@ -107,7 +107,6 @@ window.TRIA_DICTIONARY = [
       { name: 'Meaningful', code: 'metrics.meaningful_events', say: 'Create or connect: a post, Moment, daily answer, comment, message, RSVP, poll vote, friend made or circle joined. A like is not.' },
       { name: 'Active (DAU, WAU, MAU)', say: 'People with a meaningful interaction today, in the last 7 days, in the last 30.' },
       { name: 'Opened', code: 'user_days', say: 'People who opened Tria at all that day. Counted since the open ping shipped.' },
-      { name: 'Stickiness', say: 'Average daily actives over the last 28 days, divided by the 28 day actives.' },
       { name: 'Install', code: 'devices', say: 'A first open of the app or a home screen shortcut. A browser visit is a web visitor, not an install.' },
       { name: 'Account', say: 'A profile made (an @handle claimed).' },
       { name: 'Profile complete', code: 'profile_done', say: 'A photo or a bio added.' },
