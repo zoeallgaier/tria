@@ -8062,11 +8062,19 @@ button.card-song-play:active { transform: scale(0.9); }
    every aspect-ratio face with it. Take the full column back explicitly; the
    feed is already capped at --feed-width, so this centres on the same axis. */
 .pgrid--frames { width: 100%; margin-top: 0.15rem; }
-/* Two columns at every width, a phone included (Zoe, 2026-11-11: "2 columns
-   for frames view on circles and profiles"; three for an afternoon before
-   it); Discover's wall of people keeps the ladder above. Two classes so the
-   desktop's three can't win. */
-.pgrid.pgrid--frames { --cols: 2; }
+/* Three columns on a phone and four on a desktop (Zoe, 2026-11-12: "3
+   columns for the frames view on profiles, up to 4 on desktop"; two the night
+   before, three that afternoon), a profile's and a circle's alike; Discover's
+   wall of people keeps the ladder above. The fourth comes in at 900px, where
+   the column left beside the sidebar (568px) holds four at a phone's tile
+   width, 129px, and they grow to about 152px at the full measure. The 681 to
+   899 band keeps three: a Frame is a picture, no words to wrap, so the band's
+   two (made for Discover's names) isn't needed. Two classes so the ladder's
+   own --cols can't win. */
+.pgrid.pgrid--frames { --cols: 3; }
+@media (min-width: 900px) {
+  .pgrid.pgrid--frames { --cols: 4; }
+}
 
 /* A private profile, seen by an outsider: the posts column is replaced by a
    quiet, centred nudge toward adding them. Flat editorial (content, not glass),
