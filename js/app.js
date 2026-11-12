@@ -10343,7 +10343,7 @@
     return `<div class="ptile-face ptile-face--media" style="${style}">` +
         (src ? `<img src="${esc(sizedSrc(src, 180))}" alt="${esc(label || 'Frame')}" ` +
                `loading="lazy" decoding="async">` : '') +
-        (isVideo ? `<span class="ptile-play" aria-hidden="true">${svgIcon('play', 'ptile-play-ico')}</span>` : '') +
+        (isVideo ? `<span class="ptile-play" aria-hidden="true">${svgIcon(ratio ? 'playSoft' : 'play', 'ptile-play-ico')}</span>` : '') +
       `</div>`;
   }
 
@@ -10687,7 +10687,8 @@
     return `<a class="ptile ptile--frame" href="${postRoute(p)}" ` +
         `aria-label="${esc(cap || 'Frame')}">` +
         mediaFaceEl(p, cap, '3 / 4') +
-        privateMarkHtml(p, 'ptile-private') +
+        // A clip's play mark has the corner, so a locked clip's lock sits beside it.
+        privateMarkHtml(p, 'ptile-private' + (isVideoUrl(p.image) ? ' ptile-private--beside' : '')) +
       `</a>`;
   }
 
