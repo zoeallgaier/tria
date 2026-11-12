@@ -54,7 +54,7 @@ window.TRIA_DICTIONARY = [
       { name: 'Host', code: 'communities.owner', say: 'Whoever started the circle. Edits it, takes people out, hears every join.' },
       { name: 'Favorite circles', code: 'toggleFavCircle, bookmark', say: 'A bookmark on any circle: top of the sidebar.' },
       { name: 'Audience', code: "posts.audience: 'public' | 'circle' | 'list' | 'community'", say: 'Who a post is for: Anyone, My circle (friends), Choose people, or a circle.' },
-      { name: 'Private lock', code: 'privateMarkHtml, isPrivatePost', where: 'A card\'s top right, a Frame tile\'s corner', say: 'A lock on a post shared with chosen people or in an invite-only circle. Not on My circle posts, and not on a circle\'s own page.' },
+      { name: 'Private lock', code: 'privateMarkHtml, isPrivatePost', where: 'A card\'s top right, a Frame tile\'s corner', say: 'A lock on a post shared with chosen people or in an invite-only circle. Not on My circle posts, and not on a circle\'s own page. On the Frames wall one mark a tile: the lock, else a clip\'s play, else a circle\'s solid trio.' },
       { name: 'Private account', code: 'users.private', say: 'Posts fenced to friends; adding you is a request; never reposted by others.' },
       { name: 'Invite link', code: '/i/<code>', say: 'Makes two people friends outright. Private channels only (Messages, a QR held up).' },
       { name: 'Charms', code: 'CHARMS, users.charms', say: 'Little firsts worn on the rim of your photo, two at most. Stickers count.' },

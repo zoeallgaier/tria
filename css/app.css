@@ -13041,18 +13041,22 @@ a.daily-answer { text-decoration: none; }
 .ptile-private .card-private-ico rect { fill: currentColor; }
 /* A clip's play mark wears the same (Zoe: "give videos play button that
    design treatment"): small, solid white, the same shadow, the corner its
-   own; a locked clip's lock steps left of it. Only the Frames wall's tiles:
-   Discover's wall keeps its centred mark. */
+   own. Only the Frames wall's tiles: Discover's wall keeps its centred mark.
+   A tile wears ONE mark (Zoe: "private and play icons trump circle icon.
+   only one", frameMarkHtml): the lock, else the play, else the trio. */
 .ptile--frame .ptile-play {
   inset: 7px 7px auto auto;
   display: flex;
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
 }
 /* The triangle's ink is narrower than the lock's, so its box is bigger to
-   read the same size beside it. */
+   read the same size in the same corner. */
 .ptile--frame .ptile-play-ico { width: 22px; height: 22px; }
 .ptile--frame .ptile-play { inset: 5px 4px auto auto; }
-.ptile-private--beside { right: 24px; }
+/* A locked clip shows the lock alone, except on a circle's own page, where
+   the lock is hidden and the play comes back. */
+.ptile--locked .ptile-play { display: none; }
+.view--community .ptile--locked .ptile-play { display: flex; }
 
 /* The circle's page: the profile's identity block, with its photo where a
    face goes, or the triad when it has none. */

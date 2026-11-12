@@ -10684,12 +10684,28 @@
      is an even grid; the post itself still shows the whole picture. */
   function frameTileHtml(p) {
     const cap = notePlain(p.note) || p.title || '';
-    return `<a class="ptile ptile--frame" href="${postRoute(p)}" ` +
+    const locked = isPrivatePost(p);
+    // A locked clip's play mark gives way to the lock (.ptile--locked).
+    return `<a class="ptile ptile--frame${locked ? ' ptile--locked' : ''}" href="${postRoute(p)}" ` +
         `aria-label="${esc(cap || 'Frame')}">` +
         mediaFaceEl(p, cap, '3 / 4') +
-        // A clip's play mark has the corner, so a locked clip's lock sits beside it.
-        privateMarkHtml(p, 'ptile-private' + (isVideoUrl(p.image) ? ' ptile-private--beside' : '')) +
+        frameMarkHtml(p, locked) +
       `</a>`;
+  }
+
+  /* A Frame tile wears ONE corner mark (Zoe, 2026-11-11: "private and play
+     icons trump circle icon. only one"): the lock for a post not everyone can
+     read, else a clip's play, else the circle's trio, solid (the Discover
+     tab's lit mark) for a Frame said in a circle ("for frames posted in
+     circles, use the circle trio icon"). The play is mediaFaceEl's. */
+  function frameMarkHtml(p, locked) {
+    if (locked) return privateMarkHtml(p, 'ptile-private');
+    const c = p.communityId && Store.community(p.communityId);
+    if (!c || isVideoUrl(p.image)) return '';
+    const label = esc(`Posted in ${communityHandle(c)}`);
+    return `<span class="ptile-private ptile-circle" title="${label}">` +
+      svgIcon('circleOn', 'card-private-ico') +
+      `<span class="visually-hidden">${label}</span></span>`;
   }
 
   function wireProfileTabs(tabsEl, feedEl, keys, current, pick) {
