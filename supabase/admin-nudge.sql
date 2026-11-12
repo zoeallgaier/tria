@@ -42,7 +42,9 @@ revoke all on public.nudge_stop from anon, authenticated;
 --   profile   no photo or bio
 --   connect   no friend and no circle
 --   post      never made anything
---   return    never back after their first day (2 days old or more)
+--   return    never back after their first day, a week old or more (Zoe,
+--             2026-11-11: "should be after a week"; it was 2 days), so a
+--             new account has its first week before it's nudged to return
 --   quiet     settled once, no sign of life in 21 days
 -- An account under a day old is left alone: give people a day.
 create or replace function public.admin_nudge() returns jsonb
@@ -80,7 +82,7 @@ begin
         when j.profile_at is null then 'profile'
         when j.connected_at is null then 'connect'
         when j.action_at is null then 'post'
-        when u.created_at < now() - interval '2 days'
+        when u.created_at < now() - interval '7 days'
              and j.returned_day is null and coalesce(la.day, j.account_day) <= j.account_day then 'return'
         when coalesce(la.day, j.account_day) < today - 21 then 'quiet'
       end as step) st
