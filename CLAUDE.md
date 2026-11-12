@@ -53,7 +53,13 @@ Made's bars leave bare reposts out (a quote is `quote`) so they add up to the
 Made tile; Done is **Interactions** (Made has the posts); the chart is people
 active a day (as the Active tile); Opened on, Devices and App versions are
 PEOPLE from `devices` (user_days keeps only a day's first platform, and
-signed-out visitors were mixed in). **Test accounts are left out like admins**
+signed-out visitors were mixed in). **A tap shows just one thing** (Zoe:
+"lemme tap a card to filter data by type"): the Made, Comments and Messages
+tiles and every bar under Made and Interactions are picks (`astate.f`,
+`paintActivity`, no refetch); the chart, the figures, Posted to and Busiest
+circles follow (`series[].by`, `audiencesBy`, `conversationBy`, circles'
+`types`), chats and devices don't. **Every page's caveat note leads it**
+(Zoe: "put disclaimer on top since i want to know"; `leadNote`). **Test accounts are left out like admins**
 (Zoe: "remove activity from tria reviewer as well, I use that to test"):
 `metrics_ignore`, seeded by "review" in a handle, name or email, folded into
 `metrics.skip`, so every page and Nudge drop it; the SQL's check row lists

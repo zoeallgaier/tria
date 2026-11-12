@@ -409,8 +409,10 @@ end $$;
 --   conversation     posts (not Moments or bare reposts): how many got a
 --                    comment from someone else, how fast, comments per post
 --   chats            messages by kind of chat: messages, chats, people
---   series           a point a day (a week past 120 days): events, people, posts
---   circles          the busiest circles: posts, people posting, joins
+--   series           a point a day (a week past 120 days): events, people, posts,
+--                    and 'by': each type and kind's count and people that day
+--   audiencesBy, conversationBy   the same two, a post type at a time
+--   circles          the busiest circles: posts, people posting, joins, posts by type
 --   opened, platforms, os, versions   people who opened Tria, and on what
 --                    (people, not devices; signed-out visitors left out)
 create or replace function public.admin_activity(p_days int) returns jsonb
@@ -448,7 +450,7 @@ begin
       from metrics.posts p
      where p.created_at >= (coalesce(p0, t0)::timestamp at time zone metrics.tz())
   ), conv as (
-    select p.id,
+    select p.id, p.t,
            (select count(*) from public.comments c where c.post_id = p.id
                and not exists (select 1 from metrics.skip k where k.user_id = c.author)) as comments,
            (select min(c.created_at) from public.comments c
@@ -477,7 +479,8 @@ begin
      where m.created_at >= (t0::timestamp at time zone metrics.tz())
        and not exists (select 1 from metrics.skip k where k.user_id = m.author)
   ), buckets as (
-    select g::date as at from generate_series(
+    select g::date as at, (g + case when by_week then interval '6 days' else interval '0 days' end)::date as til
+      from generate_series(
       case when by_week then date_trunc('week', t0)::date else t0 end, today,
       case when by_week then interval '7 days' else interval '1 day' end) g
   )
@@ -514,18 +517,52 @@ begin
     'chats', (select coalesce(jsonb_object_agg(kind, jsonb_build_object('messages', n, 'chats', chats, 'people', people)), '{}') from (
                 select kind, count(*) as n, count(distinct chat_id) as chats, count(distinct author) as people
                   from msg group by kind) s),
+    -- Per type, so the page can show just one (Zoe, 2026-11-11: "lemme tap a card to
+    -- filter data by type"): audiences and conversation by post type, and
+    -- each point's 'by', {key: [count, people]}, a post type, 'made' (them
+    -- all) or a kind besides making, the same rules as types and kinds.
+    'audiencesBy', (select coalesce(jsonb_object_agg(t, a), '{}') from (
+                      select t, jsonb_object_agg(audience, n) as a from (
+                        select t, audience, count(*) as n from ps
+                         where day >= t0 and t <> 'moment' and not bare group by t, audience) s
+                       group by t) s2),
+    'conversationBy', (select coalesce(jsonb_object_agg(t, jsonb_build_object(
+                         'posts', posts, 'replied', replied, 'comments', comments, 'firstReplyH', h)), '{}') from (
+                         select t, count(*) as posts,
+                                count(*) filter (where first_reply is not null) as replied,
+                                coalesce(sum(comments), 0) as comments,
+                                round((extract(epoch from percentile_cont(0.5) within group (order by first_reply)) / 3600)::numeric, 1) as h
+                           from conv group by t) s),
     'series', (select jsonb_agg(jsonb_build_object(
                   'at', b.at,
-                  'events', (select count(*) from ev where ev.kind <> 'friend' and ev.day between b.at and b.at + case when by_week then 6 else 0 end)
-                          + (select count(*) from fr where fr.day between b.at and b.at + case when by_week then 6 else 0 end),
-                  'people', (select count(distinct user_id) from ev where ev.day between b.at and b.at + case when by_week then 6 else 0 end),
-                  'posts', (select count(*) from ps where not ps.bare and ps.day between b.at and b.at + case when by_week then 6 else 0 end)
+                  'events', (select count(*) from ev where ev.kind <> 'friend' and ev.day between b.at and b.til)
+                          + (select count(*) from fr where fr.day between b.at and b.til),
+                  'people', (select count(distinct user_id) from ev where ev.day between b.at and b.til),
+                  'posts', (select count(*) from ps where not ps.bare and ps.day between b.at and b.til),
+                  'by', (select coalesce(jsonb_object_agg(k, jsonb_build_array(n, people)), '{}') from (
+                           select t as k, count(*) as n, count(distinct author) as people
+                             from ps where not ps.bare and ps.day between b.at and b.til group by t
+                           union all
+                           select 'made', count(*), count(distinct author)
+                             from ps where not ps.bare and ps.day between b.at and b.til having count(*) > 0
+                           union all
+                           select kind, count(*), count(distinct user_id)
+                             from ev where kind not in ('post', 'moment', 'daily', 'friend')
+                              and ev.day between b.at and b.til group by kind
+                           union all
+                           select 'friend', count(*),
+                                  (select count(distinct x) from fr f2, unnest(array[f2.a, f2.b]) x
+                                    where f2.day between b.at and b.til)
+                             from fr where fr.day between b.at and b.til having count(*) > 0) s)
                 ) order by b.at) from buckets b),
     'circles', (select coalesce(jsonb_agg(c order by (c->>'posts')::int desc, (c->>'joins')::int desc), '[]') from (
                  select c from (
                   select jsonb_build_object('name', cm.name, 'slug', cm.slug,
                            'posts', (select count(*) from ps where ps.community_id = cm.id and ps.day >= t0 and not ps.bare),
                            'people', (select count(distinct author) from ps where ps.community_id = cm.id and ps.day >= t0 and not ps.bare),
+                           'types', (select coalesce(jsonb_object_agg(t, n), '{}') from (
+                                       select t, count(*) as n from ps
+                                        where ps.community_id = cm.id and ps.day >= t0 and not ps.bare group by t) z),
                            'joins', (select count(*) from public.community_members mm
                                       where mm.community_id = cm.id
                                         and mm.joined_at >= (t0::timestamp at time zone metrics.tz())
@@ -533,7 +570,7 @@ begin
                     from public.communities cm) x
                  where (c->>'posts')::int > 0 or (c->>'joins')::int > 0
                  order by (c->>'posts')::int desc, (c->>'joins')::int desc
-                 limit 8) s),
+                 limit 40) s),   -- the page shows 8, re-sorted by a type when one is picked
     -- All three in PEOPLE, out of 'opened': someone on two counts in both.
     'opened', (select count(distinct user_id) from dev),
     'platforms', (select coalesce(jsonb_object_agg(platform, n), '{}') from (

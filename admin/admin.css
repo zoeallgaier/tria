@@ -247,7 +247,7 @@ h2 { font-size: 1.5rem; line-height: 1.15; }
 .section-tight { margin-top: var(--gap); }
 .section-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: 0 4px 10px; }
 .section-head .sub { margin: 0; font-size: 0.85rem; color: var(--muted); }
-.footnote { font-size: 0.8rem; color: var(--muted); margin: 28px 4px 0; }
+.footnote { font-size: 0.8rem; line-height: 1.45; color: var(--muted); margin: 0 4px var(--gap); }
 
 .card {
   background: var(--surface);
@@ -274,6 +274,18 @@ h2 { font-size: 1.5rem; line-height: 1.15; }
 .delta { color: var(--muted); }
 .delta.is-up { color: var(--up); font-weight: 700; }
 .delta.is-down { color: var(--danger); font-weight: 700; }
+
+/* A pick (Activity): a tile or a bar row that shows just that. */
+.is-pick { cursor: pointer; -webkit-tap-highlight-color: transparent; transition: box-shadow var(--dur-micro) var(--ease), opacity var(--dur-micro) var(--ease); }
+.tile.is-pick.is-on { box-shadow: inset 0 0 0 2px var(--data); }
+@media (hover: hover) { .tile.is-pick:not(.is-on):hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--data) 50%, transparent); } }
+.tile.is-pick:active { transform: scale(0.99); }
+.barrow.is-pick { margin: -3px -6px; padding: 3px 6px; border-radius: 6px; }
+@media (hover: hover) { .barrow.is-pick:hover { background: var(--fill); } }
+.barrow.is-on .barrow-name { font-weight: 700; }
+.bars.has-on .barrow:not(.is-on) { opacity: 0.4; }
+.pickbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 4px var(--gap); font-size: 0.92rem; }
+.pickbar b { font-weight: 700; }
 
 /* A row of small figures in one card. */
 .strip {

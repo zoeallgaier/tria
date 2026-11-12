@@ -126,6 +126,7 @@ window.TRIA_DICTIONARY = [
       { name: 'Got a reply', where: 'Admin, Activity', say: 'Posts (not Moments or bare reposts) with a comment from someone other than the author.' },
       { name: 'Posted to', where: 'Admin, Activity', say: 'A post\'s audience: Anyone, My circle, chosen people, or a circle.' },
       { name: 'Interactions', where: 'Admin, Activity', say: 'Everything done besides making a post: comments, messages, RSVPs, poll votes, friendships and circle joins. Made has the posts, Moments and daily answers, by type, and adds up to the Made tile.' },
+      { name: 'Showing (a pick)', where: 'Admin, Activity', say: 'Tap a card (Made, Comments, Messages) or a bar under Made or Interactions to see just that: the chart counts it a day, the figures become its count, people, share of active and each, and Posted to, Got a reply and Busiest circles follow a post type. Chats and devices stay everyone\'s. Tap it again, Active, or Show everything to go back.' },
       { name: 'Things each', where: 'Admin, Activity', say: 'Everything made or done in the window, over the active people: how much an active person does.' },
       { name: 'Left out of the numbers', code: 'metrics.skip', where: 'Admin, every page', say: 'Admins (unless in_metrics) and test accounts (metrics_ignore, the App Review account): nothing they do is counted, and Nudge never lists them.' },
       { name: 'When', code: 'rhythmHtml', where: 'Admin, Overview', say: 'Meaningful interactions by weekday and hour, the last 28 days, with the busiest hour named.' },
