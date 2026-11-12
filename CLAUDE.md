@@ -29,8 +29,24 @@ always talking about the same thing ... I also want to see metrics."**
 own on the site, in the app's tokens and type, **never bundled into iOS**
 (ios-sync.sh copies only the root index.html) and a real folder, so Pages
 never hands it 404.html's app. Same origin, so a session made on the site is
-its session too; `bump.sh` stamps it with the app. Four sections: Overview,
-Funnel, Retention, Dictionary. `?demo` draws sample numbers, flagged.
+its session too; `bump.sh` stamps it with the app. Six pages since
+2026-11-11 (Zoe): **Overview** (Weekly and Monthly active tiles and charts,
+Settling in, the funnel, as a section (`paintFunnel`, an old `#funnel` lands
+there), and When, the weekday by hour heatmap), **Nudge**, Retention,
+Community, **Dailies**, Dictionary. `?demo` draws sample numbers, flagged.
+**Nudge** (Zoe: "an email for users who haven't really been in the funnel"):
+`supabase/admin-nudge.sql` (**NOT run** as of 2026-11-11; until then the page
+shows the newest accounts with no email) lists everyone a day old or more who
+stopped at a step (profile, connect, post, return, quiet: 21 days without a
+sign of life) with their email from auth.users, logs sends in `nudges` and
+keeps `nudge_stop`. Sending is the `nudge` Edge Function
+(`supabase/functions/nudge`, **NOT deployed**; Resend's API, needs secrets
+`RESEND_API_KEY` and `NUDGE_REPLY_TO`, `NUDGE_FROM` optional; refuses without
+a reply-to, since "reply stop" is the way out), two taps to send; **Open in
+Mail** works without it (mailto, Bcc for several) and "Mark as nudged" logs
+it. **Dailies** is `supabase/admin-dailies.sql` (**NOT run**; needs
+daily-analytics.sql's views), never reading likes. The Monthly chart needs
+admin-dashboard.sql re-run (`series.monthly`).
 **The Dictionary is `admin/dictionary.js`: a new feature adds its entry in
 the same commit.** Its names are the ones to use with Zoe.
 **The numbers are `supabase/admin-dashboard.sql`** (**confirmed run**

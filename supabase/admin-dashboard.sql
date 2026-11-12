@@ -334,6 +334,13 @@ begin
                               where day between today - (w * 7 + 6) and today - w * 7),
                   'opened', (select count(distinct user_id) from metrics.days
                               where day between today - (w * 7 + 6) and today - w * 7),
+                  -- Monthly active as it stood at this week's end: the 30 days
+                  -- ending that day (Zoe, 2026-11-11: "add monthly active card
+                  -- and graph"). ev reaches 120 days back, past 11 weeks plus 30.
+                  'monthly', (select count(distinct user_id) from ev
+                               where day between today - (w * 7 + 29) and today - w * 7),
+                  'monthlyOpened', (select count(distinct user_id) from metrics.days
+                               where day between today - (w * 7 + 29) and today - w * 7),
                   'joined', (select count(*) from metrics.people
                               where (created_at at time zone metrics.tz())::date
                                     between today - (w * 7 + 6) and today - w * 7)

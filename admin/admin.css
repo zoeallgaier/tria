@@ -135,7 +135,7 @@ svg.i { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-widt
 }
 .dock-pill {
   pointer-events: auto;
-  display: flex; gap: 2px; width: min(100%, 24rem); padding: 0.3rem;
+  display: flex; gap: 2px; width: min(100%, 26rem); padding: 0.3rem;
   border-radius: 999px;
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4); backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
@@ -416,6 +416,47 @@ td .sub { color: var(--muted); font-size: 0.74rem; margin-left: 4px; }
 .rhythm .rc { aspect-ratio: 1; border-radius: 3px; background: var(--fill); min-width: 0; }
 .rhythm .rl { align-self: center; }
 .rhythm .rh { text-align: left; white-space: nowrap; overflow: visible; }
+
+/* ── Nudge ──────────────────────────────────────────────────────────────── */
+.scopes--page { margin-top: 0; }
+.chip-n { color: var(--muted); font-weight: 400; margin-left: 2px; font-variant-numeric: tabular-nums; }
+.note--page { margin: 10px 4px 0; }
+.linkish {
+  appearance: none; border: 0; background: none; padding: 0; cursor: pointer;
+  color: var(--heart); font: inherit; font-weight: 700; min-height: 32px;
+}
+.linkish:disabled { color: var(--muted); cursor: default; }
+.row--head { min-height: 44px; padding-block: 4px; }
+.pick-row { padding-left: 8px; padding-right: 6px; gap: 6px; }
+.pick-row.is-picked { background: color-mix(in srgb, var(--data) 7%, transparent); }
+.pick-row + .row::before, .row--head + .row::before { left: 52px; }
+/* A 44pt box round a 22px check. */
+.pick { position: relative; flex: none; width: 44px; height: 44px; display: grid; place-items: center; cursor: pointer; }
+.pick input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.pick-box { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--muted); display: grid; place-items: center; }
+.pick input:checked + .pick-box { background: var(--data); border-color: var(--data); }
+.pick input:checked + .pick-box::after { content: ''; width: 9px; height: 5px; border: solid var(--surface); border-width: 0 0 2px 2px; transform: translateY(-1px) rotate(-45deg); }
+.pick input:disabled + .pick-box { opacity: 0.35; }
+.pick input:focus-visible + .pick-box { outline: 2px solid var(--heart); outline-offset: 2px; }
+.icon-btn {
+  appearance: none; border: 0; background: none; cursor: pointer; flex: none;
+  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--muted);
+}
+.icon-btn svg { width: 19px; height: 19px; }
+@media (hover: hover) { .icon-btn:hover { color: var(--danger); background: var(--fill); } }
+@media (max-width: 520px) { .pick-row .row-val .next { display: none; } }
+.letter { display: grid; gap: 10px; }
+.field.field--plain { padding: 0 16px; border-radius: 14px; color: var(--text); font-family: inherit; }
+.field.field--area { padding: 12px 16px; min-height: 12rem; resize: vertical; line-height: 1.5; font-family: inherit; color: var(--text); }
+.letter .note { margin: 0 4px; }
+.letter-acts { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+.letter-acts .publish-fill { flex: 1; width: auto; }
+.letter-acts .pill-quiet { min-height: 52px; padding: 0 20px; font-size: 0.95rem; }
+.publish-fill:disabled, .pill-quiet:disabled { opacity: 0.45; cursor: default; transform: none; }
+
+/* ── Dailies ──────────────────────────────────────────────────────────────── */
+.daily-now { padding: 18px 20px; }
+.daily-prompt { font-family: 'Instrument Serif', serif; font-size: 1.85rem; line-height: 1.12; margin: 6px 0 0; }
 
 /* ── The Dictionary ───────────────────────────────────────────────────────── */
 .search {
