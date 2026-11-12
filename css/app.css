@@ -13033,27 +13033,23 @@ a.daily-answer { text-decoration: none; }
 .view--community .card-community-line,
 .view--community .card-private,
 .view--community .ptile-private { display: none; }
-/* On the Frames wall, the tile's top right corner, in the carousel count's
-   material so it reads on any photo. */
+/* On the Frames wall, the tile's top right corner: a SOLID white lock, no
+   pill behind it (Zoe, 2026-11-11: "doesnt need the bg. use filled icon for
+   contrast"), the body filled and a soft shadow under it, as the clip's play
+   glyph (.ptile-play) reads on any photo. */
 .ptile--frame { position: relative; }
 .ptile-private {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 7px;
+  right: 7px;
   z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+  display: flex;
   color: #fff;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
   pointer-events: none;
 }
-.ptile-private .card-private-ico { width: 13px; height: 13px; }
+.ptile-private .card-private-ico { width: 18px; height: 18px; stroke-width: 2.2; }
+.ptile-private .card-private-ico rect { fill: currentColor; }
 
 /* The circle's page: the profile's identity block, with its photo where a
    face goes, or the triad when it has none. */
