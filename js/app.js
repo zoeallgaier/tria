@@ -4440,6 +4440,7 @@
       commentsPanelHtml(post, full);
     el.dataset.sig = cardSig(el);
     wireLinkTiles(el);
+    fillPlaceArt(el);
     wirePoll(el, post, opts);
     wireGoing(el, post, opts);
     wireLikes(el, post, opts);
@@ -4462,7 +4463,7 @@
      A rating is HALF STARS as a whole number, 1 to 10; only the stars given
      are drawn, a half as the left half of one, in the page's ink. */
   const TAKE_STAR = 'M11.14 4.83Q12 3.2 12.86 4.83L14.25 7.44Q14.88 8.64 16.21 8.87L19.12 9.38Q20.94 9.7 19.66 11.02L17.6 13.14Q16.66 14.11 16.85 15.45L17.27 18.38Q17.53 20.2 15.87 19.39L13.22 18.1Q12 17.5 10.78 18.1L8.13 19.39Q6.47 20.2 6.73 18.38L7.15 15.45Q7.34 14.11 6.4 13.14L4.34 11.02Q3.06 9.7 4.88 9.38L7.79 8.87Q9.12 8.64 9.75 7.44Z';
-  const TAKE_KIND = { film: 'Film', show: 'Show', book: 'Book', podcast: 'Podcast' };
+  const TAKE_KIND = { film: 'Film', show: 'Show', book: 'Book', podcast: 'Podcast', place: 'Place' };
   const takeRating = (t) => { const r = Math.round(+((t || {}).rating) || 0); return r >= 1 && r <= 10 ? r : 0; };
   // "3½" for a screen reader's label and the composer's readout.
   const starWords = (r) => {
@@ -4477,8 +4478,10 @@
     return `<span class="take-stars" role="img" aria-label="${esc(starWords(r))}">` +
       whole.repeat(Math.floor(r / 2)) + (r % 2 ? half : '') + `</span>`;
   }
-  const takeSub = (t) => [TAKE_KIND[t.kind], t.year, t.by].filter(Boolean).join(' · ');
+  const takeSub = (t) => (t.kind === 'place'
+    ? [t.cat || 'Place', t.by] : [TAKE_KIND[t.kind], t.year, t.by]).filter(Boolean).join(' · ');
   function takeArtHtml(t, cls = '') {
+    if (t.kind === 'place') return placeArtHtml(t, cls);
     return `<span class="take-art take-art--${esc(t.kind || 'film')}${cls ? ' ' + cls : ''}${t.art ? ' pin-cover' : ''}"` +
       (t.art ? ` style="background-image:url('${encodeURI(t.art)}')"` : '') + ` aria-hidden="true">` +
       (t.art ? '' : svgIcon('star', 'take-art-ico')) + `</span>`;
@@ -4491,10 +4494,104 @@
         `<span class="take-title">${esc(t.title)}</span>` +
         (takeSub(t) ? `<span class="take-sub">${esc(takeSub(t))}</span>` : '') +
       `</span>`;
-    return /^https:\/\//.test(t.link || '')
-      ? `<a class="card-take" href="${esc(t.link)}" target="_blank" rel="noopener noreferrer" data-out="system" ` +
+    const link = t.kind === 'place' ? placeLink(t) : t.link;
+    return /^https:\/\//.test(link || '')
+      ? `<a class="card-take" href="${esc(link)}" target="_blank" rel="noopener noreferrer" data-out="system" ` +
+          (t.kind === 'place'
+            ? `data-place="${esc(JSON.stringify({ name: t.title, lat: +t.lat, lng: +t.lng, id: t.id || '' }))}" ` : '') +
           `aria-label="${esc([t.title, takeSub(t)].filter(Boolean).join(', '))}">${inner}</a>`
       : `<div class="card-take">${inner}</div>`;
+  }
+
+  /* A TAKE ON A PLACE (2026-11-12, Zoe: "allow for takes on places and stuff,
+     built into maps"). Apple Maps is the places database: the composer's
+     search asks MapKit (TriaPlaces.search, the app only, once
+     place-takes.sql has run), and the take keeps the name, where, what it is,
+     the point and Apple's Place ID (see that file). Its art is the place's
+     own little map, square, drawn natively with a dot in the reader's colour
+     and kept on the device (TriaPlaces.snapshot); the web and an older binary
+     draw a pin. A tap opens Apple's place card over the page where the take
+     has a Place ID (iOS 18), else Maps at the point, else maps.apple.com. */
+  const placesOn = () => nativeShell() && Store.placeTakesReady() &&
+    !!window.Capacitor?.isPluginAvailable?.('TriaPlaces');
+  const placePoint = (t) => Number.isFinite(+t.lat) && Number.isFinite(+t.lng) && t.lat !== '' && t.lng !== '';
+  const placeLink = (t) => placePoint(t)
+    ? `https://maps.apple.com/?q=${encodeURIComponent(t.title || '')}&ll=${+t.lat},${+t.lng}`
+    : '';
+  const placeMaps = new Map();   // snapshot key → its file's src, this launch
+  let placeInk = null;
+  // The reader's --heart as a hex, for the dot (a canvas pixel reads any
+  // colour syntax the page's own CSS might resolve to).
+  function heartHex() {
+    if (placeInk) return placeInk;
+    try {
+      const probe = document.createElement('i');
+      probe.style.color = 'var(--heart)';
+      document.body.appendChild(probe);
+      const css = getComputedStyle(probe).color;
+      probe.remove();
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = 1;
+      const cx = cv.getContext('2d');
+      cx.fillStyle = css;
+      cx.fillRect(0, 0, 1, 1);
+      const [r, g, b] = cx.getImageData(0, 0, 1, 1).data;
+      placeInk = '#' + [r, g, b].map(n => n.toString(16).padStart(2, '0')).join('');
+    } catch { placeInk = '#00c9ce'; }
+    return placeInk;
+  }
+  const placeMapKey = (t, size) =>
+    `${(+t.lat).toFixed(5)},${(+t.lng).toFixed(5)},${size},${darkScheme() ? 'd' : 'l'},${t.cat ? 'n' : 'w'},${heartHex()}`;
+  // 88px is the feed's tile; the composer's are drawn from the same map.
+  const PLACE_MAP_PX = 88;
+  function placeArtHtml(t, cls = '') {
+    const key = placePoint(t) ? placeMapKey(t, PLACE_MAP_PX) : '';
+    const src = key && placeMaps.get(key);
+    return `<span class="take-art take-art--place${cls ? ' ' + cls : ''}${src ? ' pin-cover' : ''}"` +
+      (key ? ` data-map="${esc(key)}" data-lat="${+t.lat}" data-lng="${+t.lng}"${t.cat ? '' : ' data-wide'}` : '') +
+      (src ? ` style="background-image:url('${src}')"` : '') + ` aria-hidden="true">` +
+      (src ? '' : svgIcon('pin', 'take-art-ico')) + `</span>`;
+  }
+  // Fills every place's map under `root` that isn't drawn yet. Asked once a
+  // key; a refusal leaves the pin.
+  const placeAsks = new Map();
+  function fillPlaceArt(root) {
+    if (!root || !nativeShell() || !window.Capacitor?.isPluginAvailable?.('TriaPlaces')) return;
+    root.querySelectorAll('.take-art--place[data-map]:not(.pin-cover)').forEach((el) => {
+      const key = el.dataset.map;
+      let job = placeAsks.get(key);
+      if (!job) {
+        job = window.Capacitor.nativePromise('TriaPlaces', 'snapshot', {
+          lat: +el.dataset.lat, lng: +el.dataset.lng, size: PLACE_MAP_PX,
+          dark: darkScheme(), wide: 'wide' in el.dataset, ink: heartHex(),
+        }).then((r) => {
+          const src = r && r.path ? window.Capacitor.convertFileSrc(r.path) : '';
+          if (src) placeMaps.set(key, src);
+          return src;
+        }).catch(() => '');
+        placeAsks.set(key, job);
+      }
+      job.then((src) => {
+        if (!src || !el.isConnected || el.dataset.map !== key) return;
+        el.style.backgroundImage = `url('${src}')`;
+        el.classList.add('pin-cover');
+        el.querySelector('.take-art-ico')?.remove();
+      });
+    });
+  }
+  function placeOfTile(a) {
+    try {
+      const t = JSON.parse(a.dataset.place || '');
+      return placePoint(t) ? { name: String(t.name || ''), lat: +t.lat, lng: +t.lng, id: String(t.id || '') } : null;
+    } catch { return null; }
+  }
+  async function searchPlaces(q, signal) {
+    if (!placesOn()) return [];
+    try {
+      const r = await window.Capacitor.nativePromise('TriaPlaces', 'search', { q });
+      if (signal.aborted) return [];
+      return ((r && r.hits) || []).filter(t => t && t.title && placePoint(t)).slice(0, 4);
+    } catch { return []; }
   }
 
   const songTileHtml = (post) => post.type === 'song' && post.song ? songRowHtml(post.song) : '';
@@ -5791,6 +5888,17 @@
     const href = a.getAttribute('href') || '';
     if (!/^https?:\/\//i.test(href)) return;   // in-app routes navigate normally
     e.preventDefault();
+    // A place opens Apple's own place card over the page, else Maps at its
+    // point; the link below is the fallback for a binary without the plugin.
+    if ('place' in a.dataset && window.Capacitor?.isPluginAvailable?.('TriaPlaces')) {
+      const t = placeOfTile(a);
+      if (t) {
+        hapticTap('LIGHT');
+        window.Capacitor.nativePromise('TriaPlaces', 'open', t)
+          .catch(() => { try { window.Capacitor.nativePromise('TriaSettings', 'openExternal', { url: href }); } catch { /* inert */ } });
+        return;
+      }
+    }
     /* TWO WAYS OUT, and the link says which it wants. The default is the sheet
        above, which is right for a page you READ. `data-out="system"` asks for
        iOS itself instead, and the one caller is a song on the listening rail:
@@ -13627,6 +13735,7 @@
       wireRichEditor(noteEl, form.querySelector('#e-note-count'));
       wireTagRow(form);
     wireTakeRate(form.querySelector('.take-rate-row'));
+    fillPlaceArt(form);
     // The sheet commits as you tap, so every tap has to re-ask the bar. syncAnswers
     // is declared below and this only ever runs from a click, so the reference is
     // live by then.
@@ -16000,13 +16109,14 @@
     const key = q.toLowerCase();
     if (takeHits.has(key)) return takeHits.get(key);
     const tk = tmdbKey();
-    const [screen, books, pods] = await Promise.all([
+    const [screen, books, pods, places] = await Promise.all([
       tk ? getJson(`${TMDB}/search/multi?api_key=${tk}&query=${encodeURIComponent(q)}&include_adult=false`, signal) : null,
       getJson(`${ITUNES}/search?term=${encodeURIComponent(q)}&media=ebook&entity=ebook&limit=6`, signal),
       getJson(`${ITUNES}/search?term=${encodeURIComponent(q)}&media=podcast&entity=podcast&limit=4`, signal),
+      searchPlaces(q, signal),
     ]);
     if (signal.aborted) return null;
-    if (!screen && !books && !pods) return { hits: [], state: 'Couldn’t reach the search. Try again in a moment.' };
+    if (!screen && !books && !pods && !places.length) return { hits: [], state: 'Couldn’t reach the search. Try again in a moment.' };
     const films = ((screen || {}).results || [])
       .filter(r => (r.media_type === 'movie' || r.media_type === 'tv') && (r.poster_path || r.popularity > 2))
       .map(takeOfTmdb).filter(t => t.title).slice(0, 6);
@@ -16018,8 +16128,12 @@
     });
     const bk = dedupe(((books || {}).results || []).map(takeOfApple('book'))).slice(0, 3);
     const pd = dedupe(((pods || {}).results || []).map(takeOfApple('podcast'))).slice(0, 2);
-    // The best four on screen lead, then the books and podcasts, then the rest.
-    const hits = [...films.slice(0, 4), ...bk, ...pd, ...films.slice(4)].map(({ _pop, ...t }) => t);
+    // The best four on screen lead, then places, the books and podcasts, then
+    // the rest. A place named as typed ("blue bottle") leads them all.
+    const lead = (t) => t.title.toLowerCase().startsWith(key);
+    const pl = places.filter(lead).concat(places.filter(t => !lead(t)));
+    const first = pl.length && lead(pl[0]) ? [pl.shift()] : [];
+    const hits = [...first, ...films.slice(0, 4), ...pl.slice(0, 3), ...bk, ...pd, ...films.slice(4)].map(({ _pop, ...t }) => t);
     const out = hits.length
       ? { hits, state: '' }
       : { hits: [{ kind: 'film', title: q.slice(0, 160) }], state: '' };
@@ -17411,9 +17525,11 @@
     const head = p.title && said ? p.title
       : (said || p.title || page.title || (tk && tk.title) || (pic ? '' : domain || TYPE_LABEL[p.type] || 'Post'));
     const gist = p.title && said ? said : (!said && !p.title && page.title ? page.about || '' : '');
+    // A Take's foot wears its stars, the feed's own (Zoe, 2026-11-11: "Pinned
+    // takes should have star ratings"), after what it is about.
     const meta = metaEl(p.type === 'activity' && p.eventDate ? eventWhenLabel(p.eventDate, p.eventTime)
-      : tk ? [said || p.title ? tk.title : '', takeRating(tk) ? starWords(takeRating(tk)) : ''].filter(Boolean).join(' · ')
-      : domain);
+      : tk ? (said || p.title ? tk.title : '')
+      : domain) + takeStarsHtml(p);
     // On a words card the note is set as the feed sets it (Zoe: "reflect the
     // contents styles"): its paragraphs, line breaks, headings, bold and
     // italic, under the title when there is one, the wide card beside its
@@ -24364,9 +24480,9 @@
     return `<div class="field take-field" id="c-take-row" hidden>` +
         `<div class="take-now" id="c-take-now" hidden></div>` +
         `<input id="c-take-q" class="song-input take-input" type="search" ` +
-          `placeholder="Search a film, show, book or podcast" ` +
+          `placeholder="${placesOn() ? 'Search a film, book, place…' : 'Search a film, show, book or podcast'}" ` +
           `autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" ` +
-          `aria-label="Search a film, show, book or podcast">` +
+          `aria-label="${placesOn() ? 'Search a film, show, book, podcast or place' : 'Search a film, show, book or podcast'}">` +
         `<div class="take-results" id="c-take-results" aria-live="polite"></div>` +
         takeRateHtml('c') +
       `</div>`;
@@ -25326,10 +25442,12 @@
           paintNow();
           input.focus();
         });
+        fillPlaceArt(nowEl);
       };
       const paint = (state) => {
         if (state) { resEl.innerHTML = `<p class="feed-empty">${esc(state)}</p>`; return; }
         resEl.innerHTML = hits.map(takeHitHtml).join('');
+        fillPlaceArt(resEl);
       };
       resEl.addEventListener('click', (e) => {
         const b = e.target.closest('.take-hit');
@@ -28209,6 +28327,16 @@
       data.take = { kind: TAKE_KIND[t.kind] ? t.kind : 'film', title: String(t.title).slice(0, 160) };
       for (const k of ['year', 'by', 'src', 'id']) if (t[k]) data.take[k] = String(t[k]).slice(0, 160);
       for (const k of ['art', 'link']) if (/^https:\/\//.test(t[k] || '')) data.take[k] = t[k];
+      // A place keeps its point and what it is (place-takes.sql); its link is
+      // read off the point as it is drawn, so it is never stored.
+      if (t.kind === 'place') {
+        if (!placePoint(t)) { errEl.textContent = 'That place has no spot on the map.'; return; }
+        data.take.lat = Math.round(+t.lat * 1e6) / 1e6;
+        data.take.lng = Math.round(+t.lng * 1e6) / 1e6;
+        if (t.cat) data.take.cat = String(t.cat).slice(0, 40);
+        delete data.take.year;
+        delete data.take.link;
+      }
       const rating = takeRating({ rating: val('c-take-rating') });
       if (rating) data.take.rating = rating;
     } else {
@@ -29688,11 +29816,11 @@
     const stamp = (band, heartLt, heartDk, inkLt, inkDk) => {
       if (seq !== bandSeq) return;
       const el = document.documentElement;
-      /* The splash's copy of this answer (Zoe, 2026-10-22: the logo wears your
-         colour). It is the one surface that paints before auth, so it can only
       // None wears solid ink commits in CSS (html[data-tone="none"]).
       if (band === 'var(--mono-band)') el.dataset.tone = 'none';
       else delete el.dataset.tone;
+      /* The splash's copy of this answer (Zoe, 2026-10-22: the logo wears your
+         colour). It is the one surface that paints before auth, so it can only
          read what this install wore LAST time, which is why it is its own key
          and never --user-band on <html>: the gate must not inherit a past
          reader's colour. Signed out and Tria's own ramp both clear it. */

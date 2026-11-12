@@ -108,12 +108,17 @@ create table public.posts (
     (type = 'song' and song is not null and song ? 'title')
     or (type <> 'song' and song is null)
   ),
-  -- A take carries the thing it is about, and nothing else does (add-takes.sql).
+  -- A take carries the thing it is about, and nothing else does (add-takes.sql;
+  -- a place since place-takes.sql, which needs its point).
   constraint posts_take_shape check (
     (type = 'take' and take is not null
        and jsonb_typeof(take) = 'object'
        and take ? 'title'
-       and take->>'kind' in ('film','show','book','podcast')
+       and take->>'kind' in ('film','show','book','podcast','place')
+       and (take->>'kind' <> 'place'
+            or (jsonb_typeof(take->'lat') = 'number' and jsonb_typeof(take->'lng') = 'number'
+                and (take->>'lat')::numeric between -90 and 90
+                and (take->>'lng')::numeric between -180 and 180))
        and (not take ? 'rating'
             or (jsonb_typeof(take->'rating') = 'number'
                 and (take->>'rating')::numeric in (1,2,3,4,5,6,7,8,9,10))))
@@ -681,3 +686,9 @@ end;
 $$;
 revoke all on function public.delete_account() from public, anon;
 grant execute on function public.delete_account() to authenticated;
+
+-- Which kinds a Take can be about (place-takes.sql). The app asks once a
+-- session and offers places only when this names them.
+create or replace function public.take_kinds()
+returns text[] language sql immutable as $$ select array['film','show','book','podcast','place'] $$;
+grant execute on function public.take_kinds() to anon, authenticated;

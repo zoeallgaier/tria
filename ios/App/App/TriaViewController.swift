@@ -56,6 +56,10 @@ class TriaViewController: CAPBridgeViewController {
         // The clip editor's cut, filmstrip and camera (TriaClipPlugin.swift).
         // Missing, the editor is the web's: one clip, posted as its original.
         bridge?.registerPluginInstance(TriaClipPlugin())
+        // A Take on a place (TriaPlacesPlugin.swift): Apple Maps' search, the
+        // tile's little map and the place card. Missing, the composer finds no
+        // places and a place Take links out to maps.apple.com.
+        bridge?.registerPluginInstance(TriaPlacesPlugin())
         // A tap that launched the app, if it beat the bridge here. See TriaLaunchTap.
         if let router = bridge?.notificationRouter { TriaLaunchTap.shared.replay(into: router) }
     }

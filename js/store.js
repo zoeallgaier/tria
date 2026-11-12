@@ -442,6 +442,7 @@ const Store = (() => {
     // launch, and nothing re-rendered when the real answer arrived behind it.
     const primed = pushPrime();
     probeCarouselMax();
+    probeTakeKinds();
     try {
       const { data: { session } } = await sb.auth.getSession();
       // A recovery session getSession picked up from the reset link isn't a login —
@@ -1326,6 +1327,23 @@ const Store = (() => {
       .finally(() => { carouselAsking = false; });
   }
   const carouselMax = () => carouselCap || 6;
+
+  // Whether a Take can be about a place (place-takes.sql, 2026-11-12). Asked
+  // once of take_kinds(), which answers PGRST202 before the file, so the
+  // composer's search never offers a place the database would refuse.
+  let placeTakes = null, kindsAsking = false;
+  function probeTakeKinds() {
+    if (placeTakes !== null || kindsAsking) return;
+    kindsAsking = true;
+    sb.rpc('take_kinds')
+      .then(({ data, error }) => {
+        if (!error && Array.isArray(data)) placeTakes = data.includes('place');
+        else if (error && isMissing(error)) placeTakes = false;
+      })
+      .catch(() => {})
+      .finally(() => { kindsAsking = false; });
+  }
+  const placeTakesReady = () => placeTakes === true;
 
   // Discover: everything on Tria you're allowed to see that isn't yours, newest
   // first. This used to mean "public posts only", which was the right shape
@@ -4639,7 +4657,7 @@ const Store = (() => {
     createPost, deletePost, updatePost, uploadPhoto, dropUploads,
     // Reposts
     createRepost, undoRepost, originalOf, repostable, repostedByMe, myRepostOf,
-    canRepost, quoteAudience, repostRulesReady, probeCarouselMax, carouselMax,
+    canRepost, quoteAudience, repostRulesReady, probeCarouselMax, carouselMax, probeTakeKinds, placeTakesReady,
     probeCommentEdit, commentEditReady, editComment,
     // Comments
     commentsFor, addComment, deleteComment,

@@ -124,6 +124,34 @@ of the three tables has a select policy. **App Store Connect's privacy label
 needs "Product Interaction, linked to user" before a build with the ping
 ships.**
 
+## A Take can be about a place, from Apple Maps (2026-11-12)
+
+**Zoe: "allow for takes on places and stuff, built into maps"**, then picked
+Apple Maps over Waze (Waze has no places database to search or store), Google
+(costly, its terms forbid keeping the data) and the open sets. **A place is a
+fifth `take.kind`, not a new type or column**: `{ kind: 'place', title, by?,
+cat?, lat, lng, src: 'apple', id? }` in `posts.take`, rated with the same
+half stars, in the Takes tab like any Take. `id` is Apple's Place ID
+(`MKMapItem.identifier`, iOS 18, made to be stored); `lat`/`lng` are required
+so a take draws and opens without it; the link is never stored, it is read
+off the point (`placeLink`, maps.apple.com). **The composer's one Take search
+finds places too** (`searchPlaces` in `lookUpTakes`; a place whose name
+starts with what you typed leads the list), through **`TriaPlacesPlugin.swift`**:
+`search` is `MKLocalSearch`, points of interest and areas, never a bare
+street address, and **asks for NO location permission** (Tria never asks, so
+results lean on what Apple infers; naming a town finds it). **The tile's art
+is the place's own little map** (`snapshot`, `MKMapSnapshotter`, no other
+pins, a dot in the reader's `--heart`, kept in Caches/tria-maps; an area,
+which has no `cat`, is drawn wider; `fillPlaceArt`), a pin glyph until it
+lands and on the web. **A tap opens Apple's own place card over the page**
+(`open`, `MKMapItemDetailViewController`, iOS 18 with an id), else Maps at the
+point, else the link (the capture click handler's `data-place`). **Picking is
+the app only and needs `supabase/place-takes.sql`** (**NOT run** as of
+2026-11-12; until `take_kinds()` names 'place', `Store.placeTakesReady` is
+false and the search finds no places, since the shape check would refuse
+them). An older binary or the web still DRAWS a place take (pin, link out).
+**Needs a new binary** for the plugin.
+
 ## A private post wears a lock (2026-11-11)
 
 **Zoe: "if a post is posted on a private circle, include a lock icon on the

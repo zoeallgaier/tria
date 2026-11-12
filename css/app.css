@@ -4514,19 +4514,18 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   position: absolute;
   display: grid;
   place-items: center;
-  border-radius: 50%;
   color: #fff;
-  border: var(--glass-edge);
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  box-shadow: var(--glass-rim), var(--glass-lift);
+  border: 0;
+  background: none;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
 }
+/* A 44px target with the glyph in its corner's place (the box pays back
+   what the disc's edge used to hold). */
 .frame-sound {
-  right: 0.7rem;
-  bottom: 0.7rem;
-  width: 34px;
-  height: 34px;
+  right: calc(0.7rem - 5px);
+  bottom: calc(0.7rem - 5px);
+  width: 44px;
+  height: 44px;
   padding: 0;
 }
 .frame-sound-ico { width: 24px; height: 24px; }
@@ -4536,8 +4535,8 @@ body.postbar-live main { padding-bottom: 6.5rem; }
 .frame-play {
   top: 50%;
   left: 50%;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   transform: translate(-50%, -50%);
   pointer-events: none;
   transition: opacity var(--dur-quick) var(--ease);
@@ -13581,6 +13580,13 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
 .quoted-who .take-stars { margin-inline-start: auto; }
 .quoted-who .take-star { width: 12px; height: 12px; }
 .quoted-who .take-star--half { width: 6px; }
+/* A pinned Take's stars sit in its foot after the title, at the foot's size,
+   white over a picture's shade where the reader's colour wouldn't read. */
+.pin-foot .take-stars { margin-inline-end: 0; }
+.pin-foot .take-star { width: 13px; height: 13px; }
+.pin-foot .take-star--half { width: 6.5px; }
+.pin--pic:not(.pin--wide) .pin-foot .take-stars { color: #fff; }
+.pin-foot .take-stars + .pin-readmore { margin-inline-start: auto; }
 .take-now--fixed { margin-bottom: 0; }
 
 .card-take {
@@ -13614,6 +13620,10 @@ a.card-take:active { transform: scale(0.985); }
 }
 .take-art.pin-cover { border: 0; }
 .take-art--podcast { aspect-ratio: 1; }
+/* A place's art is its own little map, square (TriaPlaces.snapshot), the
+   streets in the scheme's own light with a dot in the reader's colour; a pin
+   until it lands, and on the web. */
+.take-art--place { aspect-ratio: 1; }
 .take-art-ico { width: 40%; height: auto; opacity: 0.6; }
 .take-art--hit { width: 40px; border-radius: 8px; }
 .take-art--now { width: 64px; border-radius: 10px; }
