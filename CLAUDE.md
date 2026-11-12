@@ -29,7 +29,7 @@ always talking about the same thing ... I also want to see metrics."**
 own on the site, in the app's tokens and type, **never bundled into iOS**
 (ios-sync.sh copies only the root index.html) and a real folder, so Pages
 never hands it 404.html's app. Same origin, so a session made on the site is
-its session too; `bump.sh` stamps it with the app. Six pages since
+its session too; `bump.sh` stamps it with the app. Seven pages since
 2026-11-11 (Zoe): **Overview** (Weekly and Monthly active tiles and charts,
 Monthly's change on the 30 days before (`mauPrev`), an **All time** chart
 (`history`, weekly and monthly active a point a week since the first sign of
@@ -43,7 +43,10 @@ behind it: **Connected is a MUTUAL friend** (a follow or unanswered request
 counted until then), a friendship's meaningful event is stamped on each side
 when THEY acted (being accepted made you "active"), and week one figures
 counted accounts still inside their week. `admin_funnel` stays for Word of
-mouth's source split. **Nudge**, Retention,
+mouth's source split. **Activity** (Zoe: Made, Done and Opened on "should be
+its own page and I want to see more data") is `admin_activity(p_days)`, a
+window beside the one before it; until the SQL is re-run it draws the
+Overview's last 7 days. **Nudge**, Retention,
 Community, **Dailies**, Dictionary. `?demo` draws sample numbers, flagged.
 **Nudge** (Zoe: "an email for users who haven't really been in the funnel"):
 `supabase/admin-nudge.sql` (**confirmed run** 2026-11-11: anon `rpc/admin_nudge`

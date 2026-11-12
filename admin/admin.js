@@ -28,6 +28,8 @@
 
   const ICON = {
     overview: '<path d="M5 20v-6M12 20V5M19 20v-10"/>',
+    // Activity: a pulse.
+    activity: '<path d="M3 12h4l2.5-6 5 12 2.5-6h4"/>',
     // Nudge: an envelope.
     nudge: '<rect x="3" y="5.5" width="18" height="13" rx="3"/><path d="m3.8 7.2 8.2 6 8.2-6"/>',
     // Dailies: the app's daily sun.
@@ -50,6 +52,7 @@
   // of their own.
   const TABS = [
     { key: 'overview', label: 'Overview' },
+    { key: 'activity', label: 'Activity' },
     { key: 'nudge', label: 'Nudge' },
     { key: 'retention', label: 'Retention' },
     { key: 'community', label: 'Community' },
@@ -212,6 +215,7 @@
     const t = currentTab();
     try {
       if (t === 'overview') await renderOverview();
+      else if (t === 'activity') await renderActivity();
       else if (t === 'nudge') await renderNudge();
       else if (t === 'retention') await renderRetention();
       else if (t === 'community') await renderCommunity();
@@ -403,7 +407,8 @@
   // Vertical columns: a distribution, or a count a week.
   function columns(items, W, { every = 1, label = '' } = {}) {
     const H = 190, L = 4, R = 4, T = 22, B = 26;
-    const n = items.length, gap = n > 8 ? 6 : 10;
+    // The gap gives way to the bars when there are many (90 days on a phone).
+    const n = items.length, gap = Math.min(n > 8 ? 6 : 10, ((W - L - R) / Math.max(1, n)) * 0.3);
     const bw = (W - L - R - gap * (n - 1)) / n;
     const max = Math.max(1, ...items.map((d) => d.n));
     let g = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">`;
@@ -472,8 +477,6 @@
     const invited = srcGroups.find((r) => r.key === 'invite')?.seq?.[1] || 0;
     const srcTotal = srcGroups.reduce((a, r) => a + (r.seq?.[1] || 0), 0);
 
-    const plats = Object.entries(o.platforms7 || {}).sort((a, b) => b[1] - a[1]);
-    const platTotal = plats.reduce((a, p) => a + p[1], 0);
 
     // Who to nudge is a page now; the Overview says how many are waiting.
     const toNudge = z ? fresh(z.people || []).length
@@ -522,13 +525,6 @@
             ? x.invites.top.map((p) => row({ title: who(p), sub: '@' + esc(p.handle), val: `<b>${fmt(p.n)}</b>` }))
             : [row({ title: 'None yet' })]) + '</div>' : '') +
       '</div></div>' +
-      '<div class="section grid grid--three">' +
-        `<div>${sectionHead('Made this week')}<div class="card">${barsHtml(o.types7, TYPE_NAMES)}</div></div>` +
-        `<div>${sectionHead('Done this week')}<div class="card">${barsHtml(o.kinds7, KIND_NAMES)}</div></div>` +
-        `<div>${sectionHead('Opened on', 'This week')}` + list(plats.length
-          ? plats.map(([k, v]) => row({ title: esc(PLATFORM[k] || k), meter: pct(v, platTotal), val: `<b>${fmt(v)}</b>` }))
-          : [row({ title: 'Nobody yet' })]) + '</div>' +
-      '</div>' +
       foot();
 
     const ca = $('c-active'), cm = $('c-monthly'), cj = $('c-joined');
@@ -572,6 +568,138 @@
         `data-tip="<b>${DAYS[d]} ${hr(h)}</b><br>${fmt(n)}"></span>`).join('');
     });
     return { html: html + '</div>', peak: peak[2] ? `${DAYS[peak[0]]} ${hr(peak[1])}` : '' };
+  }
+
+  // ── Activity: what was made and done, its own page ──────────────────────
+  // Zoe, 2026-11-11, of the Overview's Made this week, Done this week and
+  // Opened on: "this should be its own page and I want to see more data".
+  // admin_activity: a window (7 days by default) beside the one before it.
+  // Until admin-dashboard.sql is re-run it draws the Overview's week alone.
+  const AUD = { public: 'Anyone', circle: 'My circle', list: 'Chosen people', community: 'A circle' };
+  const CHAT = { direct: 'One to one', group: 'Group chats', activity: 'Plan chats', community: 'Circle chats (old)' };
+  const OS = { ios: 'iPhone or iPad', android: 'Android', mac: 'Mac', windows: 'Windows', other: 'Other' };
+  const astate = { days: 7 };
+
+  // Bars whose rows carry {n, people, prev}: the count, and in the tip who
+  // and the window before.
+  function richBars(obj, names, before) {
+    const rows = Object.entries(obj || {}).map(([k, v]) => [k, typeof v === 'number' ? { n: v } : v])
+      .filter(([, v]) => v.n > 0).sort((a, b) => b[1].n - a[1].n);
+    if (!rows.length) return '<p class="empty">Nothing yet.</p>';
+    const max = rows[0][1].n;
+    return '<div class="bars">' + rows.map(([k, v]) => {
+      const name = names[k] || k;
+      const tipText = `<b>${esc(name)}</b><br>${fmt(v.n)}` + (v.people != null ? `, by ${fmt(v.people)} ${v.people === 1 ? 'person' : 'people'}` : '') +
+        (v.prev != null ? `<br>${fmt(v.prev)} ${esc(before)}` : '');
+      const ch = v.prev != null && v.prev !== v.n ? `<small class="${v.n > v.prev ? 'is-up' : 'is-down'}">${v.n > v.prev ? '↑' : '↓'}${fmt(Math.abs(v.n - v.prev))}</small>` : '';
+      return `<div class="barrow barrow--rich" data-tip="${tipText}"><span class="barrow-name">${esc(name)}</span>` +
+        `<span class="barrow-track"><span class="barrow-fill" style="width:${(v.n / max) * 100}%"></span></span>` +
+        `<span class="barrow-val">${fmt(v.n)}${ch}</span></div>`;
+    }).join('') + '</div>';
+  }
+
+  async function renderActivity() {
+    let a = null, why = '';
+    try { a = await call('admin_activity', { p_days: astate.days }); } catch (err) {
+      why = missing(err) ? 'Re-run <b>supabase/admin-dashboard.sql</b> for the windows, changes and everything below. Until then, the last 7 days.'
+        : 'Couldn\'t load these. ' + esc(err?.message || '');
+    }
+    const d = a ? astate.days : 7;
+    const before = d === 7 ? 'the week before' : d ? `the ${d} days before` : '';
+    const span = d ? `last ${d} days` : 'all time';
+    const controls = '<div class="controls">' + segmented('adays', [[7, '7 days'], [30, '30 days'], [90, '90 days'], [0, 'All time']], astate.days, 'Window') + '</div>';
+    const wire = () => main.querySelectorAll('[data-adays]').forEach((b) => b.addEventListener('click', () => {
+      astate.days = Number(b.dataset.adays); renderActivity();
+    }));
+
+    if (!a) {
+      const o = await call('admin_overview');
+      const plats = Object.entries(o.platforms7 || {}).sort((x, y) => y[1] - x[1]);
+      const tot = plats.reduce((x, p) => x + p[1], 0);
+      main.innerHTML = headHtml('Activity') + `<div class="callout">${why}</div>` +
+        '<div class="section grid grid--three">' +
+          `<div>${sectionHead('Made', 'Last 7 days')}<div class="card">${barsHtml(o.types7, TYPE_NAMES)}</div></div>` +
+          `<div>${sectionHead('Done', 'Last 7 days')}<div class="card">${barsHtml(o.kinds7, KIND_NAMES)}</div></div>` +
+          `<div>${sectionHead('Opened on', 'Last 7 days')}` + list(plats.length
+            ? plats.map(([k, v]) => row({ title: esc(PLATFORM[k] || k), meter: pct(v, tot), val: `<b>${fmt(v)}</b>` }))
+            : [row({ title: 'Nobody yet' })]) + '</div>' +
+        '</div>' + foot();
+      return;
+    }
+
+    const K = a.kinds || {};
+    const sumK = (ks, f = 'n') => ks.reduce((x, k) => x + (K[k]?.[f] || 0), 0);
+    const hasPrev = a.prevFrom != null;
+    const made = sumK(['post', 'moment', 'daily']), madePrev = hasPrev ? sumK(['post', 'moment', 'daily'], 'prev') : null;
+    const doneAll = Object.values(K).reduce((x, v) => x + (v.n || 0), 0);
+    const cv = a.conversation || {};
+    const ser = a.series || [];
+    const plats = Object.entries(a.platforms || {}).sort((x, y) => y[1] - x[1]);
+    const platTot = plats.reduce((x, p) => x + p[1], 0);
+    const oss = Object.entries(a.os || {}).sort((x, y) => y[1] - x[1]);
+    const osTot = oss.reduce((x, p) => x + p[1], 0);
+    const vers = a.versions || [];
+    const verTot = vers.reduce((x, v) => x + v.n, 0);
+    const chats = Object.entries(a.chats || {}).sort((x, y) => y[1].messages - x[1].messages);
+    const auds = Object.entries(a.audiences || {}).sort((x, y) => y[1] - x[1]);
+    const audTot = auds.reduce((x, p) => x + p[1], 0);
+    const dl = (now, prev) => (hasPrev ? delta(now, prev, '', before) : '');
+
+    main.innerHTML =
+      headHtml('Activity') + controls +
+      '<div class="grid grid--kpi">' +
+        tile('Active', fmt(a.active), dl(a.active, a.activePrev), 'People who created or connected. Likes don\'t count.') +
+        tile('Made', fmt(made), dl(made, madePrev), 'Posts, Moments and daily answers. A bare repost isn\'t counted.') +
+        tile('Comments', fmt(K.comment?.n || 0), dl(K.comment?.n || 0, K.comment?.prev), 'On any post') +
+        tile('Messages', fmt(K.message?.n || 0), dl(K.message?.n || 0, K.message?.prev), 'In any chat') +
+      '</div>' +
+      strip([
+        ['Made something', a.active ? pctTxt(pct(a.makers, a.active)) : '–', `${fmt(a.makers)} of the ${fmt(a.active)} active made a post, Moment or daily answer`],
+        ['Each, on average', a.active ? fmt(Math.round((doneAll / a.active) * 10) / 10) : '–', 'Things done per active person'],
+        ['Got a reply', pctTxt(pct(cv.replied, cv.posts)), `${fmt(cv.replied)} of ${fmt(cv.posts)} posts got a comment from someone else (Moments and bare reposts left out)`],
+        ['First reply', esc(hours(cv.firstReplyH)), 'Typical time from a post to its first comment from someone else'],
+        ['Comments a post', cv.posts ? fmt(Math.round((cv.comments / cv.posts) * 10) / 10) : '–', 'Comments on those posts, on average'],
+      ]) +
+      `<div class="section">${sectionHead(a.byWeek ? 'Every week' : 'Every day', 'Things done')}<div class="card" id="c-act"></div></div>` +
+      '<div class="section grid grid--three">' +
+        `<div>${sectionHead('Made')}<div class="card">${richBars(a.types, TYPE_NAMES, before)}</div></div>` +
+        `<div>${sectionHead('Done')}<div class="card">${richBars(a.kinds, KIND_NAMES, before)}</div></div>` +
+        `<div>${sectionHead('Posted to')}` + list(auds.length
+          ? auds.map(([k, v]) => row({ title: esc(AUD[k] || k), meter: pct(v, audTot), val: `<b>${fmt(v)}</b>`, tipText: `<b>${esc(AUD[k] || k)}</b><br>${fmt(v)} posts, ${pctTxt(pct(v, audTot))}` }))
+          : [row({ title: 'Nothing yet' })]) + '</div>' +
+      '</div>' +
+      '<div class="section grid grid--two">' +
+        `<div>${sectionHead('Chats')}` + list(chats.length
+          ? chats.map(([k, v]) => row({ title: esc(CHAT[k] || k), sub: `${fmt(v.chats)} ${v.chats === 1 ? 'chat' : 'chats'}, ${fmt(v.people)} ${v.people === 1 ? 'person' : 'people'} writing`, val: `<b>${fmt(v.messages)}</b>` }))
+          : [row({ title: 'No messages' })]) + '</div>' +
+        `<div>${sectionHead('Busiest circles')}` + list((a.circles || []).length
+          ? a.circles.map((c) => row({ title: `<a class="who" href="../#/c/${encodeURIComponent(c.slug)}">${esc(c.name)}</a>`,
+              sub: `c/${esc(c.slug)} · ${fmt(c.people)} posting · ${fmt(c.joins)} joined`, val: `<b>${fmt(c.posts)}</b>`,
+              tipText: `<b>${esc(c.name)}</b><br>${fmt(c.posts)} posts by ${fmt(c.people)}<br>${fmt(c.joins)} joined` }))
+          : [row({ title: 'Quiet' })]) + '</div>' +
+      '</div>' +
+      '<div class="section grid grid--three">' +
+        `<div>${sectionHead('Opened on', 'People')}` + list(plats.length
+          ? plats.map(([k, v]) => row({ title: esc(PLATFORM[k] || k), meter: pct(v, platTot), val: `<b>${fmt(v)}</b>` }))
+          : [row({ title: 'Nobody yet' })]) + '</div>' +
+        `<div>${sectionHead('Devices')}` + list(oss.length
+          ? oss.map(([k, v]) => row({ title: esc(OS[k] || k), meter: pct(v, osTot), val: `<b>${fmt(v)}</b>` }))
+          : [row({ title: 'None seen' })]) + '</div>' +
+        `<div>${sectionHead('App versions', 'iOS')}` + list(vers.length
+          ? vers.map((v) => row({ title: esc(v.v), meter: pct(v.n, verTot), val: `<b>${fmt(v.n)}</b>` }))
+          : [row({ title: 'None seen' })]) + '</div>' +
+      '</div>' +
+      `<p class="footnote">${esc(span[0].toUpperCase() + span.slice(1))}, from ${esc(day(a.from))}. Opened on, Devices and App versions count since the open ping began. ${SKIP_NOTE}</p>`;
+
+    const box = $('c-act');
+    if (box) {
+      const W = chartW(box);
+      box.innerHTML = columns(ser.map((p) => ({
+        n: p.events, label: day(p.at),
+        tip: `<b>${a.byWeek ? 'Week of ' : ''}${esc(day(p.at))}</b><br>${fmt(p.events)} things done<br>${fmt(p.people)} people<br>${fmt(p.posts)} made`,
+      })), W, { every: Math.max(1, Math.ceil(ser.length / Math.max(1, Math.floor(W / 64)))), label: 'Things done ' + (a.byWeek ? 'a week' : 'a day') });
+    }
+    wire();
   }
 
   // ── Settling in, a section of the Overview ────────────────────────────────
@@ -1106,6 +1234,35 @@
           const grow = Math.round(4 + i * 2.4 + Math.sin(i / 2) * 5);
           return { week: d.toISOString().slice(0, 10), weekly: Math.max(2, grow + 0 * i), monthly: Math.round(grow * 1.45 + 6) };
         }),
+      };
+    },
+    admin_activity({ p_days }) {
+      const d = p_days || 0, m = d ? d / 7 : 30, today = new Date();
+      const k = (n, people, r = 0.9) => ({ n: Math.round(n * m), people: Math.round(people * Math.min(m, 3)), prev: d ? Math.round(n * m * r) : null });
+      const byWeek = !d || d > 120, len = byWeek ? 40 : d;
+      return {
+        days: d, from: new Date(today - (len * (byWeek ? 7 : 1) - 1) * 864e5).toISOString().slice(0, 10), to: today.toISOString().slice(0, 10),
+        prevFrom: d ? 'x' : null, byWeek,
+        active: Math.round(104 * Math.min(m, 1.6)), activePrev: d ? Math.round(94 * Math.min(m, 1.6)) : null,
+        makers: Math.round(46 * Math.min(m, 1.6)), makersPrev: d ? Math.round(41 * Math.min(m, 1.6)) : null,
+        kinds: { comment: k(243, 61, 1.1), message: k(100, 34, 0.8), circle: k(91, 50, 0.7), post: k(80, 38), friend: k(37, 25, 1.2), moment: k(36, 21), daily: k(26, 26, 1.05), vote: k(6, 6, 2), rsvp: k(4, 4) },
+        types: { moment: k(36, 21), photo: k(33, 19), note: k(31, 17, 1.1), daily: k(26, 26), repost: k(10, 8), song: k(8, 7, 0.5), take: k(3, 3), find: k(2, 2), poll: k(2, 2, 1.5) },
+        audiences: { circle: Math.round(52 * m), public: Math.round(31 * m), community: Math.round(19 * m), list: Math.round(4 * m) },
+        conversation: { posts: Math.round(106 * m), replied: Math.round(71 * m), comments: Math.round(243 * m), firstReplyH: 1.8 },
+        chats: { direct: { messages: Math.round(70 * m), chats: 21, people: 30 }, group: { messages: Math.round(24 * m), chats: 4, people: 14 }, activity: { messages: Math.round(6 * m), chats: 2, people: 7 } },
+        series: Array.from({ length: len }, (_, i) => {
+          const at = new Date(today - (len - 1 - i) * (byWeek ? 7 : 1) * 864e5).toISOString().slice(0, 10);
+          const e = Math.round((byWeek ? 40 + i * 9 : 60 + (i % 7 === 5 || i % 7 === 6 ? 30 : 0)) + Math.sin(i) * 12);
+          return { at, events: e, people: Math.round(e / 3.4), posts: Math.round(e / 4.2) };
+        }),
+        circles: [
+          { name: 'Film club', slug: 'film', posts: Math.round(14 * m), people: 9, joins: 6 },
+          { name: 'Climbing', slug: 'climb', posts: Math.round(9 * m), people: 6, joins: 3 },
+          { name: 'D&D', slug: 'dnd', posts: Math.round(6 * m), people: 5, joins: 1 },
+          { name: 'Plant people', slug: 'plants', posts: Math.round(3 * m), people: 3, joins: 4 },
+        ],
+        platforms: { ios: 96, web: 18, pwa: 14 }, os: { ios: 120, mac: 22, android: 9, windows: 4 },
+        versions: [{ v: '2.0 (1276)', n: 64 }, { v: '2.0 (1270)', n: 31 }, { v: '2.0 (1262)', n: 12 }],
       };
     },
     admin_settling({ p_days }) {

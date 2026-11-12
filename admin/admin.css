@@ -135,7 +135,7 @@ svg.i { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-widt
 }
 .dock-pill {
   pointer-events: auto;
-  display: flex; gap: 2px; width: min(100%, 26rem); padding: 0.3rem;
+  display: flex; gap: 2px; width: min(100%, 28rem); padding: 0.3rem;
   border-radius: 999px;
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4); backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
@@ -372,6 +372,11 @@ h2 { font-size: 1.5rem; line-height: 1.15; }
 .barrow-track { position: relative; height: 20px; border-radius: 4px; background: var(--fill); }
 .barrow-fill { position: absolute; inset: 0 auto 0 0; border-radius: 0 4px 4px 0; background: var(--data); min-width: 2px; }
 .barrow-val { font-variant-numeric: tabular-nums; font-size: 0.88rem; text-align: right; }
+.barrow--rich { grid-template-columns: minmax(84px, 8.5rem) minmax(0, 1fr) 3.4rem; }
+.barrow--rich .barrow-val { line-height: 1.15; }
+.barrow-val small { display: block; font-size: 0.7rem; font-weight: 700; }
+.barrow-val small.is-up { color: var(--up); }
+.barrow-val small.is-down { color: var(--danger); }
 
 /* Settling in: a headline, then four bars out of the same people. The name
    sits over its bar so long names never squeeze it on a phone. */

@@ -374,6 +374,133 @@ begin
   return res;
 end $$;
 
+-- The Activity page (Zoe, 2026-11-11: Made, Done and Opened on "should be its
+-- own page and I want to see more data"). Everything over a window of p_days
+-- ending today (0 = since the first account), each count beside the same
+-- window before it, so a change can be read. No new tracking: posts, comments,
+-- messages, RSVPs, votes, friendships, circle joins and the open ping, admins
+-- left out. Likes are not read.
+--   kinds, types     what was done and made: count, people, the window before
+--   active, makers   people who did anything, people who made a post
+--   audiences        where posts went: Anyone, My circle, chosen people, a circle
+--   conversation     posts (not Moments or bare reposts): how many got a
+--                    comment from someone else, how fast, comments per post
+--   chats            messages by kind of chat: messages, chats, people
+--   series           a point a day (a week past 120 days): events, people, posts
+--   circles          the busiest circles: posts, people posting, joins
+--   platforms, os, versions   who opened Tria where, and the app versions seen
+create or replace function public.admin_activity(p_days int) returns jsonb
+language plpgsql stable security definer set search_path = public, metrics as $$
+declare
+  today date := (now() at time zone metrics.tz())::date;
+  d int := greatest(coalesce(p_days, 0), 0);
+  t0 date;        -- this window: t0 .. today
+  p0 date;        -- the one before: p0 .. t0 - 1 (none for all time)
+  by_week boolean;
+  res jsonb;
+begin
+  if not public.is_admin() then
+    raise exception 'Only Tria''s team can see that.' using errcode = '42501';
+  end if;
+  if d > 0 then
+    t0 := today - d + 1; p0 := t0 - d;
+  else
+    select coalesce(min((created_at at time zone metrics.tz())::date), today) into t0 from metrics.people;
+  end if;
+  by_week := today - t0 > 120;
+
+  with ev as (
+    select user_id, kind, (at at time zone metrics.tz())::date as day
+      from metrics.meaningful_events
+     where at >= (coalesce(p0, t0)::timestamp at time zone metrics.tz())
+  ), ps as (
+    select p.id, p.author, p.audience, p.community_id, p.created_at,
+           (p.created_at at time zone metrics.tz())::date as day,
+           case when p.moment then 'moment'
+                when exists (select 1 from unnest(p.tags) x where x like 'daily-%') then 'daily'
+                else p.type end as t,
+           p.type = 'repost' and coalesce(p.note, '') = '' and coalesce(p.title, '') = '' as bare
+      from metrics.posts p
+     where p.created_at >= (coalesce(p0, t0)::timestamp at time zone metrics.tz())
+  ), conv as (
+    select p.id,
+           (select count(*) from public.comments c where c.post_id = p.id) as comments,
+           (select min(c.created_at) from public.comments c
+             where c.post_id = p.id and c.author <> p.author
+               and not exists (select 1 from metrics.skip k where k.user_id = c.author)) - p.created_at as first_reply
+      from ps p where p.day >= t0 and p.t <> 'moment' and not p.bare
+  ), msg as (
+    select m.author, m.chat_id, ch.kind, (m.created_at at time zone metrics.tz())::date as day
+      from public.messages m join public.chats ch on ch.id = m.chat_id
+     where m.created_at >= (t0::timestamp at time zone metrics.tz())
+       and not exists (select 1 from metrics.skip k where k.user_id = m.author)
+  ), buckets as (
+    select g::date as at from generate_series(
+      case when by_week then date_trunc('week', t0)::date else t0 end, today,
+      case when by_week then interval '7 days' else interval '1 day' end) g
+  )
+  select jsonb_build_object(
+    'days', d, 'from', t0, 'to', today, 'prevFrom', p0, 'byWeek', by_week,
+    'active', (select count(distinct user_id) from ev where day >= t0),
+    'activePrev', case when p0 is null then null else (select count(distinct user_id) from ev where day < t0) end,
+    'makers', (select count(distinct author) from ps where day >= t0 and not bare),
+    'makersPrev', case when p0 is null then null else (select count(distinct author) from ps where day < t0 and not bare) end,
+    'kinds', (select coalesce(jsonb_object_agg(kind, jsonb_build_object('n', n, 'people', people, 'prev', prev)), '{}') from (
+                select kind, count(*) filter (where day >= t0) as n,
+                       count(distinct user_id) filter (where day >= t0) as people,
+                       case when p0 is null then null else count(*) filter (where day < t0) end as prev
+                  from ev group by kind) s where n > 0 or prev > 0),
+    'types', (select coalesce(jsonb_object_agg(t, jsonb_build_object('n', n, 'people', people, 'prev', prev)), '{}') from (
+                select t, count(*) filter (where day >= t0) as n,
+                       count(distinct author) filter (where day >= t0) as people,
+                       case when p0 is null then null else count(*) filter (where day < t0) end as prev
+                  from ps group by t) s where n > 0 or prev > 0),
+    'audiences', (select coalesce(jsonb_object_agg(audience, n), '{}') from (
+                    select audience, count(*) as n from ps
+                     where day >= t0 and t <> 'moment' and not bare group by audience) s),
+    'conversation', (select jsonb_build_object(
+                       'posts', count(*),
+                       'replied', count(*) filter (where first_reply is not null),
+                       'comments', coalesce(sum(comments), 0),
+                       'firstReplyH', round((extract(epoch from percentile_cont(0.5) within group (order by first_reply)) / 3600)::numeric, 1))
+                     from conv),
+    'chats', (select coalesce(jsonb_object_agg(kind, jsonb_build_object('messages', n, 'chats', chats, 'people', people)), '{}') from (
+                select kind, count(*) as n, count(distinct chat_id) as chats, count(distinct author) as people
+                  from msg group by kind) s),
+    'series', (select jsonb_agg(jsonb_build_object(
+                  'at', b.at,
+                  'events', (select count(*) from ev where ev.day between b.at and b.at + case when by_week then 6 else 0 end),
+                  'people', (select count(distinct user_id) from ev where ev.day between b.at and b.at + case when by_week then 6 else 0 end),
+                  'posts', (select count(*) from ps where not ps.bare and ps.day between b.at and b.at + case when by_week then 6 else 0 end)
+                ) order by b.at) from buckets b),
+    'circles', (select coalesce(jsonb_agg(c order by (c->>'posts')::int desc, (c->>'joins')::int desc), '[]') from (
+                 select c from (
+                  select jsonb_build_object('name', cm.name, 'slug', cm.slug,
+                           'posts', (select count(*) from ps where ps.community_id = cm.id and ps.day >= t0 and not ps.bare),
+                           'people', (select count(distinct author) from ps where ps.community_id = cm.id and ps.day >= t0 and not ps.bare),
+                           'joins', (select count(*) from public.community_members mm
+                                      where mm.community_id = cm.id
+                                        and mm.joined_at >= (t0::timestamp at time zone metrics.tz())
+                                        and not exists (select 1 from metrics.skip k where k.user_id = mm.user_id))) as c
+                    from public.communities cm) x
+                 where (c->>'posts')::int > 0 or (c->>'joins')::int > 0
+                 order by (c->>'posts')::int desc, (c->>'joins')::int desc
+                 limit 8) s),
+    'platforms', (select coalesce(jsonb_object_agg(platform, n), '{}') from (
+                    select platform, count(distinct user_id) as n from metrics.days where day >= t0 group by platform) s),
+    'os', (select coalesce(jsonb_object_agg(os, n), '{}') from (
+             select os, count(*) as n from metrics.devices
+              where last_seen >= (t0::timestamp at time zone metrics.tz()) group by os) s),
+    'versions', (select coalesce(jsonb_agg(jsonb_build_object('v', v, 'n', n) order by n desc), '[]') from (
+                   select coalesce(app_version, 'unknown') as v, count(*) as n from metrics.devices
+                    where platform = 'ios' and last_seen >= (t0::timestamp at time zone metrics.tz())
+                    group by 1 order by 2 desc limit 6) s)
+  ) into res;
+  return res;
+end $$;
+revoke all on function public.admin_activity(int) from public;
+grant execute on function public.admin_activity(int) to authenticated;
+
 -- p_days: the window of accounts (or installs) by when they started; 0 = all.
 -- p_basis: 'account' (every account, from stage 2) or 'install' (installs since
 --   the ping shipped, from stage 1; a device an older account turned up on is
@@ -565,4 +692,4 @@ grant execute on function public.admin_retention() to authenticated;
 select 'admins' as check, count(*) as rows from public.admins
 union all select 'profile_done backfilled', count(*) from public.profile_done
 union all select 'functions', count(*) from pg_proc
- where proname in ('note_open', 'admin_overview', 'admin_funnel', 'admin_settling', 'admin_retention', 'is_admin');
+ where proname in ('note_open', 'admin_overview', 'admin_activity', 'admin_funnel', 'admin_settling', 'admin_retention', 'is_admin');
