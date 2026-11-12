@@ -20481,7 +20481,7 @@
      so the web takes a picture file. Either way it is redrawn as a
      transparent PNG and uploaded, and the charm is 'i:' plus its path in your
      own media folder (Store's isSticker). No trims and no edge: a sticker
-     is worn as it is. Up to ten are held (STICKER_MAX, below). */
+     is worn as it is. Up to fifty are held (STICKER_MAX, below). */
   const isCustomCharm = (key) => typeof key === 'string' && key.startsWith('i:');
   const charmOf = (key) => isCustomCharm(key)
     ? { key, name: 'Your charm', custom: true, got: 'Your own charm.' }
@@ -20506,12 +20506,12 @@
     cv.getContext('2d').drawImage(img, 0, 0, w, h);
     return cv.toDataURL('image/png');
   }
-  /* UP TO TEN (Zoe, 2026-10-25). Your sticker charms ARE the sticker files
+  /* UP TO FIFTY (Zoe, 2026-11-11; ten from 2026-10-25). Your sticker charms ARE the sticker files
      in your own media folder (Store.myStickers), so they follow you to every
      device and a delete is the file going. The device keeps the last list
      (STICKERS_SEEN) only so the picker paints them at once; Storage's answer
      corrects it a beat later. Oldest first, so a new one lands by New charm. */
-  const STICKER_MAX = 10;
+  const STICKER_MAX = 50;
   const STICKERS_SEEN = 'tria:stickers:';
   const stickerTime = (k) => +(/sticker-(\d+)\.png$/.exec(k)?.[1] || 0);
   const stickerOrder = (list) => [...new Set(list.filter(isCustomCharm))].sort((a, b) => stickerTime(a) - stickerTime(b));
@@ -20732,13 +20732,13 @@
         const add = scrim.querySelector('.charm-tile--add');
         const addHow = add.querySelector('.charm-tile-how');
         const addFile = add.querySelector('.charm-add-file');
-        // At ten, New charm says so and points at the hold.
+        // At fifty, New charm says so and points at the hold.
         const full = () => stickers.length >= STICKER_MAX;
         const syncAdd = () => {
           add.classList.toggle('is-full', full());
           add.setAttribute('aria-disabled', String(full()));
           if (addFile) addFile.disabled = full();
-          addHow.textContent = full() ? 'You have ten. Hold one to delete it.'
+          addHow.textContent = full() ? 'You have fifty. Hold one to delete it.'
             : stickerSheet ? 'Add an emoji or sticker.' : 'Choose a picture.';
         };
         // Storage's list, over what this device last saw: a sticker added or
