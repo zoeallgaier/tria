@@ -4498,10 +4498,11 @@ body.postbar-live main { padding-bottom: 6.5rem; }
      controls: like the lightbox's native controls, ours stay above the picture. */
   z-index: 1;
 }
-/* Small floating icon controls over the clip are chrome ABOVE content, not
-   content themselves, so they wear the same frosted-chip material as the nav
-   dial's icons rather than a flat scrim. They sit above .frame-clip (z-index:1)
-   so they're visible and tappable while the clip plays, not just before/after. */
+/* The clip's controls are bare filled glyphs, no disc (2026-11-11, Zoe:
+   "play button and sound icon on videos in feed can be filled with no circle
+   bg"): solid white with a soft shadow, the Frame tile lock's treatment, so
+   they read on a light frame or a dark one. They sit above .frame-clip
+   (z-index:1) so they're visible and tappable while the clip plays. */
 .frame-sound,
 .frame-play,
 .frame-progress { z-index: 2; }
@@ -4524,22 +4525,11 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   width: 34px;
   height: 34px;
   padding: 0;
-  /* A solid dark scrim, not the translucent --bg tint the play badge wears: a white
-     speaker on a light video frame was near-invisible (why the control read as
-     "missing"). Dark reads on any frame, light or dark, so the mute/unmute toggle
-     is unmistakable right on the post — no tap-through required. */
-  background: rgba(0, 0, 0, 0.5);
-  border-color: rgba(255, 255, 255, 0.22);
 }
-.frame-sound-ico { width: 17px; height: 17px; }
-@media (hover: hover) { .frame-sound:hover { background: rgba(0, 0, 0, 0.62); } }
-/* 42px, not the 52 this shipped at. The feed plays one clip at a time on purpose
-   (iOS caps concurrent decoders), so every video that isn't the active one wears
-   this badge permanently — it's standing chrome on most video cards, not a flash
-   before playback. At 42 it reads as an invitation rather than a lid on the
-   photograph, and it still earns its place: under reduced motion nothing autoplays
-   ever, and iOS Low Power Mode refuses too, so on those frames the badge is the
-   only cue that a tap does anything. */
+.frame-sound-ico { width: 24px; height: 24px; }
+/* Every video that isn't the one playing wears it (the feed plays one at a
+   time), and under reduced motion or Low Power Mode it's the only cue a tap
+   does anything, so it's a clear mark but no lid on the photograph. */
 .frame-play {
   top: 50%;
   left: 50%;
@@ -4549,8 +4539,7 @@ body.postbar-live main { padding-bottom: 6.5rem; }
   pointer-events: none;
   transition: opacity var(--dur-quick) var(--ease);
 }
-/* No margin here — the triangle's optical nudge lives in ICONS.play's own path. */
-.frame-play-ico { width: 18px; height: 18px; }
+.frame-play-ico { width: 36px; height: 36px; }
 .frame-video--playing .frame-play { opacity: 0; }
 /* A 2px hairline pinned to the frame's bottom edge, in the READER'S band
    (2026-11-06, Zoe: the video bars "match the users color preference"; it

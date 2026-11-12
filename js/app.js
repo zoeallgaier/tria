@@ -4368,7 +4368,7 @@
         (img.src ? `<img src="${esc(sizedSrc(img.src, 400))}" alt="${esc(img.alt)}"${sized ? ` width="${img.w}" height="${img.h}"` : ''} loading="lazy" decoding="async">` : '') +
         (isVideo
           ? `<button type="button" class="frame-sound" aria-label="Play with sound" aria-pressed="false">${svgIcon('mute', 'frame-sound-ico')}</button>` +
-            `<span class="frame-play" aria-hidden="true">${svgIcon('play', 'frame-play-ico')}</span>` +
+            `<span class="frame-play" aria-hidden="true">${svgIcon('playSoft', 'frame-play-ico')}</span>` +
             `<div class="frame-progress" aria-hidden="true"><span class="frame-progress-fill"></span></div>`
           : '');
       // .card-main holds the post itself (ending in the action row); the comment
@@ -4588,7 +4588,7 @@
     return `<figure class="card-yt${v.short ? ' card-yt--short' : ''}" data-yt="${v.id}:${v.start}">` +
         `<div class="card-yt-frame">` +
           `<img src="${esc(ytStills(v)[0])}" alt="" loading="lazy" decoding="async">` +
-          `<span class="frame-play" aria-hidden="true">${svgIcon('play', 'frame-play-ico')}</span>` +
+          `<span class="frame-play" aria-hidden="true">${svgIcon('playSoft', 'frame-play-ico')}</span>` +
         `</div>` +
         `<button type="button" class="card-yt-go" aria-label="Play the video"></button>` +
       `</figure>`;
@@ -24202,7 +24202,7 @@
                 `<video class="ed-video is-on" playsinline muted preload="auto"></video>` +
                 `<video class="ed-video" playsinline muted preload="auto"></video>` +
               `</div>` +
-              `<span class="frame-play ed-paused" aria-hidden="true">${svgIcon('play', 'frame-play-ico')}</span>` +
+              `<span class="frame-play ed-paused" aria-hidden="true">${svgIcon('playSoft', 'frame-play-ico')}</span>` +
               `<div class="ed-loading" aria-live="polite"><span class="ed-loading-dot"></span>` +
                 `<span class="ed-loading-words">Getting your clip ready</span></div>` +
               `<button type="button" class="frame-sound ed-sound" id="c-ed-sound" aria-label="Play with sound" ` +
@@ -28549,7 +28549,7 @@
     lightbox.innerHTML = isVideo
       ? `<figure class="lb-clip">` +
           `<video src="${esc(src + (win ? '#t=' + Math.max(win.start, 0.001) : ''))}" playsinline autoplay></video>` +
-          `<span class="frame-play lb-paused" aria-hidden="true">${svgIcon('play', 'frame-play-ico')}</span>` +
+          `<span class="frame-play lb-paused" aria-hidden="true">${svgIcon('playSoft', 'frame-play-ico')}</span>` +
           `<button type="button" class="frame-sound lb-sound" aria-label="Mute" aria-pressed="true">${svgIcon('sound', 'frame-sound-ico')}</button>` +
           `<div class="lb-scrub" role="slider" tabindex="0" aria-label="Where the clip is" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">` +
             `<span class="lb-track"><span class="lb-fill"></span></span><span class="lb-knob"></span>` +
