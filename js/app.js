@@ -10304,11 +10304,13 @@
 
      Deliberately NO type glyph over it: a photo announces itself as a photo, so
      the badge would be labelling the one face that never needed a label. */
-  function mediaFaceEl(p, label) {
+  // `ratio` fixes the box's shape (the Frames wall's 3:4), cropping the
+  // picture to it; without one the box is the picture's own shape.
+  function mediaFaceEl(p, label, ratio) {
     const isVideo = isVideoUrl(p.image);
     const src = isVideo ? p.poster : p.image;
     const d = imageDimsFromUrl(p.image);
-    const style = `aspect-ratio:${d ? frameRatio(d.w, d.h) : '1 / 1'};` +
+    const style = `aspect-ratio:${ratio || (d ? frameRatio(d.w, d.h) : '1 / 1')};` +
       (p.tint ? `--ph-fill:${p.tint};` : '');
     return `<div class="ptile-face ptile-face--media" style="${style}">` +
         (src ? `<img src="${esc(sizedSrc(src, 180))}" alt="${esc(label || 'Frame')}" ` +
@@ -10649,12 +10651,14 @@
       `</div>`;
   }
   /* A Frames tab's tile: the face and nothing else, a link to the post's own
-     page (see the frame wall in renderUser). */
+     page (see the frame wall in renderUser). Every tile is 3:4, three across
+     (Zoe, 2026-11-11: "make them all the same aspect ratio 3:4"), so the wall
+     is an even grid; the post itself still shows the whole picture. */
   function frameTileHtml(p) {
     const cap = notePlain(p.note) || p.title || '';
     return `<a class="ptile ptile--frame" href="${postRoute(p)}" ` +
         `aria-label="${esc(cap || 'Frame')}">` +
-        mediaFaceEl(p, cap) +
+        mediaFaceEl(p, cap, '3 / 4') +
       `</a>`;
   }
 

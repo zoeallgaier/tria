@@ -8049,11 +8049,11 @@ button.card-song-play:active { transform: scale(0.9); }
    is still the ceiling and the 681–899 sidebar band still drops back to two;
    there is no second set of rules to keep in sync.
 
-   Tiles keep their real aspect ratios, and that IS the feature. A square-cropped
-   contact sheet flattens a portrait and a wide landscape into the same brick,
-   which is what every other platform's profile grid does and precisely what Tria
-   stores photos uncropped to avoid (only avatars crop). The ragged edge is the
-   photographs being themselves.
+   Tiles were their real aspect ratios, a ragged masonry, until 2026-11-11:
+   now every tile is 3:4, three across (Zoe: "make them all the same aspect
+   ratio 3:4"; frameTileHtml), cropped to the box. The post page still shows
+   the whole photograph, uncropped. dealMasonry still deals them, which with
+   even tiles is simply row by row.
 
    A tile is the face and nothing else — no foot, no byline, no caption, no
    counts. Discover's tiles carry a person because that grid is a room full of
@@ -8071,6 +8071,10 @@ button.card-song-play:active { transform: scale(0.9); }
    every aspect-ratio face with it. Take the full column back explicitly; the
    feed is already capped at --feed-width, so this centres on the same axis. */
 .pgrid--frames { width: 100%; margin-top: 0.15rem; }
+/* Three columns at every width, a phone included (Zoe, 2026-11-11: "a 3
+   columns frames view on profiles and circles"); Discover's wall of people
+   keeps the ladder above. Two classes so the 681–899 band's two can't win. */
+.pgrid.pgrid--frames { --cols: 3; }
 
 /* A private profile, seen by an outsider: the posts column is replaced by a
    quiet, centred nudge toward adding them. Flat editorial (content, not glass),
