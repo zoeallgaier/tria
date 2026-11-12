@@ -365,28 +365,28 @@ h2 { font-size: 1.5rem; line-height: 1.15; }
 .legend--foot { margin: 12px 0 0; }
 .swatch { width: 14px; height: 3px; border-radius: 2px; background: var(--data); }
 .swatch--b { background: repeating-linear-gradient(90deg, var(--data-2) 0 4px, transparent 4px 7px); }
-.swatch--fill { height: 10px; border-radius: 3px; }
-.swatch--ghost { height: 10px; border-radius: 3px; background: var(--data-soft); }
 
 .bars { display: grid; gap: 10px; }
 .barrow { display: grid; grid-template-columns: minmax(84px, 8.5rem) minmax(0, 1fr) 3rem; gap: 12px; align-items: center; min-height: 26px; }
 .barrow-name { font-size: 0.88rem; }
 .barrow-track { position: relative; height: 20px; border-radius: 4px; background: var(--fill); }
 .barrow-fill { position: absolute; inset: 0 auto 0 0; border-radius: 0 4px 4px 0; background: var(--data); min-width: 2px; }
-.barrow-ghost { position: absolute; inset: 0 auto 0 0; border-radius: 0 4px 4px 0; background: var(--data-soft); }
 .barrow-val { font-variant-numeric: tabular-nums; font-size: 0.88rem; text-align: right; }
 
-.funnel { display: grid; }
-.step, .gap { display: grid; grid-template-columns: minmax(84px, 8rem) minmax(0, 1fr) 4.4rem; gap: 12px; align-items: center; }
-.step { padding: 6px 0; }
-.step .barrow-track { height: 26px; }
-.step-name { font-size: 0.95rem; font-weight: 700; }
-.step-val { text-align: right; font-variant-numeric: tabular-nums; line-height: 1.2; }
-.step-val b { font-size: 1.05rem; }
-.step-val small { display: block; color: var(--muted); font-size: 0.76rem; }
-.gap { font-size: 0.8rem; color: var(--muted); }
-.gap span { grid-column: 2 / -1; }
-.gap.is-worst span { color: var(--danger); font-weight: 700; }
+/* Settling in: a headline, then four bars out of the same people. The name
+   sits over its bar so long names never squeeze it on a phone. */
+.settle-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+.settle-head p { margin: 0; flex: 1 1 16rem; color: var(--muted); font-size: 0.92rem; line-height: 1.45; }
+.settle-head p b { color: var(--text); }
+.settle-bars { display: grid; gap: 14px; }
+.settle-row { display: grid; grid-template-columns: minmax(0, 1fr) 3.6rem; grid-template-areas: "name val" "bar val"; column-gap: 12px; row-gap: 6px; align-items: center; }
+.settle-name { grid-area: name; font-size: 0.92rem; }
+.settle-row .barrow-track { grid-area: bar; height: 14px; }
+.settle-row.is-low .settle-name { font-weight: 700; }
+.settle-val { grid-area: val; text-align: right; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.settle-val b { font-size: 1.05rem; }
+.settle-val small { display: block; color: var(--muted); font-size: 0.76rem; }
+.settle .note { margin-top: 14px; }
 
 .callout {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;

@@ -294,11 +294,11 @@
   const sectionHead = (title, sub, link) =>
     `<div class="section-head"><h2>${esc(title)}</h2>${link || ''}${sub ? `<p class="sub">${sub}</p>` : ''}</div>`;
   // A change on the week before: an arrow and a word, never colour alone.
-  function delta(now, before, unit = '') {
+  function delta(now, before, unit = '', than = 'last week') {
     if (before == null || now == null) return '';
     const d = Math.round((now - before) * 10) / 10;
-    if (!d) return '<span class="delta">Same as last week</span>';
-    return `<span class="delta ${d > 0 ? 'is-up' : 'is-down'}">${d > 0 ? '↑' : '↓'} ${fmt(Math.abs(d))}${unit} on last week</span>`;
+    if (!d) return `<span class="delta">Same as ${than}</span>`;
+    return `<span class="delta ${d > 0 ? 'is-up' : 'is-down'}">${d > 0 ? '↑' : '↓'} ${fmt(Math.abs(d))}${unit} on ${than}</span>`;
   }
   function tile(label, value, note, tipText, cls = '') {
     return `<div class="card tile${cls ? ' ' + cls : ''}"${tipText ? ` data-tip="${esc(tipText)}"` : ''}>` +
@@ -346,8 +346,9 @@
 
   // A line chart a point a week: meaningful actives (`a`), and opens (`b`)
   // once the ping exists. `span` is the window each point counts: 7 for
-  // weekly active, 30 for monthly.
-  function lineChart(rows, W, { a = 'active', b = 'opened', span = 7 } = {}) {
+  // weekly active, 30 for monthly. `names` label the two lines; `tipHead`
+  // heads a point's tip (the All time chart's lines are both actives).
+  function lineChart(rows, W, { a = 'active', b = 'opened', span = 7, names = ['Active', 'Opened'], label, tipHead } = {}) {
     const series = rows.map((s) => ({ week: s.week, active: s[a] || 0, opened: s[b] || 0 }));
     const H = W < 480 ? 190 : 220, L = 34, R = 10, T = 12, B = 26;
     const n = series.length;
@@ -358,12 +359,13 @@
     const hasOpened = series.some((s) => s.opened > 0);
     const path = (k) => series.map((s, i) => (k === 'opened' && i < from) ? ''
       : `${(k === 'opened' ? i === from : !i) ? 'M' : 'L'}${x(i).toFixed(1)},${y(s[k]).toFixed(1)}`).join('');
-    let g = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${span === 7 ? 'Weekly' : 'Monthly'} active people, last 12 weeks">`;
+    let g = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label || `${span === 7 ? 'Weekly' : 'Monthly'} active people, last 12 weeks`)}">`;
     [0, nice / 2, nice].forEach((t) => {
       g += `<line class="${t ? 'gridline' : 'baseline'}" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/>` +
         `<text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${fmt(t)}</text>`;
     });
-    const every = W < 420 ? 4 : W < 560 ? 3 : 2;
+    // A date label every ~64px, whatever the number of weeks.
+    const every = Math.max(1, Math.ceil(n / Math.max(1, Math.floor((W - L - R) / 64))));
     series.forEach((s, i) => {
       if ((n - 1 - i) % every === 0) g += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${esc(day(s.week))}</text>`;
     });
@@ -375,7 +377,7 @@
     if (hasOpened) g += '<circle class="dot dot--b" r="4" visibility="hidden"/>';
     g += `<rect class="hit" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></svg>`;
     const legend = hasOpened
-      ? '<ul class="legend"><li><span class="swatch"></span>Active</li><li><span class="swatch swatch--b"></span>Opened</li></ul>' : '';
+      ? `<ul class="legend"><li><span class="swatch"></span>${esc(names[0])}</li><li><span class="swatch swatch--b"></span>${esc(names[1])}</li></ul>` : '';
     return { html: legend + g, wire(root) {
       const el = root.querySelector('svg.chart');
       const cross = el.querySelector('.cross'), da = el.querySelector('.dot--a'), db = el.querySelector('.dot--b');
@@ -387,8 +389,8 @@
         cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
         da.setAttribute('cx', x(i)); da.setAttribute('cy', y(s.active)); da.setAttribute('visibility', 'visible');
         if (db) { db.setAttribute('cx', x(i)); db.setAttribute('cy', y(s.opened)); db.setAttribute('visibility', i >= from ? 'visible' : 'hidden'); }
-        showTip(`<b>${span === 7 ? 'Week' : '30 days'} to ${esc(day(addDays(s.week, 6)))}</b><br><span class="k"></span>Active ${fmt(s.active)}` +
-          (hasOpened && i >= from ? `<br><span class="k k--b"></span>Opened ${fmt(s.opened)}` : ''), e.clientX, e.clientY);
+        showTip(`<b>${tipHead || (span === 7 ? 'Week' : '30 days')} to ${esc(day(addDays(s.week, 6)))}</b><br><span class="k"></span>${esc(names[0])} ${fmt(s.active)}` +
+          (hasOpened && i >= from ? `<br><span class="k k--b"></span>${esc(names[1])} ${fmt(s.opened)}` : ''), e.clientX, e.clientY);
       };
       const hit = el.querySelector('.hit');
       hit.addEventListener('pointermove', at);
@@ -421,17 +423,6 @@
     return g + '</svg>';
   }
 
-  // Where the most people stop, on a funnel's in-order counts.
-  function worstDrop(seq, first) {
-    let worst = -1, rate = 2;
-    for (let i = first + 1; i < 6; i++) {
-      if (!seq[i - 1]) continue;
-      const r = seq[i] / seq[i - 1];
-      if (r < rate) { rate = r; worst = i; }
-    }
-    return worst;
-  }
-
   // ── Names ─────────────────────────────────────────────────────────────────
   const TYPE_NAMES = {
     note: 'Notes', photo: 'Frames', take: 'Takes', find: 'Finds', poll: 'Polls',
@@ -457,9 +448,9 @@
     // admin_overview is the page; the rest are sections that draw when they
     // answer and say so when they don't (Zoe, 2026-11-11: "what happened to
     // the overview?", one 42P01 in admin_extras had blanked all of it).
-    const [o, f30, src30, ret, x, z] = await settle([
+    const [o, st, src30, ret, x, z] = await settle([
       call('admin_overview'),
-      call('admin_funnel', { p_days: 30, p_basis: 'account', p_by: 'none' }),
+      call('admin_settling', { p_days: 30 }),
       call('admin_funnel', { p_days: 30, p_basis: 'account', p_by: 'source' }),
       call('admin_retention'),
       extras(),
@@ -470,8 +461,7 @@
     const cur = s[s.length - 1], prev = s[s.length - 2];
     // The monthly line needs admin-dashboard.sql re-run (2026-11-11).
     const hasMonthly = s.some((w) => w.monthly != null);
-    const g = f30?.groups?.[0];
-    const accounts30 = g?.seq?.[1] || 0;
+    const hist = (o.history || []).map((w) => ({ week: w.week, monthly: w.monthly || 0, weekly: w.weekly || 0 }));
 
     // Week 1 retention: the last four cohorts old enough to say.
     const ripe = (ret?.cohorts || []).filter((c) => c.weeks?.[0]?.eligible > 0).slice(-4);
@@ -489,7 +479,7 @@
     const toNudge = z ? fresh(z.people || []).length
       : x ? (x.newest || []).filter((p) => nextStep(p) !== 'Settled in').length : null;
     const nudgeLine = toNudge
-      ? `<a class="callout callout--go" href="#nudge"><span><b>${fmt(toNudge)}</b> ${toNudge === 1 ? 'person hasn\'t' : 'people haven\'t'} settled in yet.</span>${svg('chevron', 'i i--go')}</a>`
+      ? `<a class="callout callout--go" href="#nudge"><span><b>${fmt(toNudge)}</b> ${toNudge === 1 ? 'person' : 'people'} to nudge.</span>${svg('chevron', 'i i--go')}</a>`
       : '';
 
     const rh = x ? rhythmHtml(x.rhythm) : null;
@@ -498,9 +488,9 @@
       headHtml('Overview') +
       '<div class="grid grid--kpi">' +
         tile('Weekly active', fmt(o.wau), delta(cur?.active, prev?.active), 'Created or connected in the last 7 days. Likes don\'t count.') +
-        tile('Monthly active', fmt(o.mau), hasMonthly ? delta(cur?.monthly, prev?.monthly) : '', 'Created or connected in the last 30 days. Likes don\'t count.') +
+        tile('Monthly active', fmt(o.mau), delta(o.mau, o.mauPrev, '', 'last month'), 'Created or connected in the last 30 days, against the 30 before. Likes don\'t count.') +
         tile('New this week', fmt(o.new7), delta(cur?.joined, prev?.joined), 'Accounts made in the last 7 days') +
-        tile('Activated', g ? pctTxt(pct(g.activated, accounts30)) : '–', g ? `${fmt(g.activated)} of ${fmt(accounts30)} new, 30 days` : '', 'Connected and posted within a week of joining. New accounts, last 30 days.') +
+        tile('Settled in', st?.people ? pctTxt(pct(st.settled, st.people)) : '–', st?.people ? `${fmt(st.settled)} of ${fmt(st.people)} in their first week` : '', 'Made a friend (or joined a circle) and shared something, both in their first week. Joined in the last 30 days, a week old or more.') +
       '</div>' +
       nudgeLine +
       '<div class="section grid grid--two">' +
@@ -508,6 +498,8 @@
         `<div>${sectionHead('Monthly active', '30 days at a time')}<div class="card" id="c-monthly">` +
           (hasMonthly ? '' : '<p class="empty">Re-run <b>supabase/admin-dashboard.sql</b> to draw this.</p>') + '</div></div>' +
       '</div>' +
+      `<div class="section">${sectionHead('All time', hist.length ? 'Since ' + esc(day(hist[0].week)) + ', a point a week' : '')}<div class="card" id="c-history">` +
+        (hist.length > 1 ? '' : '<p class="empty">Re-run <b>supabase/admin-dashboard.sql</b> to draw this.</p>') + '</div></div>' +
       strip([
         ['Everyone', fmt(o.users), 'Every account, yours left out'],
         ['Today', fmt(o.dau), 'Created or connected today'],
@@ -549,12 +541,19 @@
       cm.innerHTML = mo.html;
       mo.wire(cm);
     }
+    const ch = $('c-history');
+    if (hist.length > 1) {
+      const al = lineChart(hist, chartW(ch), { a: 'monthly', b: 'weekly', span: 7, names: ['Monthly active', 'Weekly active'],
+        label: 'Monthly and weekly active people, all time', tipHead: 'Week' });
+      ch.innerHTML = al.html;
+      al.wire(ch);
+    }
     const W = chartW(cj);
     cj.innerHTML = columns(s.map((w) => ({
       n: w.joined, label: day(w.week),
       tip: `<b>Week to ${esc(day(addDays(w.week, 6)))}</b><br>${fmt(w.joined)} new`,
     })), W, { every: W < 420 ? 4 : W < 560 ? 3 : 2, label: 'New accounts a week, last 12 weeks' });
-    await paintFunnel($('funnel'));
+    paintSettling($('funnel'), sstate.days === 30 ? st : null);
   }
 
   // The week's rhythm: 7 rows by 24 hours, meaningful events, 28 days.
@@ -576,97 +575,59 @@
     return { html: html + '</div>', peak: peak[2] ? `${DAYS[peak[0]]} ${hr(peak[1])}` : '' };
   }
 
-  // ── Settling in (the funnel), a section of the Overview ───────────────────
-  const STAGES = [
-    { name: 'Install', say: 'First opened the app or a shortcut' },
-    { name: 'Account', say: 'Claimed an @handle' },
-    { name: 'Profile', say: 'Added a photo or bio' },
-    { name: 'Connected', say: 'Made a friend or joined a circle' },
-    { name: 'Posted', say: 'First post, comment, message, RSVP or vote' },
-    { name: 'Came back', say: 'Active again within 7 days' },
+  // ── Settling in, a section of the Overview ────────────────────────────────
+  // Zoe, 2026-11-11: the six stage funnel (in order vs at all, three splits,
+  // installs) was "painful to look at or understand", and Activated "can be
+  // folded" into it. Now it is one question: of the people who joined, what
+  // did they do in their first week? One headline, Settled in (made a friend
+  // or joined a circle, AND shared something, the old Activated), and the four
+  // things on their own, each out of the same people. Only accounts a week old
+  // or more count, so nobody is marked down for days they still have.
+  const SETTLE = [
+    { k: 'profile', name: 'Added a photo or bio', tip: 'A profile photo or a bio' },
+    { k: 'connected', name: 'Made a friend or joined a circle', tip: 'A mutual friend (a request they asked or answered, now both ways), or a circle joined. A follow or an unanswered request doesn\'t count.' },
+    { k: 'shared', name: 'Shared something', tip: 'A post, Moment, daily answer, comment, message, RSVP or poll vote. A like doesn\'t count.' },
+    { k: 'back', name: 'Came back another day', tip: 'Opened Tria or did something on any of the 6 days after the day they joined' },
   ];
-  // 30 days by default, so its Activated agrees with the tile above it.
-  const fstate = { basis: 'account', by: 'none', days: 30 };
-  const groupName = (by, k) => (by === 'source' ? SOURCE[k] || k : by === 'platform' ? PLATFORM[k] || k : by === 'cohort' ? 'Week of ' + day(k) : 'Everyone');
+  const sstate = { days: 30 };
 
-  async function paintFunnel(box) {
+  async function paintSettling(box, given) {
     if (!box) return;
-    let res, r0;
-    try {
-      res = await call('admin_funnel', { p_days: fstate.days, p_basis: fstate.basis, p_by: fstate.by });
-      r0 = fstate.by === 'none' ? res : await call('admin_funnel', { p_days: fstate.days, p_basis: fstate.basis, p_by: 'none' });
-    } catch (err) {
-      box.innerHTML = sectionHead('Settling in') + `<div class="callout">Couldn't load these. ${esc(err?.message || '')}</div>`;
-      return;
-    }
-    const groups = res.groups || [];
-    const first = fstate.basis === 'install' ? 0 : 1;
-    const overall = r0.groups?.[0] || { seq: [0, 0, 0, 0, 0, 0], any: [0, 0, 0, 0, 0, 0], young: 0, activated: 0 };
-
-    const top = overall.seq[first] || 0;
-    const worst = worstDrop(overall.seq, first);
-    let steps = '';
-    for (let i = first; i < 6; i++) {
-      const v = overall.seq[i], anyV = overall.any[i];
-      if (i > first) {
-        steps += `<div class="gap${i === worst ? ' is-worst' : ''}"><span>↓ ${pctTxt(pct(v, overall.seq[i - 1]))}${i === worst ? ', biggest drop' : ''}</span></div>`;
+    let r = given;
+    if (!r) {
+      try { r = await call('admin_settling', { p_days: sstate.days }); } catch (err) {
+        const missing = /admin_settling|PGRST202|42883/.test(String(err?.message || err?.code || ''));
+        box.innerHTML = sectionHead('Settling in') + `<div class="callout">${missing
+          ? 'Re-run <b>supabase/admin-dashboard.sql</b> to draw this.' : 'Couldn\'t load these. ' + esc(err?.message || '')}</div>`;
+        return;
       }
-      steps += `<div class="step" data-tip="<b>${esc(STAGES[i].name)}</b><br>${esc(STAGES[i].say)}<br>${fmt(v)} in order, ${fmt(anyV)} at all">` +
-        `<span class="step-name">${esc(STAGES[i].name)}</span>` +
-        `<span class="barrow-track"><span class="barrow-ghost" style="width:${top ? (anyV / top) * 100 : 0}%"></span><span class="barrow-fill" style="width:${top ? (v / top) * 100 : 0}%"></span></span>` +
-        `<span class="step-val"><b>${fmt(v)}</b><small>${pctTxt(pct(v, top))}</small></span></div>`;
     }
-    const worstLine = worst > 0
-      ? `<a class="callout callout--go" href="#nudge"><span><b>${esc(STAGES[worst - 1].name)} → ${esc(STAGES[worst].name)}</b> loses the most: ${fmt(overall.seq[worst - 1] - overall.seq[worst])} people, ${pctTxt(100 - pct(overall.seq[worst], overall.seq[worst - 1]))}.</span>${svg('chevron', 'i i--go')}</a>`
-      : '';
-
-    let split = '';
-    if (fstate.by !== 'none') {
-      const head = '<tr><th>' + esc({ cohort: 'Joined', source: 'Source', platform: 'Platform' }[fstate.by]) + '</th>' +
-        STAGES.slice(first).map((st) => `<th>${esc(st.name)}</th>`).join('') + '<th>Activated</th><th>Median</th></tr>';
-      const rows = groups.map((gr) => {
-        const t = gr.seq[first];
-        const cells = gr.seq.slice(first).map((v, j) => (j === 0 ? `<td>${fmt(v)}</td>`
-          : `<td>${pctTxt(pct(v, t))}<span class="sub">${fmt(v)}</span></td>`)).join('');
-        return `<tr><td>${esc(groupName(fstate.by, gr.key))}</td>${cells}` +
-          `<td>${pctTxt(pct(gr.activated, gr.seq[1]))}<span class="sub">${fmt(gr.activated)}</span></td><td>${esc(hours(gr.actMedianH))}</td></tr>`;
-      }).join('');
-      const actRows = groups.filter((gr) => gr.seq[1] > 0).map((gr) => {
-        const name = groupName(fstate.by, gr.key);
-        return row({ title: esc(name), sub: `${fmt(gr.seq[1])} accounts`,
-          meter: pct(gr.activated, gr.seq[1]), val: `<b>${pctTxt(pct(gr.activated, gr.seq[1]))}</b>`,
-          tipText: `<b>${esc(name)}</b><br>${fmt(gr.activated)} of ${fmt(gr.seq[1])} activated<br>median ${esc(hours(gr.actMedianH))}` });
-      });
-      split = (actRows.length ? `<div class="section-tight">${sectionHead('Activated by ' + { cohort: 'week', source: 'source', platform: 'platform' }[fstate.by])}${list(actRows)}</div>` : '') +
-        `<div class="section-tight">${sectionHead('Every stage')}` +
-        `<div class="card"><div class="table-wrap"><table><thead>${head}</thead><tbody>${rows || '<tr><td>Nobody yet</td></tr>'}</tbody></table></div></div></div>`;
-    }
-
+    const n = r.people || 0;
+    const joinedIn = sstate.days ? `joined in the last ${sstate.days} days` : 'ever joined';
+    const low = n ? SETTLE.reduce((m, st) => ((r[st.k] || 0) < (r[m.k] || 0) ? st : m), SETTLE[0]) : null;
+    const bars = SETTLE.map((st) => {
+      const v = r[st.k] || 0;
+      return `<div class="settle-row${st === low ? ' is-low' : ''}" data-tip="<b>${esc(st.name)}</b><br>${esc(st.tip)}<br>${fmt(v)} of ${fmt(n)}">` +
+        `<span class="settle-name">${esc(st.name)}</span>` +
+        `<span class="barrow-track"><span class="barrow-fill" style="width:${pct(v, n) || 0}%"></span></span>` +
+        `<span class="settle-val"><b>${pctTxt(pct(v, n))}</b><small>${fmt(v)}</small></span></div>`;
+    }).join('');
     box.innerHTML =
-      sectionHead('Settling in', 'From account to coming back') +
-      '<div class="controls">' +
-        segmented('basis', [['account', 'Account'], ['install', 'Install']], fstate.basis, 'From') +
-        segmented('days', [[30, '30 days'], [90, '90 days'], [0, 'All']], fstate.days, 'Joined in') +
-        segmented('by', [['none', 'All'], ['cohort', 'Week'], ['source', 'Source'], ['platform', 'Platform']], fstate.by, 'Split') +
-      '</div>' +
-      `<div class="card"><div class="funnel">${steps}</div>` +
-        '<ul class="legend legend--foot"><li><span class="swatch swatch--fill"></span>In order</li><li><span class="swatch swatch--ghost"></span>At all</li></ul>' +
-        (overall.young ? `<p class="note">${fmt(overall.young)} are still in their first week.</p>` : '') +
-        (first === 0 ? '<p class="note">Installs count from when tracking began.</p>' : '') +
-      '</div>' + worstLine +
-      '<div class="grid grid--tiles section-tight">' +
-        tile('Activated', pctTxt(pct(overall.activated, overall.seq[1])), `${fmt(overall.activated)} of ${fmt(overall.seq[1])}`, 'Connected and posted, both within 7 days of joining') +
-        tile('Median time', esc(hours(overall.actMedianH)), 'to activate') +
-        tile('Slowest quarter', esc(hours(overall.actP75H)), '3 in 4 by then') +
-      '</div>' + split;
-
+      sectionHead('Settling in', 'What people did in their first week') +
+      '<div class="controls">' + segmented('sdays', [[30, '30 days'], [90, '90 days'], [0, 'All time']], sstate.days, 'Joined in') + '</div>' +
+      (n ? '<div class="card settle">' +
+          `<div class="settle-head"><div class="tile-value">${pctTxt(pct(r.settled, n))}</div>` +
+          `<p><b>Settled in.</b> ${fmt(r.settled)} of the ${fmt(n)} who ${joinedIn} made a friend and shared something in their first week` +
+          (r.medianH != null ? `, typically within ${esc(hours(r.medianH)).replace(' ', '&nbsp;')}` : '') + '.</p></div>' +
+          `<div class="settle-bars">${bars}</div>` +
+          (r.young ? `<p class="note">${fmt(r.young)} more joined this past week and count once their week is up.</p>` : '') +
+          (r.pingSince ? `<p class="note">Opening Tria counts as coming back since ${esc(day(r.pingSince))}; before that only doing something did.</p>`
+            : '<p class="note">Coming back counts only doing something until the open ping has data.</p>') +
+        '</div>' +
+        (low ? `<a class="callout callout--go" href="#nudge"><span>Fewest people <b>${esc(low.name.toLowerCase())}</b>. See who to nudge.</span>${svg('chevron', 'i i--go')}</a>` : '')
+        : `<div class="card"><p class="empty">Nobody who ${joinedIn} has had their first week yet.${r.young ? ` ${fmt(r.young)} joined this past week.` : ''}</p></div>`);
     box.querySelectorAll('.segmented button').forEach((b) => {
-      b.addEventListener('click', () => {
-        if (b.dataset.basis) fstate.basis = b.dataset.basis;
-        if (b.dataset.days != null) fstate.days = Number(b.dataset.days);
-        if (b.dataset.by) fstate.by = b.dataset.by;
-        paintFunnel(box);
-      });
+      b.addEventListener('click', () => { sstate.days = Number(b.dataset.sdays); paintSettling(box); });
     });
   }
 
@@ -1121,8 +1082,19 @@
         friendships: 486, circles: 23, momentsLive: 14,
         kinds7: { post: 96, comment: 212, message: 640, moment: 58, daily: 41, rsvp: 12, vote: 33, friend: 27, circle: 15 },
         types7: { note: 44, photo: 38, take: 6, find: 9, poll: 4, activity: 3, moment: 58, daily: 41, repost: 11 },
-        platforms7: { ios: 96, pwa: 14, web: 18 }, series,
+        platforms7: { ios: 96, pwa: 14, web: 18 }, series, mauPrev: 131,
+        history: Array.from({ length: 40 }, (_, i) => {
+          const d = new Date(today); d.setDate(d.getDate() - (39 - i) * 7 - 6);
+          const grow = Math.round(4 + i * 2.4 + Math.sin(i / 2) * 5);
+          return { week: d.toISOString().slice(0, 10), weekly: Math.max(2, grow + 0 * i), monthly: Math.round(grow * 1.45 + 6) };
+        }),
       };
+    },
+    admin_settling({ p_days }) {
+      const n = p_days === 30 ? 43 : p_days === 90 ? 118 : 196;
+      const f = (r) => Math.round(n * r);
+      return { days: p_days, pingSince: new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10), people: n, young: 18,
+        profile: f(0.72), connected: f(0.61), shared: f(0.47), back: f(0.66), settled: f(0.39), medianH: 21.5 };
     },
     admin_funnel({ p_basis, p_by }) {
       const mk = (key, n, f) => {

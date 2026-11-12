@@ -29,7 +29,7 @@
 --                        a browser visit is not an install)
 --   2 Account            users.created_at
 --   3 Profile complete   profile_done.at (a photo or a bio)
---   4 Connected          the first friend row they made, or first circle joined
+--   4 Connected          the first mutual friend, or first circle joined
 --   5 First action       the first CREATE event (post, Moment, daily, comment,
 --                        message, RSVP, vote)
 --   6 Returned           opened again (or, before the ping, did something) on
@@ -210,8 +210,12 @@ select e.* from (
   union all
   select user_id, created_at, 'vote', 'create' from public.poll_votes
   union all
-  select f.a, greatest(f.created_at, r.created_at), 'friend', 'connect'
-    from public.friends f join public.friends r on r.a = f.b and r.b = f.a
+  -- Each side at the moment THEY acted (the ask, or the yes), once the tie is
+  -- mutual. Until 2026-11-11 both sides were stamped at the yes, so being
+  -- accepted counted as "active" (and "came back") for someone who did nothing.
+  select f.a, f.created_at, 'friend', 'connect'
+    from public.friends f
+   where exists (select 1 from public.friends r where r.a = f.b and r.b = f.a)
   union all
   select user_id, joined_at, 'circle', 'connect' from public.community_members
 ) e
@@ -240,9 +244,14 @@ select u.id as user_id,
   from public.users u
   left join public.profile_done pd on pd.user_id = u.id
   left join public.user_origin o on o.user_id = u.id
+  -- Connected: a MUTUAL friend (when it became mutual) or a circle joined. Until
+  -- 2026-11-11 any friend row they made counted, so a follow or an unanswered
+  -- request read as connected.
   left join lateral (
     select min(x) as at from (
-      select min(f.created_at) as x from public.friends f where f.a = u.id
+      select min(greatest(f.created_at, r.created_at)) as x
+        from public.friends f join public.friends r on r.a = f.b and r.b = f.a
+       where f.a = u.id
       union all
       select min(m.joined_at) from public.community_members m where m.user_id = u.id
     ) s
@@ -291,6 +300,11 @@ begin
       from metrics.meaningful_events where at > now() - interval '120 days'
   ), weeks as (
     select generate_series(0, 11) as w
+  ), allev as (
+    -- Every day anyone did something, ever: the All time chart.
+    select distinct user_id, (at at time zone metrics.tz())::date as day from metrics.meaningful_events
+  ), hist as (
+    select generate_series(0, least(260, greatest(0, (today - coalesce((select min(day) from allev), today)) / 7))) as w
   )
   select jsonb_build_object(
     'asOf', now(),
@@ -302,6 +316,17 @@ begin
     'dau', (select count(distinct user_id) from ev where day = today),
     'wau', (select count(distinct user_id) from ev where day > today - 7),
     'mau', (select count(distinct user_id) from ev where day > today - 30),
+    -- The 30 days before those: Monthly active's "on last month".
+    'mauPrev', (select count(distinct user_id) from ev where day > today - 60 and day <= today - 30),
+    -- A point a week since the first sign of life: weekly and monthly active
+    -- as each stood that week's end (Zoe, 2026-11-11: "all time active graph").
+    'history', (select jsonb_agg(jsonb_build_object(
+                  'week', today - (w * 7 + 6),
+                  'weekly', (select count(distinct user_id) from allev
+                              where day between today - (w * 7 + 6) and today - w * 7),
+                  'monthly', (select count(distinct user_id) from allev
+                               where day between today - (w * 7 + 29) and today - w * 7)
+                ) order by w desc) from hist),
     'avgDau28', (select round(avg(n)::numeric, 1) from (
                    select d::date, (select count(distinct user_id) from ev where ev.day = d::date) as n
                      from generate_series(today - 27, today, interval '1 day') g(d)) s),
@@ -437,6 +462,57 @@ begin
   return res;
 end $$;
 
+-- Settling in (Zoe, 2026-11-11: the funnel was "painful to look at or
+-- understand"; Activated and settled in "can be folded"). One question: of the
+-- people who joined, what did they do in their FIRST WEEK? Each step counted on
+-- its own (no "in order"), and only accounts at least 7 days old, so nobody is
+-- counted as not doing something they still have days left to do.
+--   profile    a photo or bio (accounts from before profile_done existed are
+--              backfilled at their account's time, so they count as week one)
+--   connected  a mutual friend or a circle joined
+--   shared     a post, Moment, daily, comment, message, RSVP or vote
+--   back       opened or did something on another day in the week
+--   settled    connected AND shared, both in week one (was "Activated")
+-- p_days: accounts that joined in the p_days before the last 7; 0 = all.
+create or replace function public.admin_settling(p_days int) returns jsonb
+language plpgsql stable security definer set search_path = public, metrics as $$
+declare res jsonb;
+begin
+  if not public.is_admin() then
+    raise exception 'Only Tria''s team can see that.' using errcode = '42501';
+  end if;
+
+  with j as (
+    select j.*, j.account_at + interval '7 days' as wk
+      from metrics.journeys j
+     where coalesce(p_days, 0) = 0 or j.account_at > now() - make_interval(days => p_days + 7)
+  ), ripe as (
+    select *,
+      profile_at   <= wk as p,
+      connected_at <= wk as c,
+      action_at    <= wk as s,
+      returned_day is not null as b
+      from j where account_at <= now() - interval '7 days'
+  )
+  select jsonb_build_object(
+    'days', p_days,
+    'pingSince', (select min(day) from metrics.days),
+    'people', (select count(*) from ripe),
+    'young', (select count(*) from j where account_at > now() - interval '7 days'),
+    'profile', (select count(*) from ripe where p),
+    'connected', (select count(*) from ripe where c),
+    'shared', (select count(*) from ripe where s),
+    'back', (select count(*) from ripe where b),
+    'settled', (select count(*) from ripe where c and s),
+    'medianH', (select round((extract(epoch from percentile_cont(0.5) within group
+                  (order by greatest(connected_at, action_at) - account_at)) / 3600)::numeric, 1)
+                  from ripe where c and s)
+  ) into res;
+  return res;
+end $$;
+revoke all on function public.admin_settling(int) from public;
+grant execute on function public.admin_settling(int) to authenticated;
+
 -- Weekly cohorts by account week, the last 12; week k is days 7k to 7k+6
 -- after the account's day, and a person counts when they were alive on any.
 create or replace function public.admin_retention() returns jsonb
@@ -489,4 +565,4 @@ grant execute on function public.admin_retention() to authenticated;
 select 'admins' as check, count(*) as rows from public.admins
 union all select 'profile_done backfilled', count(*) from public.profile_done
 union all select 'functions', count(*) from pg_proc
- where proname in ('note_open', 'admin_overview', 'admin_funnel', 'admin_retention', 'is_admin');
+ where proname in ('note_open', 'admin_overview', 'admin_funnel', 'admin_settling', 'admin_retention', 'is_admin');

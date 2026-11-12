@@ -31,8 +31,19 @@ own on the site, in the app's tokens and type, **never bundled into iOS**
 never hands it 404.html's app. Same origin, so a session made on the site is
 its session too; `bump.sh` stamps it with the app. Six pages since
 2026-11-11 (Zoe): **Overview** (Weekly and Monthly active tiles and charts,
-Settling in, the funnel, as a section (`paintFunnel`, an old `#funnel` lands
-there), and When, the weekday by hour heatmap), **Nudge**, Retention,
+Monthly's change on the 30 days before (`mauPrev`), an **All time** chart
+(`history`, weekly and monthly active a point a week since the first sign of
+life), **Settling in** (`paintSettling`, `admin_settling`; an old `#funnel`
+lands there) and When, the weekday by hour heatmap). **Settling in replaced
+the six step funnel** (Zoe: "painful to look at or understand"): what people
+did in their FIRST WEEK, each thing on its own out of the same people, only
+accounts a week old; **Settled in** (a friend or circle AND shared something,
+in week one) is the old Activated folded in (Zoe: "can be folded"). The audit
+behind it: **Connected is a MUTUAL friend** (a follow or unanswered request
+counted until then), a friendship's meaningful event is stamped on each side
+when THEY acted (being accepted made you "active"), and week one figures
+counted accounts still inside their week. `admin_funnel` stays for Word of
+mouth's source split. **Nudge**, Retention,
 Community, **Dailies**, Dictionary. `?demo` draws sample numbers, flagged.
 **Nudge** (Zoe: "an email for users who haven't really been in the funnel"):
 `supabase/admin-nudge.sql` (**NOT run** as of 2026-11-11; until then the page
