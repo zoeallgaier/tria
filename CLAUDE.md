@@ -46,7 +46,18 @@ counted accounts still inside their week. `admin_funnel` stays for Word of
 mouth's source split. **Activity** (Zoe: Made, Done and Opened on "should be
 its own page and I want to see more data") is `admin_activity(p_days)`, a
 window beside the one before it; until the SQL is re-run it draws the
-Overview's last 7 days. **Nudge**, Retention,
+Overview's last 7 days. **Audited 2026-11-11** (Zoe: "clean/accurate,
+concise/clear, easy to interpret ... without losing the details"): a
+friendship counts ONCE, the day it turned mutual (each side was counted);
+Made's bars leave bare reposts out (a quote is `quote`) so they add up to the
+Made tile; Done is **Interactions** (Made has the posts); the chart is people
+active a day (as the Active tile); Opened on, Devices and App versions are
+PEOPLE from `devices` (user_days keeps only a day's first platform, and
+signed-out visitors were mixed in). **Test accounts are left out like admins**
+(Zoe: "remove activity from tria reviewer as well, I use that to test"):
+`metrics_ignore`, seeded by "review" in a handle, name or email, folded into
+`metrics.skip`, so every page and Nudge drop it; the SQL's check row lists
+who is left out. **Nudge**, Retention,
 Community, **Dailies**, Dictionary. `?demo` draws sample numbers, flagged.
 **Nudge** (Zoe: "an email for users who haven't really been in the funnel"):
 `supabase/admin-nudge.sql` (**confirmed run** 2026-11-11: anon `rpc/admin_nudge`

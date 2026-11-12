@@ -60,8 +60,28 @@ insert into public.admins (user_id)
 select id from public.users where username = 'zoe'
 on conflict do nothing;
 
+-- Accounts that are not people using Tria, left out the same way (Zoe,
+-- 2026-11-11: "remove activity from tria reviewer as well, I use that to
+-- test"): the App Review account she tests with. Seeded by anything that says
+-- "review" in its handle, name or email; the check at the foot lists who is
+-- left out, so a wrong match shows. Add one by hand:
+--   insert into public.metrics_ignore (user_id) select id from public.users where username = '...';
+create table if not exists public.metrics_ignore (
+  user_id    uuid primary key references public.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+alter table public.metrics_ignore enable row level security;
+revoke all on public.metrics_ignore from anon, authenticated;
+
+insert into public.metrics_ignore (user_id)
+select u.id from public.users u left join auth.users a on a.id = u.id
+ where u.username ilike '%review%' or u.name ilike '%review%' or a.email ilike '%review%'
+on conflict do nothing;
+
 create or replace view metrics.skip as
-  select user_id from public.admins where not in_metrics;
+  select user_id from public.admins where not in_metrics
+  union
+  select user_id from public.metrics_ignore;
 
 create or replace function public.is_admin() returns boolean
 language sql stable security definer set search_path = public as $$
@@ -380,7 +400,10 @@ end $$;
 -- window before it, so a change can be read. No new tracking: posts, comments,
 -- messages, RSVPs, votes, friendships, circle joins and the open ping, admins
 -- left out. Likes are not read.
---   kinds, types     what was done and made: count, people, the window before
+--   kinds, types     what was done and made: count, people, the window before.
+--                    types leaves out bare reposts (a quote is 'quote'), so it
+--                    sums to kinds' post + moment + daily; a friendship is
+--                    counted once, the day it became mutual (audited 2026-11-11)
 --   active, makers   people who did anything, people who made a post
 --   audiences        where posts went: Anyone, My circle, chosen people, a circle
 --   conversation     posts (not Moments or bare reposts): how many got a
@@ -388,7 +411,8 @@ end $$;
 --   chats            messages by kind of chat: messages, chats, people
 --   series           a point a day (a week past 120 days): events, people, posts
 --   circles          the busiest circles: posts, people posting, joins
---   platforms, os, versions   who opened Tria where, and the app versions seen
+--   opened, platforms, os, versions   people who opened Tria, and on what
+--                    (people, not devices; signed-out visitors left out)
 create or replace function public.admin_activity(p_days int) returns jsonb
 language plpgsql stable security definer set search_path = public, metrics as $$
 declare
@@ -418,17 +442,35 @@ begin
            (p.created_at at time zone metrics.tz())::date as day,
            case when p.moment then 'moment'
                 when exists (select 1 from unnest(p.tags) x where x like 'daily-%') then 'daily'
+                when p.type = 'repost' then 'quote'   -- a bare one is left out below
                 else p.type end as t,
            p.type = 'repost' and coalesce(p.note, '') = '' and coalesce(p.title, '') = '' as bare
       from metrics.posts p
      where p.created_at >= (coalesce(p0, t0)::timestamp at time zone metrics.tz())
   ), conv as (
     select p.id,
-           (select count(*) from public.comments c where c.post_id = p.id) as comments,
+           (select count(*) from public.comments c where c.post_id = p.id
+               and not exists (select 1 from metrics.skip k where k.user_id = c.author)) as comments,
            (select min(c.created_at) from public.comments c
              where c.post_id = p.id and c.author <> p.author
                and not exists (select 1 from metrics.skip k where k.user_id = c.author)) - p.created_at as first_reply
       from ps p where p.day >= t0 and p.t <> 'moment' and not p.bare
+  ), fr as (
+    -- Each friendship ONCE, on the day it became mutual. meaningful_events
+    -- stamps each side when they acted, which is right for "active" but
+    -- counted every friendship twice, a side of it maybe in another window.
+    select f.a, f.b, (greatest(f.created_at, r.created_at) at time zone metrics.tz())::date as day
+      from public.friends f join public.friends r on r.a = f.b and r.b = f.a
+     where f.a < f.b
+       and greatest(f.created_at, r.created_at) >= (coalesce(p0, t0)::timestamp at time zone metrics.tz())
+       and not exists (select 1 from metrics.skip k where k.user_id in (f.a, f.b))
+  ), dev as (
+    -- People by the devices they opened Tria on in the window. user_days keeps
+    -- only a day's FIRST platform, so the app and the web on one day read as
+    -- one; a device's last_seen knows each. Signed-out visitors aren't people.
+    select distinct user_id, platform, os, coalesce(app_version, 'unknown') as v
+      from metrics.devices
+     where user_id is not null and last_seen >= (t0::timestamp at time zone metrics.tz())
   ), msg as (
     select m.author, m.chat_id, ch.kind, (m.created_at at time zone metrics.tz())::date as day
       from public.messages m join public.chats ch on ch.id = m.chat_id
@@ -449,12 +491,17 @@ begin
                 select kind, count(*) filter (where day >= t0) as n,
                        count(distinct user_id) filter (where day >= t0) as people,
                        case when p0 is null then null else count(*) filter (where day < t0) end as prev
-                  from ev group by kind) s where n > 0 or prev > 0),
+                  from ev where kind <> 'friend' group by kind
+                union all
+                select 'friend', count(*) filter (where day >= t0),
+                       (select count(distinct x) from fr, unnest(array[fr.a, fr.b]) x where fr.day >= t0),
+                       case when p0 is null then null else count(*) filter (where day < t0) end
+                  from fr) s where n > 0 or prev > 0),
     'types', (select coalesce(jsonb_object_agg(t, jsonb_build_object('n', n, 'people', people, 'prev', prev)), '{}') from (
                 select t, count(*) filter (where day >= t0) as n,
                        count(distinct author) filter (where day >= t0) as people,
                        case when p0 is null then null else count(*) filter (where day < t0) end as prev
-                  from ps group by t) s where n > 0 or prev > 0),
+                  from ps where not bare group by t) s where n > 0 or prev > 0),
     'audiences', (select coalesce(jsonb_object_agg(audience, n), '{}') from (
                     select audience, count(*) as n from ps
                      where day >= t0 and t <> 'moment' and not bare group by audience) s),
@@ -469,7 +516,8 @@ begin
                   from msg group by kind) s),
     'series', (select jsonb_agg(jsonb_build_object(
                   'at', b.at,
-                  'events', (select count(*) from ev where ev.day between b.at and b.at + case when by_week then 6 else 0 end),
+                  'events', (select count(*) from ev where ev.kind <> 'friend' and ev.day between b.at and b.at + case when by_week then 6 else 0 end)
+                          + (select count(*) from fr where fr.day between b.at and b.at + case when by_week then 6 else 0 end),
                   'people', (select count(distinct user_id) from ev where ev.day between b.at and b.at + case when by_week then 6 else 0 end),
                   'posts', (select count(*) from ps where not ps.bare and ps.day between b.at and b.at + case when by_week then 6 else 0 end)
                 ) order by b.at) from buckets b),
@@ -486,15 +534,15 @@ begin
                  where (c->>'posts')::int > 0 or (c->>'joins')::int > 0
                  order by (c->>'posts')::int desc, (c->>'joins')::int desc
                  limit 8) s),
+    -- All three in PEOPLE, out of 'opened': someone on two counts in both.
+    'opened', (select count(distinct user_id) from dev),
     'platforms', (select coalesce(jsonb_object_agg(platform, n), '{}') from (
-                    select platform, count(distinct user_id) as n from metrics.days where day >= t0 group by platform) s),
+                    select platform, count(distinct user_id) as n from dev group by platform) s),
     'os', (select coalesce(jsonb_object_agg(os, n), '{}') from (
-             select os, count(*) as n from metrics.devices
-              where last_seen >= (t0::timestamp at time zone metrics.tz()) group by os) s),
+             select os, count(distinct user_id) as n from dev group by os) s),
     'versions', (select coalesce(jsonb_agg(jsonb_build_object('v', v, 'n', n) order by n desc), '[]') from (
-                   select coalesce(app_version, 'unknown') as v, count(*) as n from metrics.devices
-                    where platform = 'ios' and last_seen >= (t0::timestamp at time zone metrics.tz())
-                    group by 1 order by 2 desc limit 6) s)
+                   select v, count(distinct user_id) as n from dev
+                    where platform = 'ios' group by v order by 2 desc limit 6) s)
   ) into res;
   return res;
 end $$;
@@ -690,6 +738,8 @@ grant execute on function public.admin_retention() to authenticated;
 
 -- ── Checks ──────────────────────────────────────────────────────────────────
 select 'admins' as check, count(*) as rows from public.admins
+union all select 'left out: ' || coalesce(string_agg('@' || u.username, ', '), 'nobody'), count(*)
+  from metrics.skip k join public.users u on u.id = k.user_id
 union all select 'profile_done backfilled', count(*) from public.profile_done
 union all select 'functions', count(*) from pg_proc
  where proname in ('note_open', 'admin_overview', 'admin_activity', 'admin_funnel', 'admin_settling', 'admin_retention', 'is_admin');

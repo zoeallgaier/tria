@@ -431,7 +431,7 @@
   // ── Names ─────────────────────────────────────────────────────────────────
   const TYPE_NAMES = {
     note: 'Notes', photo: 'Frames', take: 'Takes', find: 'Finds', poll: 'Polls',
-    activity: 'Plans', song: 'Music', repost: 'Reposts', moment: 'Moments', daily: 'Daily answers',
+    activity: 'Plans', song: 'Music', repost: 'Reposts', quote: 'Quotes', moment: 'Moments', daily: 'Daily answers',
   };
   const KIND_NAMES = {
     post: 'Posts', moment: 'Moments', daily: 'Daily answers', comment: 'Comments', message: 'Messages',
@@ -439,7 +439,7 @@
   };
   const PLATFORM = { ios: 'iOS app', pwa: 'Home screen', web: 'Web', unknown: 'Before tracking' };
   const SOURCE = { invite: 'Invite', circle: 'Circle link', profile: 'Profile link', post: 'Post link', daily: 'Daily link', referral: 'Another site', direct: 'Direct', unknown: 'Before tracking' };
-  const SKIP_NOTE = 'Your own activity isn\'t counted.';
+  const SKIP_NOTE = 'Your own activity and the App Review test account aren\'t counted.';
   const foot = () => `<p class="footnote">${SKIP_NOTE}</p>`;
 
 
@@ -631,6 +631,10 @@
     const sumK = (ks, f = 'n') => ks.reduce((x, k) => x + (K[k]?.[f] || 0), 0);
     const hasPrev = a.prevFrom != null;
     const made = sumK(['post', 'moment', 'daily']), madePrev = hasPrev ? sumK(['post', 'moment', 'daily'], 'prev') : null;
+    // What people did besides making: Made has its own bars, so Interactions
+    // leaves posts, Moments and daily answers to it.
+    const talk = Object.fromEntries(Object.entries(K).filter(([k]) => !['post', 'moment', 'daily'].includes(k)));
+    const opened = a.opened ?? null;
     const doneAll = Object.values(K).reduce((x, v) => x + (v.n || 0), 0);
     const cv = a.conversation || {};
     const ser = a.series || [];
@@ -649,21 +653,21 @@
       headHtml('Activity') + controls +
       '<div class="grid grid--kpi">' +
         tile('Active', fmt(a.active), dl(a.active, a.activePrev), 'People who created or connected. Likes don\'t count.') +
-        tile('Made', fmt(made), dl(made, madePrev), 'Posts, Moments and daily answers. A bare repost isn\'t counted.') +
+        tile('Made', fmt(made), dl(made, madePrev), 'Posts (quotes too), Moments and daily answers. A bare repost isn\'t counted.') +
         tile('Comments', fmt(K.comment?.n || 0), dl(K.comment?.n || 0, K.comment?.prev), 'On any post') +
         tile('Messages', fmt(K.message?.n || 0), dl(K.message?.n || 0, K.message?.prev), 'In any chat') +
       '</div>' +
       strip([
         ['Made something', a.active ? pctTxt(pct(a.makers, a.active)) : '–', `${fmt(a.makers)} of the ${fmt(a.active)} active made a post, Moment or daily answer`],
-        ['Each, on average', a.active ? fmt(Math.round((doneAll / a.active) * 10) / 10) : '–', 'Things done per active person'],
+        ['Things each', a.active ? fmt(Math.round((doneAll / a.active) * 10) / 10) : '–', `${fmt(doneAll)} things made or done by ${fmt(a.active)} active people, on average each`],
         ['Got a reply', pctTxt(pct(cv.replied, cv.posts)), `${fmt(cv.replied)} of ${fmt(cv.posts)} posts got a comment from someone else (Moments and bare reposts left out)`],
-        ['First reply', esc(hours(cv.firstReplyH)), 'Typical time from a post to its first comment from someone else'],
-        ['Comments a post', cv.posts ? fmt(Math.round((cv.comments / cv.posts) * 10) / 10) : '–', 'Comments on those posts, on average'],
+        ['First reply in', esc(hours(cv.firstReplyH)), 'Typical (median) time from a post to its first comment from someone else, of the posts that got one'],
+        ['Comments per post', cv.posts ? fmt(Math.round((cv.comments / cv.posts) * 10) / 10) : '–', `${fmt(cv.comments)} comments on the ${fmt(cv.posts)} posts made in the window, on average`],
       ]) +
-      `<div class="section">${sectionHead(a.byWeek ? 'Every week' : 'Every day', 'Things done')}<div class="card" id="c-act"></div></div>` +
+      `<div class="section">${sectionHead(a.byWeek ? 'Active each week' : 'Active each day', 'People who created or connected')}<div class="card" id="c-act"></div></div>` +
       '<div class="section grid grid--three">' +
-        `<div>${sectionHead('Made')}<div class="card">${richBars(a.types, TYPE_NAMES, before)}</div></div>` +
-        `<div>${sectionHead('Done')}<div class="card">${richBars(a.kinds, KIND_NAMES, before)}</div></div>` +
+        `<div>${sectionHead('Made', 'By type')}<div class="card">${richBars(a.types, TYPE_NAMES, before)}</div></div>` +
+        `<div>${sectionHead('Interactions', 'Besides making')}<div class="card">${richBars(talk, KIND_NAMES, before)}</div></div>` +
         `<div>${sectionHead('Posted to')}` + list(auds.length
           ? auds.map(([k, v]) => row({ title: esc(AUD[k] || k), meter: pct(v, audTot), val: `<b>${fmt(v)}</b>`, tipText: `<b>${esc(AUD[k] || k)}</b><br>${fmt(v)} posts, ${pctTxt(pct(v, audTot))}` }))
           : [row({ title: 'Nothing yet' })]) + '</div>' +
@@ -679,25 +683,26 @@
           : [row({ title: 'Quiet' })]) + '</div>' +
       '</div>' +
       '<div class="section grid grid--three">' +
-        `<div>${sectionHead('Opened on', 'People')}` + list(plats.length
+        `<div>${sectionHead('Opened on', opened != null ? `Of ${fmt(opened)} people` : 'People')}` + list(plats.length
           ? plats.map(([k, v]) => row({ title: esc(PLATFORM[k] || k), meter: pct(v, platTot), val: `<b>${fmt(v)}</b>` }))
           : [row({ title: 'Nobody yet' })]) + '</div>' +
-        `<div>${sectionHead('Devices')}` + list(oss.length
+        `<div>${sectionHead('Devices', 'People')}` + list(oss.length
           ? oss.map(([k, v]) => row({ title: esc(OS[k] || k), meter: pct(v, osTot), val: `<b>${fmt(v)}</b>` }))
           : [row({ title: 'None seen' })]) + '</div>' +
-        `<div>${sectionHead('App versions', 'iOS')}` + list(vers.length
+        `<div>${sectionHead('App versions', 'People on iOS')}` + list(vers.length
           ? vers.map((v) => row({ title: esc(v.v), meter: pct(v.n, verTot), val: `<b>${fmt(v.n)}</b>` }))
           : [row({ title: 'None seen' })]) + '</div>' +
       '</div>' +
-      `<p class="footnote">${esc(span[0].toUpperCase() + span.slice(1))}, from ${esc(day(a.from))}. Opened on, Devices and App versions count since the open ping began. ${SKIP_NOTE}</p>`;
+      `<p class="footnote">${esc(span[0].toUpperCase() + span.slice(1))}, from ${esc(day(a.from))}. A friendship counts once, the day it became mutual. Opened on, Devices and App versions count people since the open ping began; someone on two counts in both. ${SKIP_NOTE}</p>`;
 
     const box = $('c-act');
     if (box) {
       const W = chartW(box);
-      box.innerHTML = columns(ser.map((p) => ({
-        n: p.events, label: day(p.at),
-        tip: `<b>${a.byWeek ? 'Week of ' : ''}${esc(day(p.at))}</b><br>${fmt(p.events)} things done<br>${fmt(p.people)} people<br>${fmt(p.posts)} made`,
-      })), W, { every: Math.max(1, Math.ceil(ser.length / Math.max(1, Math.floor(W / 64)))), label: 'Things done ' + (a.byWeek ? 'a week' : 'a day') });
+      // People, the unit of the Active tile; the last point is still going.
+      box.innerHTML = columns(ser.map((p, i) => ({
+        n: p.people, label: day(p.at),
+        tip: `<b>${a.byWeek ? 'Week of ' : ''}${esc(day(p.at))}${i === ser.length - 1 ? ', so far' : ''}</b><br>${fmt(p.people)} active<br>${fmt(p.posts)} made<br>${fmt(p.events)} things made or done`,
+      })), W, { every: Math.max(1, Math.ceil(ser.length / Math.max(1, Math.floor(W / 64)))), label: 'People active ' + (a.byWeek ? 'each week' : 'each day') });
     }
     wire();
   }
@@ -1246,7 +1251,7 @@
         active: Math.round(104 * Math.min(m, 1.6)), activePrev: d ? Math.round(94 * Math.min(m, 1.6)) : null,
         makers: Math.round(46 * Math.min(m, 1.6)), makersPrev: d ? Math.round(41 * Math.min(m, 1.6)) : null,
         kinds: { comment: k(243, 61, 1.1), message: k(100, 34, 0.8), circle: k(91, 50, 0.7), post: k(80, 38), friend: k(37, 25, 1.2), moment: k(36, 21), daily: k(26, 26, 1.05), vote: k(6, 6, 2), rsvp: k(4, 4) },
-        types: { moment: k(36, 21), photo: k(33, 19), note: k(31, 17, 1.1), daily: k(26, 26), repost: k(10, 8), song: k(8, 7, 0.5), take: k(3, 3), find: k(2, 2), poll: k(2, 2, 1.5) },
+        types: { moment: k(36, 21), photo: k(30, 19), note: k(29, 17, 1.1), daily: k(26, 26), quote: k(6, 5), song: k(8, 7, 0.5), take: k(3, 3), find: k(2, 2), poll: k(2, 2, 1.5) },
         audiences: { circle: Math.round(52 * m), public: Math.round(31 * m), community: Math.round(19 * m), list: Math.round(4 * m) },
         conversation: { posts: Math.round(106 * m), replied: Math.round(71 * m), comments: Math.round(243 * m), firstReplyH: 1.8 },
         chats: { direct: { messages: Math.round(70 * m), chats: 21, people: 30 }, group: { messages: Math.round(24 * m), chats: 4, people: 14 }, activity: { messages: Math.round(6 * m), chats: 2, people: 7 } },
@@ -1261,7 +1266,7 @@
           { name: 'D&D', slug: 'dnd', posts: Math.round(6 * m), people: 5, joins: 1 },
           { name: 'Plant people', slug: 'plants', posts: Math.round(3 * m), people: 3, joins: 4 },
         ],
-        platforms: { ios: 96, web: 18, pwa: 14 }, os: { ios: 120, mac: 22, android: 9, windows: 4 },
+        opened: 131, platforms: { ios: 96, web: 28, pwa: 14 }, os: { ios: 110, mac: 22, android: 9, windows: 4 },
         versions: [{ v: '2.0 (1276)', n: 64 }, { v: '2.0 (1270)', n: 31 }, { v: '2.0 (1262)', n: 12 }],
       };
     },
