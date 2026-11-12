@@ -985,6 +985,11 @@
     const prompts = (d.prompts || []).filter((p) => p.runs > 0);
     const best = prompts.slice().sort((a, b) => b.avgPeople - a.avgPeople || b.answers - a.answers).slice(0, 6);
     const quiet = prompts.slice().sort((a, b) => a.avgPeople - b.avgPeople || a.answers - b.answers).slice(0, 6);
+    // Zoe, 2026-11-11: "dailies need graphs". Every week since the first daily,
+    // and the weekdays, since the rotation is planned by weekday.
+    const weeks = d.weeks || [];
+    const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dows = DOW.map((name, i) => (d.weekdays || []).find((w) => w.dow === i + 1) || { dow: i + 1, avgPeople: 0, days: 0 });
     const promptRow = (p) => row({
       title: esc(p.prompt), sub: `${esc(ASKS[p.type] || p.type)} · ran ${fmt(p.runs)}×`,
       val: `<b>${fmt(p.avgPeople)}</b>`, tipText: `<b>${esc(p.slug)}</b><br>${fmt(p.avgPeople)} people a run, ${fmt(p.answers)} answers in all`,
@@ -1002,6 +1007,8 @@
         tile('Regulars', fmt(d.regulars), `of ${fmt(d.answerers)} who answered`, 'Answered on 4 or more days in the last 28') +
       '</div>' +
       `<div class="section">${sectionHead('People a day', '4 weeks')}<div class="card" id="c-daily"></div></div>` +
+      (weeks.length > 1 ? `<div class="section">${sectionHead('All time', 'Since ' + esc(day(weeks[0].week)) + ', a point a week')}<div class="card" id="c-daily-all"></div></div>` : '') +
+      (dows.some((w) => w.days) ? `<div class="section">${sectionHead('By weekday', 'People a day, on average')}<div class="card" id="c-daily-dow"></div></div>` : '') +
       `<div class="section">${sectionHead('Every day')}` + list(days.length ? days.map((r) => row({
         title: esc(r.prompt),
         sub: `${esc(day(r.day))} · ${esc(ASKS[r.type] || r.type)} · ${fmt(r.answers)} ${r.answers === 1 ? 'answer' : 'answers'}, ${fmt(r.replied)} replied to`,
@@ -1022,6 +1029,18 @@
       n: r.people, label: day(r.day),
       tip: `<b>${esc(day(r.day))}</b><br>${esc(r.prompt)}<br>${fmt(r.people)} people, ${fmt(r.answers)} answers`,
     })), W, { every: W < 420 ? 7 : W < 700 ? 4 : 2, label: 'People answering the daily, last 28 days' });
+    const ca = $('c-daily-all');
+    if (ca) {
+      const al = lineChart(weeks, chartW(ca), { a: 'people', b: 'answers', names: ['People', 'Answers'],
+        label: 'People answering the daily and answers, a week at a time, all time', tipHead: 'Week' });
+      ca.innerHTML = al.html;
+      al.wire(ca);
+    }
+    const cw = $('c-daily-dow');
+    if (cw) cw.innerHTML = columns(dows.map((w, i) => ({
+      n: w.avgPeople, label: DOW[i],
+      tip: `<b>${DOW[i]}</b><br>${fmt(w.avgPeople)} people a day, over ${fmt(w.days)} ${w.days === 1 ? 'day' : 'days'}`,
+    })), chartW(cw), { label: 'People answering the daily on each weekday, on average' });
   }
 
   // ── Dictionary ────────────────────────────────────────────────────────────
@@ -1155,6 +1174,12 @@
         asOf: new Date().toISOString(), tz: Intl.DateTimeFormat().resolvedOptions().timeZone, days,
         prompts: P.map(([slug, type, prompt], i) => ({ slug, type, prompt, runs: 2, answers: 40 - i * 4, avgPeople: 19 - i * 1.5 })),
         types: { note: 260, photo: 170, find: 48 }, answerers: 88, regulars: 31,
+        weeks: Array.from({ length: 16 }, (_, i) => {
+          const d = new Date(); d.setDate(d.getDate() - (15 - i) * 7 - ((d.getDay() + 6) % 7));
+          const people = Math.round(8 + i * 2.2 + (i % 3) * 3);
+          return { week: d.toLocaleDateString('en-CA'), people, answers: Math.round(people * 2.4) };
+        }),
+        weekdays: [17.2, 15.8, 11.4, 19.6, 14.1, 21.3, 12.7].map((avgPeople, i) => ({ dow: i + 1, avgPeople, days: 15 })),
       };
     },
     admin_extras() {

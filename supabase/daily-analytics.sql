@@ -121,30 +121,169 @@ values
   (69, 'vibe-check', 'note', 'report', 'What’s the vibe today, in five words or fewer?')
 ;
 
+-- ── The season, lifted from SEASON ──────────────────────────────────────────
+-- 1.6's hand-written run of days (SEASON and SEASON_FIRST_DAY in app.js), which
+-- the app consults BEFORE the rotation (dailyOn). It started on day 48, Mon
+-- 2026-09-14, and runs 109 days to 2026-12-31; on those days the rotation's
+-- prompt was never shown. Until 2026-11-11 this file knew only the rotation, so
+-- every season day was matched to a prompt nobody saw and the Dailies page read
+-- zero (Zoe: "its all 0s rn"). Like the rotation above, this is a COPY: if
+-- SEASON changes, regenerate it (the values were written out of app.js by a
+-- script, not by hand). `idx` is 1000 + the season index, so it never meets a
+-- rotation idx.
+create or replace view metrics.daily_season_config as
+select 48 as first_day;                                -- SEASON_FIRST_DAY
+
+create or replace view metrics.daily_season (i, slug, type, kind, prompt) as
+values
+  (0, 'screenshot', 'photo', 'retrieval', 'Show us your most recent screenshot.'),
+  (1, 'almost-said', 'note', 'report', 'What did you almost say today?'),
+  (2, 'carry', 'photo', 'retrieval', 'Show us the thing you carry everywhere.'),
+  (3, 'bookmarked', 'find', 'retrieval', 'Share the oldest thing in your bookmarks.'),
+  (4, 'stop', 'note', 'report', 'What should everyone stop doing immediately?'),
+  (5, 'gift-kept', 'photo', 'retrieval', 'Show us something someone gave you that you still use.'),
+  (6, 'checked-on', 'note', 'report', 'Who checked on you when they didn’t have to?'),
+  (7, 'meme-sent', 'photo', 'retrieval', 'Show us the meme you’ve sent the most.'),
+  (8, 'summer-over', 'note', 'report', 'Summer’s over. What are you not going to miss?'),
+  (9, 'worn-out', 'photo', 'retrieval', 'Show us the thing you’ve worn out.'),
+  (10, 'sent-twice', 'find', 'retrieval', 'Share the link you’ve sent to more than one person.'),
+  (11, 'rule', 'note', 'report', 'What rule do you break on principle?'),
+  (12, 'two-years', 'photo', 'retrieval', 'Show us a photo from exactly two years ago.'),
+  (13, 'owed', 'note', 'report', 'Who do you owe a text?'),
+  (14, 'favorites', 'photo', 'retrieval', 'Show us something you put in your Favorites.'),
+  (15, 'avoiding', 'note', 'report', 'What are you avoiding right now?'),
+  (16, 'old-tab', 'photo', 'retrieval', 'Show us the tab you’ve had open for weeks.'),
+  (17, 'sent-me', 'find', 'retrieval', 'Share the last thing someone sent you that you actually opened.'),
+  (18, 'convinced', 'note', 'report', 'What are you weirdly convinced of?'),
+  (19, 'photographed-twice', 'photo', 'retrieval', 'Show us something you’ve photographed more than once.'),
+  (20, 'said', 'note', 'report', 'What did someone say to you that stuck?'),
+  (21, 'most-photos', 'photo', 'retrieval', 'Show us who or what has the most photos in your camera roll.'),
+  (22, 'free-crime', 'note', 'report', 'You get one free crime, no consequences. What is it?'),
+  (23, 'note-app', 'photo', 'retrieval', 'Screenshot one line from your notes app.'),
+  (24, 'still-thinking', 'find', 'retrieval', 'Share something you watched that you’re still thinking about.'),
+  (25, 'worst-take', 'note', 'report', 'What’s the worst take you’ve ever had?'),
+  (26, 'handwriting', 'photo', 'retrieval', 'Show us something in someone else’s handwriting.'),
+  (27, 'easier', 'note', 'report', 'What got easier this year without you noticing?'),
+  (28, 'funniest', 'photo', 'retrieval', 'Show us the funniest thing on your phone.'),
+  (29, 'nemesis', 'note', 'report', 'Who or what is your nemesis?'),
+  (30, 'reflex', 'photo', 'retrieval', 'Show us the app you open without thinking.'),
+  (31, 'recommended', 'find', 'retrieval', 'Share the last thing someone recommended that you actually liked.'),
+  (32, 'no-reason', 'note', 'report', 'What’s a rule everyone follows for no reason?'),
+  (33, 'oldest-thing', 'photo', 'retrieval', 'Show us the oldest thing you own.'),
+  (34, 'forward', 'note', 'report', 'What are you quietly looking forward to?'),
+  (35, 'year-ago', 'photo', 'retrieval', 'Show us the photo you took a year ago today.'),
+  (36, 'irrational-fear', 'note', 'report', 'What are you irrationally scared of?'),
+  (37, 'screenshot-kept', 'photo', 'retrieval', 'Show us a screenshot you’ve kept for months.'),
+  (38, 'horror', 'find', 'retrieval', 'Share the scariest thing you’ve ever watched.'),
+  (39, 'halloween-take', 'note', 'report', 'What’s the worst Halloween candy, and you’re right?'),
+  (40, 'costume-old', 'photo', 'retrieval', 'Show us a photo of you in an old Halloween costume.'),
+  (41, 'comfort-watch', 'note', 'report', 'What do you put on when you don’t want to think?'),
+  (42, 'group-chat-meme', 'photo', 'retrieval', 'Show us the last meme someone sent you.'),
+  (43, 'haunted', 'note', 'report', 'What’s the closest you’ve come to believing in a ghost?'),
+  (44, 'decoration-old', 'photo', 'retrieval', 'Show us the Halloween decoration you put up every year.'),
+  (45, 'every-october', 'find', 'retrieval', 'Share the thing you watch every October.'),
+  (46, 'overrated-scary', 'note', 'report', 'What horror movie is overrated, and you’ll say it?'),
+  (47, 'halloween', 'photo', 'retrieval', 'Halloween. Show us yours.'),
+  (48, 'extra-hour', 'note', 'report', 'You got an hour back. What did you do with it?'),
+  (49, 'last-night', 'photo', 'retrieval', 'Show us the last photo you took last night.'),
+  (50, 'boring', 'note', 'report', 'What’s the most boring thing you did today?'),
+  (51, 'last-search', 'note', 'report', 'What’s the last thing you searched?'),
+  (52, 'sent-group', 'find', 'retrieval', 'Share the last thing you sent the group chat.'),
+  (53, 'food-scam', 'note', 'report', 'What food is a scam?'),
+  (54, 'cant-explain', 'photo', 'retrieval', 'Show us a photo in your camera roll you can’t explain.'),
+  (55, 'ended-well', 'note', 'report', 'What ended better than you expected?'),
+  (56, 'screenshot-argument', 'photo', 'retrieval', 'Show us a screenshot you took to prove a point.'),
+  (57, 'bees', 'note', 'report', 'Would you rather have 25 bees in your mouth or one bee in your ear forever?'),
+  (58, 'warmest', 'photo', 'retrieval', 'Show us the warmest thing you own.'),
+  (59, 'dark-at-five', 'find', 'retrieval', 'Share what you put on when it’s dark at five.'),
+  (60, 'fight-animals', 'note', 'report', 'You have to fight every animal you’ve seen in person this year. How does it go?'),
+  (61, 'worn-most', 'photo', 'retrieval', 'Show us the thing in your closet you actually wear.'),
+  (62, 'small-win', 'note', 'report', 'What’s the smallest thing that went right this week?'),
+  (63, 'worst-photo', 'photo', 'retrieval', 'Show us the worst photo ever taken of you.'),
+  (64, 'dreading', 'note', 'report', 'What are you quietly dreading?'),
+  (65, 'family-dish', 'photo', 'retrieval', 'Show us the food only your family makes.'),
+  (66, 'saved-recipe', 'find', 'retrieval', 'Share a recipe you actually make.'),
+  (67, 'side-dish', 'note', 'report', 'What’s the most overrated Thanksgiving dish?'),
+  (68, 'table-old', 'photo', 'retrieval', 'Show us a photo from a holiday table you miss.'),
+  (69, 'glad-didnt', 'note', 'report', 'What are you glad you didn’t do?'),
+  (70, 'travel-photo', 'photo', 'retrieval', 'Show us the last photo you took away from home.'),
+  (71, 'assigned', 'note', 'report', 'What are you in charge of bringing?'),
+  (72, 'food-photo', 'photo', 'retrieval', 'Show us the last food photo in your camera roll.'),
+  (73, 'thankful', 'note', 'report', 'What are you thankful for?'),
+  (74, 'leftover-take', 'note', 'report', 'What’s the correct leftover sandwich, and you’re right?'),
+  (75, 'the-table', 'photo', 'retrieval', 'Show us the table.'),
+  (76, 'not-the-food', 'note', 'report', 'What was the best part, and it wasn’t the food?'),
+  (77, 'of-you', 'photo', 'retrieval', 'Show us a photo someone else took of you.'),
+  (78, 'not-this-year', 'note', 'report', 'It’s December. What are you not doing this year?'),
+  (79, 'ornament', 'photo', 'retrieval', 'Show us the ornament with a story.'),
+  (80, 'wishlist-link', 'find', 'retrieval', 'Share something on your list.'),
+  (81, 'too-early', 'note', 'report', 'Is it too early for Christmas music? Defend yourself.'),
+  (82, 'candles', 'photo', 'retrieval', 'Show us the light in your house tonight.'),
+  (83, 'winter-ritual', 'note', 'report', 'What’s the one thing that makes winter bearable?'),
+  (84, 'holiday-meme', 'photo', 'retrieval', 'Show us the meme that is December.'),
+  (85, 'list-left', 'note', 'report', 'What’s still on your list?'),
+  (86, 'decorations', 'photo', 'retrieval', 'Show us the first decoration that went up.'),
+  (87, 'holiday-song', 'find', 'retrieval', 'Share the holiday song you’ll defend.'),
+  (88, 'christmas-movie', 'note', 'report', 'What’s the best Christmas movie, and it’s not close?'),
+  (89, 'card', 'photo', 'retrieval', 'Show us a card someone sent you.'),
+  (90, 'small-win-year', 'note', 'report', 'What’s the smallest thing that went right this year?'),
+  (91, 'first-of-year', 'photo', 'retrieval', 'Show us the first photo you took this year.'),
+  (92, 'teeth', 'note', 'report', 'Would you rather have fingers for teeth or teeth for fingers?'),
+  (93, 'played-most', 'photo', 'retrieval', 'Screenshot your most played song of the year.'),
+  (94, 'watched-year', 'find', 'retrieval', 'Share the best thing you watched this year.'),
+  (95, 'leave-behind', 'note', 'report', 'What trend do you want left in this year?'),
+  (96, 'photo-of-year', 'photo', 'retrieval', 'Show us your photo of the year.'),
+  (97, 'carried', 'note', 'report', 'Who got you through this year?'),
+  (98, 'last-daylight', 'photo', 'retrieval', 'Show us the last photo you took in daylight.'),
+  (99, 'spending-it', 'note', 'report', 'Where are you spending it?'),
+  (100, 'the-tree', 'photo', 'retrieval', 'Show us the tree, or whatever you’ve got instead.'),
+  (101, 'playing-tonight', 'find', 'retrieval', 'Share what’s playing tonight.'),
+  (102, 'christmas', 'photo', 'retrieval', 'Merry Christmas. Show us one photo from today.'),
+  (103, 'what-you-got', 'photo', 'retrieval', 'Show us the best thing you got.'),
+  (104, 'what-day', 'note', 'report', 'What day is it? What are you doing?'),
+  (105, 'ninth-from-end', 'photo', 'retrieval', 'Show us the ninth photo from the end of your camera roll.'),
+  (106, 'overrated-year', 'note', 'report', 'What was overrated this year?'),
+  (107, 'never-posted', 'photo', 'retrieval', 'Show us the photo from this year you never posted.'),
+  (108, 'song-of-year', 'find', 'retrieval', 'Share the song that was your year.')
+;
+
 -- ── Every occurrence that has happened ──────────────────────────────────────
--- One row per prompt per day it ran, epoch → today, in the reporting zone.
--- `run_no` is which pass round the ten-week loop it was, which is the column
--- that answers "does a prompt thin out the second time?".
+-- One row per prompt per day it ran, epoch → today, in the reporting zone: the
+-- season's prompt where the season has one, else the rotation's. `run_no` is
+-- which time this prompt was SHOWN (the season skips rotation days, so it is
+-- counted, not worked out from the cycle), the column that answers "does a
+-- prompt thin out the second time?".
 create or replace view metrics.daily_occurrences as
 select
-  g.day_number,
-  (g.day_number / c.cycle_days) + 1                       as run_no,
-  g.on_date,
-  to_char(g.on_date, 'Dy')                                as weekday,
-  p.idx, p.slug, p.type, p.kind, p.prompt,
-  (g.on_date::timestamp) at time zone c.tz                as opens,
-  ((g.on_date + 1)::timestamp) at time zone c.tz          as closes
-from metrics.daily_config c
-cross join lateral (
+  o.day_number,
+  (row_number() over (partition by o.slug order by o.on_date))::int as run_no,
+  o.on_date, o.weekday, o.idx, o.slug, o.type, o.kind, o.prompt, o.opens, o.closes
+from (
   select
-    s.ts::date                                            as on_date,
-    (s.ts::date - c.epoch)                                as day_number
-  from generate_series(
-         c.epoch::timestamp,
-         (now() at time zone c.tz)::date::timestamp,
-         interval '1 day') as s(ts)
-) g
-join metrics.daily_prompts p on p.idx = g.day_number % c.cycle_days;
+    g.day_number,
+    g.on_date,
+    to_char(g.on_date, 'Dy')                              as weekday,
+    coalesce(1000 + s.i, p.idx)                           as idx,
+    coalesce(s.slug, p.slug)                              as slug,
+    coalesce(s.type, p.type)                              as type,
+    case when s.slug is not null then s.kind else p.kind end as kind,
+    coalesce(s.prompt, p.prompt)                          as prompt,
+    (g.on_date::timestamp) at time zone c.tz              as opens,
+    ((g.on_date + 1)::timestamp) at time zone c.tz        as closes
+  from metrics.daily_config c
+  cross join metrics.daily_season_config sc
+  cross join lateral (
+    select
+      s.ts::date                                          as on_date,
+      (s.ts::date - c.epoch)                              as day_number
+    from generate_series(
+           c.epoch::timestamp,
+           (now() at time zone c.tz)::date::timestamp,
+           interval '1 day') as s(ts)
+  ) g
+  join metrics.daily_prompts p on p.idx = g.day_number % c.cycle_days
+  left join metrics.daily_season s on s.i = g.day_number - sc.first_day
+) o;
 
 -- ── Answers ─────────────────────────────────────────────────────────────────
 -- A post carrying exactly one `daily-` tag, dated to the local day it was made.

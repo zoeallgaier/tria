@@ -16,6 +16,12 @@
 --   prompts   every prompt that has run, with its runs and people per run.
 --   types     what answers were made of, 28 days.
 --   answerers, regulars   people who answered in 28 days, and on 4 days or more.
+--   weeks     every week since the first daily: people who answered, answers.
+--   weekdays  people a finished day, on average, Monday (1) to Sunday (7).
+--
+-- 2026-11-11: it read zero for every day because daily-analytics.sql didn't
+-- know the season (Zoe: "its all 0s rn"). Re-run daily-analytics.sql, then
+-- this file.
 create or replace function public.admin_dailies() returns jsonb
 language plpgsql stable security definer set search_path = public, metrics as $$
 declare
@@ -40,6 +46,10 @@ begin
       from metrics.daily_occurrences o
       left join ans a on a.slug = o.slug and a.d = o.on_date
      group by o.on_date, o.slug, o.prompt, o.type, o.run_no
+  ), hits as (
+    select a.id, a.author, o.on_date
+      from metrics.daily_occurrences o
+      join ans a on a.slug = o.slug and a.d = o.on_date
   )
   select jsonb_build_object(
     'asOf', now(),
@@ -57,6 +67,18 @@ begin
                   select slug, min(prompt) as prompt, min(type) as type, count(*) as n,
                          sum(answers) as answers, round(avg(people), 1) as avg_people
                     from runs where on_date < today group by slug) s),
+    'weeks', (select coalesce(jsonb_agg(jsonb_build_object(
+                 'week', w, 'people', p, 'answers', n) order by w), '[]') from (
+                select date_trunc('week', o.on_date)::date as w,
+                       count(distinct h.author) as p, count(h.id) as n
+                  from (select distinct on_date from metrics.daily_occurrences) o
+                  left join hits h on h.on_date = o.on_date
+                 group by 1) s),
+    'weekdays', (select coalesce(jsonb_agg(jsonb_build_object(
+                    'dow', dow, 'avgPeople', a, 'days', n) order by dow), '[]') from (
+                   select extract(isodow from on_date)::int as dow,
+                          round(avg(people), 1) as a, count(*) as n
+                     from runs where on_date < today group by 1) s),
     'types', (select coalesce(jsonb_object_agg(type, n), '{}') from (
                 select type, count(*) as n from ans where d > today - 28 group by type) s),
     'answerers', (select count(distinct author) from ans where d > today - 28),

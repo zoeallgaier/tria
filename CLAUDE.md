@@ -46,8 +46,8 @@ counted accounts still inside their week. `admin_funnel` stays for Word of
 mouth's source split. **Nudge**, Retention,
 Community, **Dailies**, Dictionary. `?demo` draws sample numbers, flagged.
 **Nudge** (Zoe: "an email for users who haven't really been in the funnel"):
-`supabase/admin-nudge.sql` (**NOT run** as of 2026-11-11; until then the page
-shows the newest accounts with no email) lists everyone a day old or more who
+`supabase/admin-nudge.sql` (**confirmed run** 2026-11-11: anon `rpc/admin_nudge`
+answers its 42501; "Not back" waits until an account is a week old) lists everyone a day old or more who
 stopped at a step (profile, connect, post, return, quiet: 21 days without a
 sign of life) with their email from auth.users, logs sends in `nudges` and
 keeps `nudge_stop`. Sending is the `nudge` Edge Function
@@ -55,8 +55,13 @@ keeps `nudge_stop`. Sending is the `nudge` Edge Function
 `RESEND_API_KEY` and `NUDGE_REPLY_TO`, `NUDGE_FROM` optional; refuses without
 a reply-to, since "reply stop" is the way out), two taps to send; **Open in
 Mail** works without it (mailto, Bcc for several) and "Mark as nudged" logs
-it. **Dailies** is `supabase/admin-dailies.sql` (**NOT run**; needs
-daily-analytics.sql's views), never reading likes. The Monthly chart needs
+it. **Dailies** is `supabase/admin-dailies.sql` (**confirmed run**, anon
+answers its 42501; needs daily-analytics.sql's views, which **know the
+season since 2026-11-11**: `metrics.daily_season`, written out of app.js's
+SEASON by script, is consulted before the rotation as `dailyOn` does; without
+it every day since 2026-09-14 matched a prompt nobody saw and read zero, Zoe:
+"its all 0s rn". **Regenerate it if SEASON changes.** The page has All time
+and By weekday charts), never reading likes. The Monthly chart needs
 admin-dashboard.sql re-run (`series.monthly`).
 **The Dictionary is `admin/dictionary.js`: a new feature adds its entry in
 the same commit.** Its names are the ones to use with Zoe.
@@ -64,8 +69,8 @@ the same commit.** Its names are the ones to use with Zoe.
 2026-11-11: its own check answered admins 1, profile_done 77, functions 5, and
 anon `rpc/admin_overview` answers its 42501 "Only Tria's team can see that.";
 **it must be RE-RUN for the admin exclusion below**, safe to re-run) and
-`supabase/admin-extras.sql` (the Community section, **NOT run** as of
-2026-11-11; until it runs that tab says so). `admins` (Zoe, seeded by
+`supabase/admin-extras.sql` (the Community section, **confirmed run**
+2026-11-11: anon `rpc/admin_extras` answers its 42501). `admins` (Zoe, seeded by
 username) gates `admin_overview`, `admin_funnel`, `admin_retention`,
 `admin_extras`, each a 42501 to anyone else. **Admins are left out of every
 number** (Zoe: "exclude my metrics? I post a lot and probably skew data"):
