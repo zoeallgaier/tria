@@ -2254,9 +2254,12 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
 @media (hover: hover) { .card-passed:hover { color: var(--text); } }
 /* A Frame's own card pads its byline and foot by hand (the media is full
    bleed), so the line has to join them or it starts at the screen edge. The
-   circle line over a byline (.card-community) is the same case. */
+   circle line over a byline (.card-community) is the same case, and so is its
+   row when it wears a lock (.card-community-line), which must stay above the
+   phone block's gutter or it wins by source order and steps in further. */
 .card--photo .card-passed,
-.card--photo .card-community { padding-inline: var(--inset); }
+.card--photo .card-community,
+.card--photo .card-community-line { padding-inline: var(--inset); }
 
 /* Icon-only likes/comments are a 44px square (the shared social tap target).
    When a COUNT rides along, the button grows to the left so the glyph keeps that
@@ -13018,7 +13021,6 @@ a.daily-answer { text-decoration: none; }
   margin-bottom: 0.75rem;
 }
 .card-community-line .card-community { margin-bottom: 0; min-width: 0; }
-.card--photo .card-community-line { padding-inline: var(--inset); }
 .card--photo .card-community-line .card-community { padding-inline: 0; }
 .view--community .card-community-line,
 .view--community .card-private,
