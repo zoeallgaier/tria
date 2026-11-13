@@ -53,7 +53,7 @@ window.TRIA_DICTIONARY = [
       { name: 'Follow', code: 'one friends row', say: 'Adding a public account that hasn\'t added you back. On a private account it is a request.' },
       { name: 'Circle', code: 'community, #/c/<slug>', say: 'A space for an interest anyone can start and join. Just a feed, no chat. Never a room.' },
       { name: 'c/slug', code: 'communities.slug', say: 'A circle\'s handle and clean link, like reddit\'s r/.' },
-      { name: 'Invite only', code: 'communities.invite_only', say: 'A circle you join only with a member\'s invite. Its posts stay with its members.' },
+      { name: 'Invite only', code: 'communities.invite_only', say: 'A circle you join only with a member\'s invite. Its posts stay with its members. Its lock rides its c/slug: on its page, its bar, and in Who can see this.' },
       { name: 'Host', code: 'communities.owner', say: 'Whoever started the circle. Edits it, takes people out, hears every join.' },
       { name: 'Favorite circles', code: 'toggleFavCircle, bookmark', say: 'A bookmark on any circle: top of the sidebar.' },
       { name: 'Audience', code: "posts.audience: 'public' | 'circle' | 'list' | 'community'", say: 'Who a post is for: Anyone, My circle (friends), Choose people, or a circle.' },

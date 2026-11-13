@@ -24754,8 +24754,11 @@
       : pubAudience.mode === 'community' ? 'circle' : 'lock';
     // A circle with a photo wears it, as its row in the sheet does.
     const c = pubAudience.mode === 'community' && Store.community(pubAudience.community);
+    // An invite-only circle's lock rides its c/slug here too, as in the sheet.
+    const shut = c && c.inviteOnly
+      ? svgIcon('lock', 'title-lock') + `<span class="visually-hidden">, invite only</span>` : '';
     return (c && c.avatar ? communityPicHtml(c, 'aud-lock-pic', 22) : svgIcon(glyph, 'aud-lock-ico')) +
-      `<span class="aud-lock-label">${esc(audienceLockText())}</span>` +
+      `<span class="aud-lock-label">${esc(audienceLockText())}${shut}</span>` +
       (chevron ? svgIcon('chevDown', 'aud-lock-chev') : '');
   }
   // A quote whose audience isn't the reader's to choose: the same box, still,
@@ -24906,7 +24909,11 @@
           `aria-pressed="${mode === 'community' && room === c.id}">` +
         communityPicHtml(c, 'aud-mode-lead', 44) +
         `<span class="aud-mode-t">${esc(c.name)}</span>` +
-        `<span class="aud-mode-d">Only the people in ${esc(communityHandle(c))}</span>` +
+        // An invite-only circle's lock rides its c/slug, as on its page
+        // (Zoe, 2026-11-12: "private circles need lock icon on audience picker").
+        `<span class="aud-mode-d">Only the people in ${esc(communityHandle(c))}` +
+          (c.inviteOnly ? svgIcon('lock', 'title-lock') + `<span class="visually-hidden">, invite only</span>` : '') +
+        `</span>` +
         `<span class="aud-mode-tick" aria-hidden="true"></span>` +
       `</button>`;
 
