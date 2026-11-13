@@ -42,7 +42,8 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "prepareClip", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopClip", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "goTo", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "feel", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "feel", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "navFeel", returnType: CAPPluginReturnNone)
     ]
 
     /// THE FEEL, Tria's own soft haptics (Zoe, 2026-11-13: "a new softer
@@ -63,6 +64,20 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         let ms = call.getDouble("ms") ?? 360
         DispatchQueue.main.async { TriaFeel.shared.play(kind, at: at, flight: ms / 1000) }
         call.resolve()
+    }
+
+    /// THE FIELD'S FEEL (Zoe, 2026-11-13: "add soft tria-esque haptics for
+    /// navigating the circles page"): TriaFeel's softer patterns for moving
+    /// round Explore circles. `kind`: wake, rise, settle, catch, stop, fold,
+    /// unfold (see `play`). It NEVER ANSWERS: a resolve is a trip back into
+    /// the page, `evaluateJavaScript` on the main thread (docs/ios-shell.md,
+    /// the reason Tria's haptics are rationed), and these fire mid gesture,
+    /// a pinch's patter included, so the call is simply let go. The bridge
+    /// keeps no unanswered call that isn't `keepAlive`, and the page sent no
+    /// callback to wait on.
+    @objc func navFeel(_ call: CAPPluginCall) {
+        let kind = call.getString("kind") ?? ""
+        DispatchQueue.main.async { TriaFeel.shared.play(kind, at: 0, flight: 0) }
     }
 
     /// A route opened BY THE APP, so the back swipe never skips the page
@@ -510,6 +525,23 @@ final class TriaFeel {
         ], relativeTime: t)
     }
 
+    /// A stretch of the refresh pull's hum: low sharpness is what makes it a
+    /// swell and not a buzz.
+    private static func hum(_ t: Double, _ length: Double, _ intensity: Float, _ sharpness: Float) -> CHHapticEvent {
+        CHHapticEvent(eventType: .hapticContinuous, parameters: [
+            CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity),
+            CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness)
+        ], relativeTime: t, duration: length)
+    }
+
+    /// An intensity dial over a whole pattern, (seconds, 0 to 1). It turns
+    /// down EVERY event under it, so it reads 1 wherever a tap sits.
+    private static func dial(_ points: [(Double, Float)]) -> CHHapticParameterCurve {
+        CHHapticParameterCurve(parameterID: .hapticIntensityControl,
+                               controlPoints: points.map { CHHapticParameterCurve.ControlPoint(relativeTime: $0.0, value: $0.1) },
+                               relativeTime: 0)
+    }
+
     /// The like's twinkle: a round landing, then taps that get quieter and
     /// brighter, the way the stars wink out. The posting twinkle's shape
     /// (TWINKLE in app.js) at about half its strength and in half the time.
@@ -555,6 +587,44 @@ final class TriaFeel {
                 .init(relativeTime: lift + fall, value: 0.15)
             ], relativeTime: 0))
             events += Self.sparkle(from: lift + fall, settle: true)
+
+        // THE FIELD'S FEEL (navFeel): moving round Explore circles. Softer
+        // than a like, since only what you're looking at changed. The hum's
+        // swell is timed to the camera's glide (GLIDE_W in app.js, a
+        // critically damped spring at 11 a second: fastest at ~0.09s, all
+        // but still by ~0.3s).
+        case "wake":
+            // A finger landed: up now, so the beat that follows is on time.
+            engine.start(completionHandler: nil)
+            return
+        case "rise":
+            // A circle comes up over its sheet, or a double tap zooms in: a
+            // round pop as the finger lets go, the hum swelling with the
+            // glide and gone as it slows, then a breath of a tick as it
+            // lands at its size.
+            events = [Self.tap(0, 0.5, 0.12),
+                      Self.hum(0.015, 0.265, 0.45, 0.08),
+                      Self.tap(0.3, 0.2, 0.5)]
+            curves = [Self.dial([(0, 1), (0.02, 0.5), (0.09, 1), (0.28, 0.05), (0.29, 1)])]
+        case "settle":
+            // Put back, or a double tap zooms out: the same hum with no pop,
+            // and a soft landing as the field comes to rest.
+            events = [Self.hum(0, 0.26, 0.42, 0.05),
+                      Self.tap(0.28, 0.34, 0.08)]
+            curves = [Self.dial([(0, 0.6), (0.07, 1), (0.26, 0.05), (0.27, 1)])]
+        case "catch":
+            // The sheet's pull up arms Open: a soft latch and its echo.
+            events = [Self.tap(0, 0.5, 0.45), Self.tap(0.05, 0.16, 0.7)]
+        case "stop":
+            // A pinch meets either end of the zoom: a cushion, pressed and
+            // pushing back. As round as a tap gets.
+            events = [Self.tap(0, 0.42, 0.04), Self.tap(0.05, 0.15, 0.04)]
+        case "fold":
+            // A circle folds to its face under a pinch: one quiet, dull tick.
+            events = [Self.tap(0, 0.28, 0.3)]
+        case "unfold":
+            // And opens again: a touch brighter.
+            events = [Self.tap(0, 0.3, 0.5)]
         default:
             return
         }

@@ -227,6 +227,26 @@ single tap's sparkle is as it was. An unlike stays a LIGHT tap.
 web get the LIGHT tap a like always had. The Swift and the first JS half
 landed inside 2951cc8 (a parallel session's commit).
 
+## Moving round Explore circles has a feel (2026-11-13)
+
+**Zoe: "add soft tria-esque haptics for navigating the circles page".** The
+field is the one place a buzz says only that what you're LOOKING at moved
+(the rule and its reason are in docs/ios-shell.md). `hapticNav(kind, or)` in
+app.js, `navFeel` in TriaSettingsPlugin.swift, patterns in `TriaFeel`
+beside the like's: **rise** (a circle lifts, a double tap zooms in: a round
+pop, the refresh pull's hum swelling with the glide's spring, a tiny tick as
+it lands), **settle** (put back, a double tap zooms out: the hum, a soft
+landing), **catch** (the sheet's pull up arms Open), **stop** (a pinch past
+either end of the zoom, once until it comes back in), **fold** / **unfold**
+(a quiet tick as a circle folds to its face under a pinch, at most one a
+frame, `PATTER_MS` 60 apart), and **wake** (the engine up as a finger lands).
+A drag has none. **`navFeel` never resolves** (`CAPPluginReturnNone`), so no
+`evaluateJavaScript` comes back on the main thread mid gesture. A put-away's
+settle waits a `setTimeout` 0 so tapping another circle round the sheet is one
+rise; Join, Invite and the roster close the sheet quietly (`hush`); leaving the
+page (`gone`) never settles. **Needs a new binary**; an older one and the web
+keep the LIGHT tap on the lift and the catch, and nothing else.
+
 ## A filled mark wears your colour's gradient (2026-11-13)
 
 **Zoe: "since we have a gradient for all the color styles can we use that on

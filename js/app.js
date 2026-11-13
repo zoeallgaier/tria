@@ -5854,7 +5854,10 @@
      against a fixed panel, not a broken one.
 
      LIGHT for something that stays on the screen, MEDIUM for something that lands
-     in the real world — the same split as canSocial vs canJoin. */
+     in the real world — the same split as canSocial vs canJoin.
+
+     Explore circles is the exception (2026-11-13, Zoe): moving round the field
+     has a feel of its own, `hapticNav` below, which pays no bridge toll. */
   const hapticTap = (style) => haptic('impact', { style: style || 'LIGHT' });
   const hapticEvent = (type) => haptic('notification', { type: type || 'SUCCESS' });
 
@@ -5901,6 +5904,41 @@
       }
     }
     hapticTap('LIGHT');
+  }
+
+  /* THE FIELD'S FEEL (2026-11-13, Zoe: "add soft tria-esque haptics for
+     navigating the circles page"): the one place a buzz says only that what
+     you are LOOKING at moved, the second exception to the rule above. It is
+     TriaFeel's family, softer than a like, `navFeel` in
+     TriaSettingsPlugin.swift: 'rise' as a circle comes up over its sheet or
+     a double tap zooms in (a round pop, the refresh pull's hum swelling with
+     the glide, a breath of a tick as it lands), 'settle' as one is put back
+     or a double tap zooms out (the hum, then a soft landing), 'catch' as the
+     sheet's pull up arms Open, 'stop' as a pinch meets either end of the
+     zoom, and 'fold' / 'unfold', a quiet tick as a circle folds to its face
+     under a pinch or opens again, so a pinch out patters. 'wake' brings the
+     engine up as a finger lands, so the first beat isn't late.
+     The rule's reason was the bridge, not taste, and `navFeel` NEVER
+     ANSWERS: no resolve, so no evaluateJavaScript back into the page on the
+     main thread, which is what made a buzz mid gesture cost frames. `or` is
+     what a binary without it (and the web) does instead, the LIGHT tap these
+     beats had; without one it is silence. */
+  let navReady = null;
+  function hapticNav(kind, or) {
+    if (nativeShell()) {
+      if (navReady === null) {
+        try {
+          navReady = !!window.Capacitor?.PluginHeaders?.find((p) => p.name === 'TriaSettings')
+            ?.methods?.some((m) => m.name === 'navFeel');
+        } catch { navReady = false; }
+      }
+      if (navReady) {
+        try { window.Capacitor.toNative('TriaSettings', 'navFeel', { kind }); }
+        catch { /* a garnish, never a failure */ }
+        return;
+      }
+    }
+    if (or) hapticTap(or);
   }
 
   /* ── Outbound links in the native shell ──────────────────────────────────────
@@ -18940,6 +18978,7 @@
   // whole is a field of faces. Either one or the other, never resting
   // between, over FOLD_MS.
   const FOLD_AT = 0.6, UNFOLD_AT = 0.66, FOLD_MS = 340;
+  const PATTER_MS = 60;      // the least time between two folds' ticks under a pinch
   const ICON_OF_R = 1.2;     // a folded face's width, to its circle's radius
   function renderExploreCircles() {
     const list = exploreList();
@@ -19246,7 +19285,11 @@
     let leaving = false;         // a circle is being opened: nothing to put back
     let peekLeft = null;         // how its sheet stood as you went in
     let peekPanel = null;
-    const lift = (i) => {
+    let gone = false;            // the field was left (circlesOff)
+    let settling = 0;            // a put-away's feel, a beat behind it
+    // `quiet`: put away by something that has its own say (Join's tap and
+    // stars, a sheet coming up in its place), so it adds no feel.
+    const lift = (i, quiet) => {
       if (i >= 0 && sheetOpen) return;      // another sheet is up
       const was = focus;
       if (i >= 0 && was < 0) zBack = cam.z;
@@ -19259,9 +19302,15 @@
         const nd = nodes[was];
         camAim = nd ? aimAbout(zBack, nd.x * cam.z + cam.x, nd.y * cam.z + cam.y)
           : aimAbout(cam.z, 0, 0);
+        // Its settle waits out the event: a tap on another circle round the
+        // sheet closes this one (the sheet's click) and then lifts that one
+        // (ours), and that is one rise, not a settle and a rise.
+        if (was >= 0 && !quiet && !gone) settling = setTimeout(() => { if (!gone) hapticNav('settle'); }, 0);
         wake();
         return;
       }
+      clearTimeout(settling);
+      hapticNav('rise', 'LIGHT');
       quietHint();
       openPeek(i);
       // Up to its own size, the way a watch's app comes up out of the grid.
@@ -19337,6 +19386,7 @@
       };
       const opened = performance.now();
       let tapAt = null, tapHit = -1, pull = null, swallow = 0;
+      let hush = false;          // closed by a pill with its own say (lift's `quiet`)
       // Every click on the window, before the sheet's own: the tap that lifted
       // the circle can land its click on the scrim as it goes up (WebKit
       // hit-tests a touch's click after the touch), which would close it at
@@ -19375,7 +19425,7 @@
         if (armed !== pull.armed) {
           pull.armed = armed;
           scrimEl.classList.toggle('is-armed', armed);
-          if (armed) hapticTap('LIGHT');
+          if (armed) hapticNav('catch', 'LIGHT');
         }
       }
       function endPull(e) {
@@ -19407,14 +19457,14 @@
           // A pull down's let-go leaves the panel where the finger was: it
           // carries on down from there, on the sheet's own slide.
           if (panel && !leaving) { panel.style.transition = ''; panel.style.transform = ''; }
-          if (focus === i && !leaving) lift(-1);
+          if (focus === i && !leaving) lift(-1, hush);
         },
         wire: (scrim, close) => {
           scrimEl = scrim;
           // The head's taps, as its page wires them (sheets don't stack, so
           // the roster waits for this one to go). A link leaves the field.
           const q = (sel) => scrim.querySelector(sel);
-          q('#community-join')?.addEventListener('click', () => { close(); joinHere(i); });
+          q('#community-join')?.addEventListener('click', () => { hush = true; close(); joinHere(i); });
           // A member's pills, the page's own (Zoe, 2026-11-08): Post and Edit
           // leave the field in the tap; Invite waits for this sheet to go,
           // since sheets don't stack.
@@ -19424,6 +19474,7 @@
             go('#/publish');
           });
           q('#community-invite')?.addEventListener('click', () => {
+            hush = true;
             close();
             openCommunityInvite(Store.community(c.id) || c);
           });
@@ -19433,6 +19484,7 @@
             go(`${communityRoute(Store.community(c.id) || c)}/edit`);
           });
           q('#community-members')?.addEventListener('click', () => {
+            hush = true;
             close();
             openCommunityMembers(Store.community(c.id) || c);
           });
@@ -19458,7 +19510,7 @@
           // After the sheet's own click has closed it.
           scrim.addEventListener('click', (e) => {
             if (e.target !== scrim || tapHit < 0) return;
-            if (tapHit !== i) { hapticTap('LIGHT'); lift(tapHit); }
+            if (tapHit !== i) lift(tapHit);
             else if (leaving) goIn();
             tapHit = -1;
           });
@@ -19467,6 +19519,7 @@
           panel.addEventListener('dragstart', (e) => e.preventDefault());
           panel.addEventListener('pointerdown', (e) => {
             if (e.button > 0 || pull) return;
+            hapticNav('wake');    // ahead of a pull's catch
             pull = { id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, armed: false };
             window.addEventListener('pointermove', movePull);
             window.addEventListener('pointerup', endPull);
@@ -19532,25 +19585,38 @@
     };
     const startPinch = () => {
       const m = pairOf();
-      pinch = { d0: m.d, z0: cam.z, wx: (m.x - cam.x) / cam.z, wy: (m.y - cam.y) / cam.z };
+      // `edge`: the end of the zoom it has met (-1 out, 1 in), felt once.
+      pinch = { d0: m.d, z0: cam.z, wx: (m.x - cam.x) / cam.z, wy: (m.y - cam.y) / cam.z, edge: 0 };
       zoomAt = m;
       camAim = null;
       cam.vx = cam.vy = cam.gx = cam.gy = cam.gz = 0;
       spendHint('pinch');
+      hapticNav('wake');
     };
     const movePinch = () => {
       const m = pairOf();
-      cam.z = giveZoom(pinch.z0 * m.d / pinch.d0);
+      const want = pinch.z0 * m.d / pinch.d0;
+      cam.z = giveZoom(want);
       cam.x = m.x - pinch.wx * cam.z;
       cam.y = m.y - pinch.wy * cam.z;
       zoomAt = m;
+      // THE STOPS: a pinch that runs past either end, where the zoom starts
+      // to give, meets a soft cushion, once, until it has come a little way
+      // back in (so fingers resting on the line don't keep bumping it).
+      const [lo, hi] = zoomRange();
+      const past = want < lo * 0.985 ? -1 : want > hi * 1.015 ? 1 : 0;
+      if (past && past !== pinch.edge) { pinch.edge = past; hapticNav('stop'); }
+      else if (want > lo * 1.04 && want < hi / 1.04) pinch.edge = 0;
     };
     // A double tap on the paper: all the way out, or back in about the tap.
+    // It feels as a put-away and a lift do: out settles, in rises.
     let paperTap = null;
     const toggleZoom = (p) => {
       if (!canZoom()) return;
       const [lo] = zoomRange();
-      camAim = aimAbout(cam.z > lo + 0.03 ? lo : 1, p.x, p.y);
+      const out = cam.z > lo + 0.03;
+      camAim = aimAbout(out ? lo : 1, p.x, p.y);
+      hapticNav(out ? 'settle' : 'rise');
       spendHint('pinch');
       wake();
     };
@@ -19574,7 +19640,8 @@
       const i = hitAt(p.x, p.y);
       hand = { id: e.pointerId, i, x0: p.x, y0: p.y, x: p.x, y: p.y,
         moved: false, vx: 0, vy: 0, lastT: performance.now() };
-      if (i >= 0) nodes[i].press = true;
+      // Down on a circle: the engine comes up now, so a lift's rise is on time.
+      if (i >= 0) { nodes[i].press = true; hapticNav('wake'); }
       cam.vx = cam.vy = cam.gx = cam.gy = 0;
       wake();
     };
@@ -19638,7 +19705,6 @@
           return;
         }
         paperTap = null;
-        hapticTap('LIGHT');
         lift(h.i);
         return;
       }
@@ -19661,7 +19727,7 @@
         e.preventDefault();
         if (hand || focus >= 0 || sheetOpen) return;
         const p = local(e), i = hitAt(p.x, p.y);
-        if (i >= 0) { hapticTap('LIGHT'); lift(i); }
+        if (i >= 0) lift(i);
       }
     });
     // A keyboard's Tab brings the circle it lands on into view, ringed (a
@@ -19764,6 +19830,7 @@
     // overshoot. With motion reduced it sleeps once nothing is moving, and
     // anything that moves wakes it.
     let raf = 0, last = 0, acc = 0;
+    let patterAt = 0;            // the last fold's tick
     const born = performance.now();
     let waveEnd = fresh && !reduce ? -1 : 0;     // -1: not yet timed
     const STEP = 1000 / 60;
@@ -19845,6 +19912,10 @@
         waveEnd = born + far + GROW_MS;
       }
       const rising = now < waveEnd;
+      // A circle folding or opening under the fingers' pinch, felt as a
+      // quiet tick (the patter of a pinch out). One a frame at most and
+      // PATTER_MS apart, the rest let go, so a quick pinch is a few calls.
+      let turned = null;
       nodes.forEach((nd, i) => {
         place(nd);
         let grow = 1;
@@ -19869,8 +19940,10 @@
         // Folded by how small its words are drawn (the lift's pop and the
         // rise aside, which pass), on its own clock.
         const drawn = nd.lens * cam.z;
+        const wasFolded = nd.folded;
         if (drawn < FOLD_AT) nd.folded = true;
         else if (drawn > UNFOLD_AT) nd.folded = false;
+        if ((pinch || gesture) && nd.folded !== wasFolded) turned = nd.folded ? 'fold' : 'unfold';
         const ft = reduce ? +nd.folded
           : Math.min(1, Math.max(0, nd.fold + (nd.folded ? 1 : -1) * dt * 1000 / FOLD_MS));
         if (ft !== nd.fold) {
@@ -19881,6 +19954,7 @@
         if (Math.abs(nd.vx) + Math.abs(nd.vy) > 0.02 || Math.abs(nd.aim - nd.glow) > 0.01
             || Math.abs(aimS - nd.scale) > 0.002 || Math.abs(nd.sv) > 0.001) moving = true;
       });
+      if (turned && now - patterAt >= PATTER_MS) { patterAt = now; hapticNav(turned); }
       drawLines(now);
       if (!reduce || moving) wake();
     };
@@ -19928,6 +20002,9 @@
     circlesOff = () => {
       circlesCam = { x: cam.x, y: cam.y, z: cam.z, zBack, lifted: focus >= 0 ? nodes[focus].c.id : null,
         sheet: peekLeft || { rise: 0 } };
+      // route() takes the sheet down after this: no settle as you leave.
+      gone = true;
+      clearTimeout(settling);
       clearTimeout(hintTimer);
       quietHint();
       cancelAnimationFrame(raf);

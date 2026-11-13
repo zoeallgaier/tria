@@ -53,7 +53,8 @@ forget, no promise per tap. Three rules: **only an act that changed the SHARED
 WORLD** gets one — a like, a vote, an RSVP, a comment, a repost, a published
 post — never an act that only changed what you are LOOKING at, the **one
 exception** being a danger row in `openSheet`, which is a warning *about* what's
-coming (and, Zoe 2026-10-31, a tab re-tap, whose tap IS the refresh); LIGHT is for something
+coming (and, Zoe 2026-10-31, a tab re-tap, whose tap IS the refresh, and since
+2026-11-13 moving round Explore circles, below); LIGHT is for something
 that stays on screen and MEDIUM for something that lands in the real world, the
 same split as `canSocial` vs `canJoin`; and they are **not** gated on
 prefers-reduced-motion, unlike the sparkles — a haptic isn't motion, iOS has its
@@ -86,6 +87,26 @@ words has only that to say which mark is under the thumb. It is a handful of
 calls per hold, and the fan only ever fades (no blur, no transform), so the
 frames those calls cross are the compositor's rather than the main thread's. On the web the bookends do nothing and
 a tick is the usual 8ms `vibrate`.
+
+**The second exception is Explore circles' field** (2026-11-13, Zoe: "add soft
+tria-esque haptics for navigating the circles page"): moving round it has a feel
+of its own (`hapticNav` in app.js, `navFeel` in TriaSettingsPlugin.swift, patterns
+in `TriaFeel`), though nothing in the shared world changed. Rise as a circle
+lifts or a double tap zooms in, settle as one is put back or a double tap zooms
+out, catch as the sheet's pull up arms Open, stop as a pinch meets either end of
+the zoom, and a quiet fold or unfold tick per circle under a pinch, at most one
+a frame and 60ms apart (`PATTER_MS`). A drag has none: a pan is a scroll. **It
+pays no bridge toll because `navFeel` never resolves** (`CAPPluginReturnNone`):
+the bridge saves no call that isn't `keepAlive`, so an unanswered call is just
+let go, and with no `toJs` there is no `evaluateJavaScript` on the main thread.
+That is what makes a patter under a pinch affordable where the 1.3 rule refused
+a panel's single buzz. `wake` starts the engine as a finger lands on a circle,
+the sheet or a pinch, so a lift's rise isn't late. A put-away's settle waits
+out the event (a `setTimeout` 0), because a tap on another circle round the
+sheet closes the old one before lifting the new, and that should be one rise.
+Join, Invite and the roster close the sheet quietly (`hush`). An older binary
+gets the LIGHT taps the lift and the catch always had, and nothing else; the
+web the same through `vibrate`.
 
 **Putting them back was tried on 2026-08-27 and reverted the same day.** The
 argument was that the tween's first beat gives the finger nothing, so the tap
