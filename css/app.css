@@ -2254,12 +2254,9 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
 @media (hover: hover) { .card-passed:hover { color: var(--text); } }
 /* A Frame's own card pads its byline and foot by hand (the media is full
    bleed), so the line has to join them or it starts at the screen edge. The
-   circle line over a byline (.card-community) is the same case, and so is its
-   row when it wears a lock (.card-community-line), which must stay above the
-   phone block's gutter or it wins by source order and steps in further. */
+   circle line over a byline (.card-community) is the same case. */
 .card--photo .card-passed,
-.card--photo .card-community,
-.card--photo .card-community-line { padding-inline: var(--inset); }
+.card--photo .card-community { padding-inline: var(--inset); }
 
 /* Icon-only likes/comments are a 44px square (the shared social tap target).
    When a COUNT rides along, the button grows to the left so the glyph keeps that
@@ -11879,7 +11876,6 @@ body[data-ambient="none"] .pf-row-swatch {
   /* Tighter inset to the phone text column. Tap still opens full-screen. */
   .photo { padding-inline: var(--gutter); }
   .card--photo .card-community,
-  .card--photo .card-community-line,
   .card--photo .byline,
   .card--photo .card-solometa,
   .card--photo .card-passed,
@@ -13001,7 +12997,8 @@ a.daily-answer { text-decoration: none; }
 /* Which circle a post was said in, over its byline (communityTagHtml), in the
    repost line's measure (.card-passed): "Posted in c/<slug>", a link in, and
    absent on the circle's own page, where every card would be saying the page's
-   name. */
+   name. An invite-only circle's line wears the lock in the mark's place (Zoe,
+   2026-11-13: "One icon is fine"). */
 .card-community {
   display: inline-flex;
   align-items: center;
@@ -13019,12 +13016,10 @@ a.daily-answer { text-decoration: none; }
 .view--community .card-passed-room { display: none; }
 
 /* A post not everyone can read: a lock in its top right corner (Zoe,
-   2026-11-11), an invite-only circle's or one shared with chosen people
-   (privateMarkHtml). It ends the card's first line, the circle line's when
-   there is one, else the byline's or a profile's date line, after a Take's
-   stars, in the line's own muted ink at the circle mark's size. The circle
-   line takes a row of its own only when it wears one, so its margin moves out
-   to the row. */
+   2026-11-11) on one shared with chosen people (privateMarkHtml). It ends
+   the byline or a profile's date line, after a Take's stars, in the line's
+   own muted ink at the circle mark's size. An invite-only circle's post wears
+   its lock on the circle line instead (.card-community). */
 .card-private {
   flex: 0 0 auto;
   display: inline-flex;
@@ -13035,15 +13030,6 @@ a.daily-answer { text-decoration: none; }
 }
 .take-stars + .card-private { margin-inline-start: 0.1rem; }
 .card-private-ico { display: block; width: 15px; height: 15px; }
-.card-community-line {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-.card-community-line .card-community { margin-bottom: 0; min-width: 0; }
-.card--photo .card-community-line .card-community { padding-inline: 0; }
-.view--community .card-community-line,
 .view--community .card-private,
 .view--community .ptile-private { display: none; }
 /* On the Frames wall, the tile's top right corner: a SOLID white lock, no

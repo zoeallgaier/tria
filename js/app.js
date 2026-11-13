@@ -2772,25 +2772,30 @@
   // the person said. The circle's own page hides it
   // (.view--community .card-community), where it would say the page's name
   // over every card.
+  // An INVITE-ONLY circle's line wears the lock where the circle's mark goes,
+  // and no second lock at the right (Zoe, 2026-11-13: "use lock instead of
+  // circles icon on feed for posts in private circles. One icon is fine").
   function communityTagHtml(post) {
     if (!post.communityId) return '';
     const c = Store.community(post.communityId);
     if (!c) return '';
-    const tag = `<a class="card-community" href="${communityRoute(c)}">` +
-      svgIcon('circle', 'card-community-ico') +
-      `<span>Posted in <b>${esc(communityHandle(c))}</b></span></a>`;
-    // A locked post's lock rides the top line's right, so here it is this one.
-    const lock = privateMarkHtml(post);
-    return lock ? `<div class="card-community-line">${tag}${lock}</div>` : tag;
+    const locked = isPrivatePost(post);
+    return `<a class="card-community" href="${communityRoute(c)}"` +
+        (locked ? ` title="${esc(privateLabel(post))}"` : '') + `>` +
+      svgIcon(locked ? 'lock' : 'circle', 'card-community-ico') +
+      `<span>Posted in <b>${esc(communityHandle(c))}</b></span>` +
+      (locked ? `<span class="visually-hidden">, ${esc(privateLabel(post).toLowerCase())}</span>` : '') +
+      `</a>`;
   }
 
   /* A post not everyone can read wears a lock in its top right corner (Zoe,
      2026-11-11: "if a post is posted on a private circle, include a lock icon
      ... or privately to select people"): said in an INVITE-ONLY circle, or
      shared with chosen people ('list'). Not My circle: that is most posts, and
-     a lock on nearly everything says nothing. It rides the card's first line
-     (the circle line when there is one, else the byline or a profile's date
-     line), after a Take's stars, and on the Frames wall the tile's corner. A
+     a lock on nearly everything says nothing. An invite-only circle's post
+     wears it in place of the circle's mark on its "Posted in" line
+     (communityTagHtml); any other ends the byline or a profile's date line,
+     after a Take's stars, and on the Frames wall the tile's corner. A
      circle's own page hides it (.view--community), where every post would wear
      it and the bar's c/slug already does. */
   function isPrivatePost(post) {
@@ -2813,7 +2818,8 @@
       svgIcon('lock', 'card-private-ico') +
       `<span class="visually-hidden">${label}</span></span>`;
   }
-  // The byline and the date line wear it only when no circle line is over them.
+  // The byline and the date line wear it only when no circle line is over
+  // them: that line's mark is the lock.
   const headLockHtml = (post) => post.communityId && Store.community(post.communityId)
     ? '' : privateMarkHtml(post);
 
@@ -5398,7 +5404,7 @@
     });
     fig.addEventListener('click', (e) => {
       if (moved) { moved = false; e.preventDefault(); return; }
-      open();
+      tapOrLike(el, e, open);   // a second tap likes it
     });
     fig.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
@@ -5415,7 +5421,7 @@
     const im = fig.querySelector('img');
     if (im) revealCardImage(fig, im);
     const open = () => openLightbox(img.src, img.alt, false, im);
-    fig.addEventListener('click', open);
+    fig.addEventListener('click', (e) => tapOrLike(el, e, open));   // a second tap likes it
     fig.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
     });
@@ -5608,7 +5614,7 @@
     });
 
     const open = () => openLightbox(post.image, alt, true);
-    fig.addEventListener('click', open);
+    fig.addEventListener('click', (e) => tapOrLike(el, e, open));   // a second tap likes it
     fig.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
     });
@@ -6073,6 +6079,56 @@
     });
   }
 
+  /* DOUBLE TAP TO LIKE (2026-11-13, Zoe: "since I can tap a post to open
+     comments let me double tap to like like moments, frames too"). A card's
+     words and its Frame (a photo, a carousel, a clip) take a second tap as a
+     like, as a Moment does: a heart springs up where the finger was
+     (popHeart, the viewer's own) and the card's heart flips through its own
+     button, so the write, the buzz and the sparkles are wireHeart's alone. A
+     double tap only ever ADDS; taking a like back is the heart's.
+
+     The single tap (the thread, the lightbox) waits the Moments viewer's
+     window for a second one, and only on a card you could like: your own
+     post, someone signed out, or a post you can't react to answers at once,
+     since no second tap means anything there. Per card, so a tap on one card
+     and a tap on the next are two taps. */
+  function likeableHeart(el) {
+    if (!Store.isAuthed()) return null;
+    const btn = el.querySelector('.card-like:not(.comment-like)');
+    return btn && btn.tagName === 'BUTTON' && !btn.classList.contains('card-like--owner') ? btn : null;
+  }
+  // The heart where the finger was, in the reader's --heart (.heart-pop).
+  function popHeart(host, x, y) {
+    const pop = document.createElement('span');
+    pop.className = 'heart-pop';
+    pop.setAttribute('aria-hidden', 'true');
+    pop.style.left = x + 'px';
+    pop.style.top = y + 'px';
+    pop.innerHTML = svgIcon('heart');
+    host.appendChild(pop);
+    setTimeout(() => { if (pop.isConnected) burstSparkles(pop); }, 90);
+    setTimeout(() => pop.remove(), 1000);
+  }
+  // `single` is what one tap does, or null where one tap does nothing.
+  function tapOrLike(el, e, single) {
+    const btn = likeableHeart(el);
+    if (!btn) { if (single) single(); return; }
+    const was = el._tap;
+    if (was) clearTimeout(was.timer);
+    const now = Date.now();
+    if (was && now - was.at < MOMENT_TAP_MS) {
+      el._tap = null;
+      popHeart(document.body, e.clientX, e.clientY);
+      if (shownReaction(btn)) hapticTap('LIGHT');
+      else btn.click();
+      return;
+    }
+    el._tap = { at: now, timer: single ? setTimeout(() => {
+      el._tap = null;
+      if (el.isConnected) single();
+    }, MOMENT_TAP_MS) : 0 };
+  }
+
   /* A PICTURE ON A COMMENT sits under its words, at a thread's size rather than
      a card's: it is part of somebody's reply, not a post of its own. Its box
      comes off the -WxH stamp in the filename (the same trick a post photo uses)
@@ -6318,11 +6374,17 @@
     // title or content"), so a sheet on a phone and the page on a desktop.
     // A link, a mention or a button in them keeps its own tap, the quoted
     // tile stays the original's, and a finished selection isn't a tap.
-    if (glyph) el.querySelector('.card-main')?.addEventListener('click', (e) => {
+    // A second tap likes it (tapOrLike), on the post's own page too, where
+    // one tap does nothing. Touch only: a mouse's double click on words is
+    // picking one out, and a desktop's click on them is a link, at once.
+    const open = glyph ? () => glyph.click() : null;
+    const twice = nativeShell() || !finePointer();
+    if (post && (open || twice)) el.querySelector('.card-main')?.addEventListener('click', (e) => {
       if (!e.target.closest('.card-title, .card-note, .card-list, .card-h1, .card-h2, .readmore-clip')) return;
       if (e.target.closest('a, button, .card-quoted')) return;
       if (String(window.getSelection?.() || '')) return;
-      glyph.click();
+      if (twice) tapOrLike(el, e, open);
+      else open();
     });
     const panel = el.querySelector('.comments-panel');
     if (!panel) return;

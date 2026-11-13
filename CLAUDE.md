@@ -236,9 +236,12 @@ them). An older binary or the web still DRAWS a place take (pin, link out).
 post in feed and profile feeds ... or privately to select people ... top
 right corner is best".** `privateMarkHtml` (`isPrivatePost`: audience `list`,
 or a post in an INVITE-ONLY circle; never My circle, which is most posts)
-ends the card's first line: the circle line when there is one (it becomes
-`.card-community-line` only then), else the byline or a profile's date line
-(`headLockHtml`), after a Take's stars, in muted ink. A Frames tile wears it
+ends the byline or a profile's date line (`headLockHtml`), after a Take's
+stars, in muted ink. **An invite-only circle's post wears it IN PLACE of the
+circle's mark** on its "Posted in c/slug" line (`communityTagHtml`, Zoe,
+2026-11-13: "use lock instead of circles icon on feed for posts in private
+circles. One icon is fine"); the second lock at that line's right and its
+`.card-community-line` row are gone. A Frames tile wears it
 in its top right corner, a solid white lock with a soft shadow and no pill (`.ptile-private`); a clip's play mark wears the same, and a Frame said in a circle the solid trio (`circleOn`; Zoe: "for frames posted in circles, use the circle trio icon"). **A tile wears ONE mark** (`frameMarkHtml`, Zoe: "private and play icons trump circle icon. only one"): the lock, else the play, else the trio.
 **The old "Shared privately" / "Shared with N" line at a card's foot is
 gone**: the lock's label holds those words. A circle's own page hides every
