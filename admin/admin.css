@@ -451,6 +451,8 @@ a.callout--go .i--go { transform: scaleX(-1); color: var(--muted); width: 18px; 
 .icon-btn svg { width: 19px; height: 19px; }
 @media (hover: hover) { .icon-btn:hover { color: var(--danger); background: var(--fill); } }
 @media (max-width: 520px) { .pick-row .row-val .next { display: none; } }
+.nudged-row { padding-right: 6px; gap: 6px; }
+.nudged-row .row-val { color: var(--muted); white-space: nowrap; }
 .letter { display: grid; gap: 10px; }
 .field.field--plain { padding: 0 16px; border-radius: 14px; color: var(--text); font-family: inherit; }
 .field.field--area { padding: 12px 16px; min-height: 12rem; resize: vertical; line-height: 1.5; font-family: inherit; color: var(--text); }
@@ -458,6 +460,12 @@ a.callout--go .i--go { transform: scaleX(-1); color: var(--muted); width: 18px; 
 .letter-acts { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
 .letter-acts .publish-fill { flex: 1; width: auto; }
 .letter-acts .pill-quiet { min-height: 52px; padding: 0 20px; font-size: 0.95rem; }
+/* On a phone Send takes the row and the two quiet ones share the next. */
+@media (max-width: 520px) {
+  .letter-acts { flex-wrap: wrap; }
+  .letter-acts .publish-fill { flex-basis: 100%; }
+  .letter-acts .pill-quiet { flex: 1; padding: 0 12px; }
+}
 .publish-fill:disabled, .pill-quiet:disabled { opacity: 0.45; cursor: default; transform: none; }
 
 /* What they get: the email as it lands, its From, To and Subject over the

@@ -848,7 +848,7 @@
     quiet: ['We miss you on Tria', 'Hi {name},\n\nIt\'s been a while. A few things have happened on Tria since you were last there, and your circle is still there.\n\nZoe, at Tria'],
   };
   const WEEK = 7 * 86400000;
-  const nstate = { step: 'all', fresh: true, picked: new Set(), subject: '', message: '', edited: false, marked: null };
+  const nstate = { step: 'all', picked: new Set(), subject: '', message: '', edited: false, marked: null };
   // Not stopped, and (unless asked) not written to in the last week.
   const fresh = (people) => people.filter((p) => !p.stopped && (!p.nudged || Date.now() - new Date(p.nudged) > WEEK));
   const firstName = (p) => (String(p.name || '').trim().split(/\s+/)[0] || p.handle || 'there');
@@ -928,7 +928,10 @@
     }
     const everyone = z.people || [];
     const live = everyone.filter((p) => !p.stopped);
-    const pool = nstate.fresh ? fresh(live) : live;
+    // Nudged this week is its own section (Zoe, 2026-11-12: "put nudged in a
+    // new section"); a week on, they're back in the list above.
+    const pool = fresh(live);
+    const lately = live.filter((p) => !pool.includes(p)).sort((a, b) => new Date(b.nudged) - new Date(a.nudged));
     const shown = nstate.step === 'all' ? pool : pool.filter((p) => p.step === nstate.step);
     const stopped = everyone.filter((p) => p.stopped);
     // A pick that left the list (a filter changed) is let go.
@@ -936,7 +939,6 @@
     for (const id of nstate.picked) if (!ids.has(id)) nstate.picked.delete(id);
     if (!nstate.edited) [nstate.subject, nstate.message] = LETTER[nstate.step] || LETTER.all;
     const count = (k) => (k === 'all' ? pool.length : pool.filter((p) => p.step === k).length);
-    const recent = live.length - fresh(live).length;
 
     const personRow = (p) => {
       const on = nstate.picked.has(p.id);
@@ -959,7 +961,6 @@
         [['all', 'Everyone'], ...Object.entries(STEP).map(([k, v]) => [k, v.chip])].map(([k, l]) =>
           `<button class="pill-quiet${k === nstate.step ? ' is-on' : ''}" type="button" data-step="${k}" aria-pressed="${k === nstate.step}">${esc(l)} <span class="chip-n">${fmt(count(k))}</span></button>`).join('') +
       '</div>' +
-      (recent ? `<p class="note note--page"><button class="linkish" type="button" id="n-fresh">${nstate.fresh ? `Show ${fmt(recent)} nudged this week` : 'Hide those nudged this week'}</button></p>` : '') +
       '<div class="section-tight">' + list(shown.length
         ? [`<div class="row row--head"><button class="linkish" type="button" id="n-all"${pickable.length ? '' : ' disabled'}>${allOn ? 'Select none' : `Select all ${fmt(pickable.length)}`}</button></div>`, ...shown.map(personRow)]
         : [row({ title: nstate.step === 'all' ? 'Everyone has settled in.' : 'Nobody here.' })]) + '</div>' +
@@ -971,6 +972,7 @@
           '<div class="letter-acts">' +
             `<button class="publish-fill" type="button" id="n-send"${n ? '' : ' disabled'}>${n ? `Send to ${fmt(n)}` : 'Send'}</button>` +
             `<button class="pill-quiet" type="button" id="n-mail"${n ? '' : ' disabled'}>Open in Mail</button>` +
+            '<button class="pill-quiet" type="button" id="n-test">Send me a test</button>' +
           '</div>' +
           `<p class="note" id="n-status" role="status">${nstate.marked ? `Sent it from Mail? <button class="linkish" type="button" id="n-mark">Mark ${fmt(nstate.marked.ids.length)} as nudged</button>` : ''}</p>` +
         '</div></div>' +
@@ -978,6 +980,12 @@
           : snd.live ? 'Not sending yet: set <b>RESEND_API_KEY</b> and <b>NUDGE_REPLY_TO</b> on the nudge function.'
           : 'Not sending yet: the nudge function isn\'t deployed. Open in Mail sends it from your own address, as plain words.')}` +
         '<div class="mail-preview" id="n-preview"></div></div>' +
+      (lately.length ? `<div class="section">${sectionHead('Nudged', 'This week. Back in the list after seven days.')}` + list(lately.map((p) =>
+        `<div class="row nudged-row" data-tip="${esc(stepTip(p))}">` +
+          `<div class="row-main"><div class="row-title">${who(p)}</div><div class="row-sub">${[p.email ? esc(p.email) : '', esc(STEP[p.step]?.say || '')].filter(Boolean).join(' · ')}</div></div>` +
+          `<div class="row-val">${esc(ago(p.nudged))}</div>` +
+          `<button class="icon-btn" type="button" data-stop="${esc(p.id)}" aria-label="${esc(p.name)} asked us to stop" data-tip="Asked us to stop">${svg('stop')}</button>` +
+        '</div>')) + '</div>' : '') +
       (stopped.length ? `<div class="section">${sectionHead('Asked us to stop', 'Never emailed')}` + list(stopped.map((p) => row({
         title: who(p), sub: esc(p.email || ''),
         val: `<button class="linkish" type="button" data-unstop="${esc(p.id)}">Undo</button>`,
@@ -989,7 +997,6 @@
     main.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => {
       nstate.step = b.dataset.step; nstate.picked.clear(); again();
     }));
-    $('n-fresh')?.addEventListener('click', () => { nstate.fresh = !nstate.fresh; again(); });
     $('n-all')?.addEventListener('click', () => {
       if (allOn) nstate.picked.clear(); else pickable.forEach((p) => nstate.picked.add(p.id));
       again();
@@ -1000,10 +1007,14 @@
     }));
     const subj = $('n-subject'), msg = $('n-message');
     // The preview: the first person picked (else the first listed) by name.
-    const paintPreview = () => {
+    // Send me a test fills {name} the same way, so the test is the preview.
+    const example = () => {
       const ps = shown.filter((p) => nstate.picked.has(p.id) && p.email);
       const eg = ps[0] || shown.find((p) => p.email);
-      const name = eg ? firstName(eg) : 'there';
+      return { ps, eg, name: eg ? firstName(eg) : 'there' };
+    };
+    const paintPreview = () => {
+      const { ps, eg, name } = example();
       const fill = (s) => s.replace(/\{name\}/g, name);
       const to = !eg ? 'Pick people above'
         : ps.length > 1 ? `${esc(eg.email)} <span class="mail-k">and ${fmt(ps.length - 1)} more, one email each</span>`
@@ -1023,6 +1034,20 @@
     const picked = () => shown.filter((p) => nstate.picked.has(p.id) && p.email);
     const stepOf = () => (nstate.step === 'all' ? 'other' : nstate.step);
     const status = $('n-status');
+    // Why the nudge function said no, in words, for Send and the test alike.
+    const DEPLOY = '<b>supabase functions deploy nudge --no-verify-jwt</b>';
+    const trouble = async (err) => {
+      const code = err?.context?.status;
+      const said = code ? await err.context.json?.().catch(() => null) : null;
+      return code === 503 ? 'Sending isn\'t set up yet: set <b>RESEND_API_KEY</b> and <b>NUDGE_REPLY_TO</b> on the nudge function. Open in Mail works now.'
+        : code === 403 ? 'Only Tria\'s team can send these.'
+        : code === 502 ? 'Resend refused it. Check the sending domain is verified.'
+        : said?.error === 'no_email' ? 'Your account has no email address to send a test to.'
+        : code === 400 ? `The live nudge function is older than this page: ${DEPLOY}.`
+        : code === 404 || err?.name === 'FunctionsFetchError' || err?.name === 'FunctionsRelayError'
+          ? `The nudge function isn't deployed yet: ${DEPLOY}. Open in Mail works now.`
+          : 'Couldn\'t send. ' + esc(err?.message || '');
+    };
 
     // Send: two taps, as every irreversible thing in Tria is.
     const send = $('n-send');
@@ -1054,13 +1079,29 @@
         await renderNudge();
         $('n-status').textContent = `Sent to ${fmt(data?.sent || 0)}.` + (data?.skipped ? ` ${fmt(data.skipped)} skipped.` : '');
       } catch (err) {
-        const code = err?.context?.status;
-        done(code === 503 ? 'Sending isn\'t set up yet: set <b>RESEND_API_KEY</b> and <b>NUDGE_REPLY_TO</b> on the nudge function. Open in Mail works now.'
-          : code === 403 ? 'Only Tria\'s team can send these.'
-          : code === 502 ? 'Resend refused it. Check the sending domain is verified.'
-          : code === 404 || err?.name === 'FunctionsFetchError' || err?.name === 'FunctionsRelayError'
-            ? 'The nudge function isn\'t deployed yet: <b>supabase functions deploy nudge</b>. Open in Mail works now.'
-            : 'Couldn\'t send. ' + esc(err?.message || ''));
+        done(await trouble(err));
+      }
+    });
+
+    // Send me a test (Zoe, 2026-11-12): the letter as written, filled as the
+    // preview is, to your own account's address only. One tap, since it
+    // reaches nobody else; never logged as a nudge.
+    const test = $('n-test');
+    test.addEventListener('click', async () => {
+      if (!nstate.subject.trim() || !nstate.message.trim()) { status.textContent = 'Write a subject and a message first.'; return; }
+      const { name } = example();
+      test.disabled = true;
+      test.textContent = 'Sending…';
+      const done = (line) => { test.disabled = false; test.textContent = 'Send me a test'; status.innerHTML = line; };
+      if (DEMO) { done('Sample data: no test was sent.'); return; }
+      try {
+        const { data, error } = await sb.functions.invoke('nudge', {
+          body: { test: true, name, subject: nstate.subject, message: nstate.message },
+        });
+        if (error) throw error;
+        done(`Sent a test to <b>${esc(data?.to || 'you')}</b>, as ${esc(name)} would get it.`);
+      } catch (err) {
+        done(await trouble(err));
       }
     });
 

@@ -92,7 +92,18 @@ without a reply-to, since "reply stop" is the way out; nothing receives mail
 AT triaonline.com, no MX, so the reply-to is not a hello@ address until a
 forwarder exists), two taps to send; **Open in
 Mail** works without it (mailto, Bcc for several) and "Mark as nudged" logs
-it. **What they get** (Zoe, 2026-11-12: "where is the email sent from and what
+it. **Send me a test** (Zoe, 2026-11-12: "add a send test email feature"):
+one tap, the letter as written with {name} filled as the preview fills it,
+POSTed as `{ test: true, name, subject, message }` and sent ONLY to the
+caller's own auth email (never an address the page names, so the function
+is no relay), not logged in `nudges`. It is function REV 2026-11-12b, **NOT
+deployed** as of 2026-11-12: the live 2026-11-12 answers a test with its 400
+and the page says to redeploy. **Nudged is its own section** (Zoe,
+2026-11-12: "put nudged in a new section"): everyone written to in the last
+week, under What they get, with when, where they stopped and their stop
+button (a reply saying stop lands there); the list to nudge never shows
+them and the "Show N nudged this week" toggle is gone. A week on they are
+back in the list. **What they get** (Zoe, 2026-11-12: "where is the email sent from and what
 does it look like?"): under the letter, the email as it lands, From (`Tria
 <hello@triaonline.com>`, the function's GET says its `from`, never the reply
 address), To, Subject and the card itself, redrawn as you type, with whether

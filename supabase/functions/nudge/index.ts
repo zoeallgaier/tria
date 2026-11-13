@@ -9,6 +9,12 @@
 // Tria's auth mail. Every send is logged in `nudges` (admin-nudge.sql) and
 // nobody in `nudge_stop` is ever written to.
 //
+// POST { test: true, subject, message, name } is Send me a test (Zoe,
+// 2026-11-12: "add a send test email feature"): the same email, filled with
+// `name` (the first name the page's preview shows), sent only to the CALLER's
+// own account email. Never to an address the page names, so the function is
+// never a relay; not logged in `nudges`; the stop list doesn't apply.
+//
 // `{name}` in the subject or message is the person's first name.
 // The message is plain words: a blank line starts a paragraph. Every email ends
 // on an Open Tria button and one line saying how to stop them. Replies go to
@@ -29,7 +35,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const REV = '2026-11-12';
+const REV = '2026-11-12b';
 const URL_ = Deno.env.get('SUPABASE_URL')!;
 const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -83,6 +89,16 @@ function html(message: string) {
 }
 const text = (message: string) =>
   `${message.trim()}\n\nOpen Tria: ${SITE}\n\nYou're getting this because you have a Tria account. Reply "stop" and we won't email you again.`;
+// One email as Resend takes it: a nudge and a test are the same letter.
+const mail = (to: string, name: string, subject: string, message: string) => ({
+  from: FROM,
+  to: [to],
+  reply_to: REPLY_TO,
+  subject: fill(subject, name),
+  html: html(fill(message, name)),
+  text: text(fill(message, name)),
+  headers: { 'List-Unsubscribe': `<mailto:${REPLY_TO}?subject=stop>` },
+});
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
@@ -100,13 +116,32 @@ Deno.serve(async (req) => {
   if (!isAdmin || !who?.user) return json({ error: 'forbidden' }, 403);
   if (!RESEND || !REPLY_TO) return json({ error: 'not_ready' }, 503);
 
-  let body: { ids?: unknown; step?: unknown; subject?: unknown; message?: unknown };
+  let body: { ids?: unknown; step?: unknown; subject?: unknown; message?: unknown; test?: unknown; name?: unknown };
   try { body = await req.json(); } catch { return json({ error: 'body' }, 400); }
-  const ids = Array.isArray(body.ids) ? [...new Set(body.ids.filter((x) => typeof x === 'string'))] as string[] : [];
   const subject = String(body.subject || '').trim().slice(0, 140);
   const message = String(body.message || '').trim().slice(0, 4000);
+  if (!subject || !message) return json({ error: 'body' }, 400);
+
+  // Send me a test: to the caller alone.
+  if (body.test === true) {
+    const to = who.user.email;
+    if (!to) return json({ error: 'no_email' }, 400);
+    const name = String(body.name || '').replace(/\s+/g, ' ').trim().slice(0, 60) || 'there';
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(mail(to, name, subject, message)),
+    });
+    if (!res.ok) {
+      console.log('resend test', res.status, await res.text());
+      return json({ error: 'resend', status: res.status }, 502);
+    }
+    return json({ sent: 1, test: true, to });
+  }
+
+  const ids = Array.isArray(body.ids) ? [...new Set(body.ids.filter((x) => typeof x === 'string'))] as string[] : [];
   const step = STEPS.includes(String(body.step)) ? String(body.step) : 'other';
-  if (!ids.length || ids.length > 100 || !subject || !message) return json({ error: 'body' }, 400);
+  if (!ids.length || ids.length > 100) return json({ error: 'body' }, 400);
 
   const svc = createClient(URL_, SERVICE);
   const [{ data: people }, { data: stops }, { data: admins }] = await Promise.all([
@@ -127,15 +162,7 @@ Deno.serve(async (req) => {
   const res = await fetch('https://api.resend.com/emails/batch', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(targets.map((t) => ({
-      from: FROM,
-      to: [t.email],
-      reply_to: REPLY_TO,
-      subject: fill(subject, t.name),
-      html: html(fill(message, t.name)),
-      text: text(fill(message, t.name)),
-      headers: { 'List-Unsubscribe': `<mailto:${REPLY_TO}?subject=stop>` },
-    }))),
+    body: JSON.stringify(targets.map((t) => mail(t.email, t.name, subject, message))),
   });
   if (!res.ok) {
     console.log('resend', res.status, await res.text());
