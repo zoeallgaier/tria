@@ -9316,15 +9316,7 @@
       const p = cur().post;
       if (own()) return;
       spendTip('moments');
-      const pop = document.createElement('span');
-      pop.className = 'mv-pop';
-      pop.setAttribute('aria-hidden', 'true');
-      pop.style.left = x + 'px';
-      pop.style.top = y + 'px';
-      pop.innerHTML = svgIcon('heart');
-      root.appendChild(pop);
-      setTimeout(() => { if (pop.isConnected) burstSparkles(pop); }, 90);
-      setTimeout(() => pop.remove(), 1000);
+      popHeart(root, x, y);
       hapticTap('LIGHT');
       if (Store.reactionOf(p.id)) return;   // a double tap only ever adds
       setLike(p, 'heart');

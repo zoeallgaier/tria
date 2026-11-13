@@ -167,6 +167,24 @@ of the three tables has a select policy. **App Store Connect's privacy label
 needs "Product Interaction, linked to user" before a build with the ping
 ships.**
 
+## Double tap a post to like it (2026-11-13)
+
+**Zoe: "since I can tap a post to open comments let me double tap to like
+like moments, frames too"**, then "give it the animation where I tap like
+moments". A card's words (the same targets whose tap raises the thread) and
+its Frame (a photo, a carousel, a clip) take a second tap as a like, in every
+feed and on the post's own page (`tapOrLike`): the Moments viewer's heart
+springs up where the finger was (`popHeart`, `.heart-pop`, which the viewer
+now shares; on the body at z 90, over the page and under the bar) and the
+card's own heart is clicked, so the write, buzz and sparkles are `wireHeart`'s.
+**Only ever adds**: on a liked post it pops and taps LIGHT, no write. **The
+single tap waits `MOMENT_TAP_MS` (200ms)** for a second, and only on a card
+you could like (`likeableHeart`: signed in, a friend's heart button, not the
+author's); your own post, a guest's or one you can't react to answers at
+once. **The words do it on touch only** (`nativeShell() || !finePointer()`): a
+mouse's double click there is picking a word, and a desktop's click on them is
+a link. A Frame's double click likes on a desktop too, as Instagram's does.
+
 ## Charms: solid, in a heart's colour, on every byline (2026-11-12)
 
 **Zoe: "make pfp in feeds a bit bigger, and add everyone's charms. keep

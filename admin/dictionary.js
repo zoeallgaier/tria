@@ -92,7 +92,7 @@ window.TRIA_DICTIONARY = [
       { name: 'Swipe to reply', code: 'wireMessages', where: 'A chat', say: 'Drag a message sideways past 60px to reply to it.' },
       { name: 'Pull up to reply', code: 'REPLY_AT', where: 'Moments, a circle\'s sheet', say: 'A pull up past 70px replies to a Moment or opens a peeked circle.' },
       { name: 'Hold a comment', code: 'wireCommentHold', say: 'Your own comment: hold to Edit or Delete.' },
-      { name: 'Double tap', say: 'Likes a Moment or an On repeat song.' },
+      { name: 'Double tap', code: 'tapOrLike, popHeart', say: 'Likes it: a Moment, an On repeat song, or a post\'s words or Frame in any feed (since 2026-11-13), a heart springing up where you tapped. Only ever adds.' },
       { name: 'Type tabs', code: 'wireProfileTabs, typeTabsFor', where: 'Profile, a circle', say: 'All, Frames, Takes, Reposts: swipe the posts sideways to change.' },
     ],
   },
