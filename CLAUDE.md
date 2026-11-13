@@ -518,7 +518,17 @@ what the page IS (the wall, the shelf, another axis); Notes, Finds, Polls and
 Activities only narrowed the same feed, so they live in All. Notes was the
 one pushback (writing is Tria's heart): bring it back first if a photo
 poster's words get hard to find. No strip when nothing narrows (one type
-only, unless it is Frames, the wall). **A sideways
+only, unless it is a wall, Frames or Takes). **Takes is a wall too since
+2026-11-12** (Zoe: "give takes the compacted view like frames with the star
+rating in the corner", "top right corner", "no circles icons";
+`takeWallTileHtml`, `WALL_TILE` picks the tile by tab key): the Frames
+wall's 3:4 tile on its grid, the poster, cover or podcast art filling it,
+the stars white with the lock's shadow in the TOP RIGHT and a private
+take's lock after them, never the circle trio. A place wears its map drawn
+at the tile's height (`PLACE_TILE_PX`, `data-size` on `fillPlaceArt`) with
+its name over a shade at the foot. The words (serif title, what it is) are
+always laid under the picture, so no picture, a broken one, or a place on
+the web shows them at the foot with the stars in `--heart`. **A sideways
 drag on the posts goes to the next type** (`wireProfileTabs`): the pane and
 the line follow the finger one to one (a quarter past either end), past 28% or
 a flick it goes; the next pane is not built under the finger, so the old one

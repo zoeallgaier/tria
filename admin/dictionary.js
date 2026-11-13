@@ -41,6 +41,8 @@ window.TRIA_DICTIONARY = [
       { name: 'Quote', code: 'createRepost', say: 'A repost with your words, and any audience you choose.' },
       { name: 'Drafts', code: 'openDrafts, Store.saveDraft, drafts table', where: 'The New sheet\'s last row, while one waits', say: 'The composer saves as you write, no button and no question. Leaving says "Saved to drafts." Words, tags, attachments and photos come back on every device; a clip comes back on the phone it was made on. Syncs across devices once drafts.sql runs.' },
       { name: 'Pins', code: '.pin-grid', where: 'Profile', say: 'Up to four posts held above your wall, in a two column grid.' },
+      { name: 'Frames wall', code: 'frameTileHtml, .pgrid--frames', where: 'The Frames tab on a profile or a circle', say: 'Every Frame as a 3:4 tile, three across on a phone and four on a desktop. A tap opens the post.' },
+      { name: 'Takes wall', code: 'takeWallTileHtml, WALL_TILE', where: 'The Takes tab on a profile or a circle', say: 'Takes on the Frames wall\'s grid: the poster, cover or place map fills the tile, the stars in its top right corner, a private take\'s lock after them, never a circle mark. No picture, or one that won\'t load, shows the title instead.' },
       { name: 'Tags', code: 'trendingTags', say: 'Words on a post. Two or more posts on one makes it trend on Discover.' },
     ],
   },

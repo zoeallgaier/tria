@@ -13082,6 +13082,115 @@ a.daily-answer { text-decoration: none; }
 /* An invite-only circle's page, to someone holding no invite: the pill's place
    says why, in the quiet weight and the muted ink, and takes no tap. */
 .community-closed { gap: 0.45rem; color: var(--muted); cursor: default; }
+/* THE TAKES WALL (Zoe, 2026-11-12: "give takes the compacted view like frames
+   with the star rating in the corner"; takeWallTileHtml). The Frames wall's
+   3:4 tile on the same grid. The words are always laid down first and a
+   picture covers them: a poster that won't load is removed and they show,
+   so no tile is ever blank. The stars sit in the top right (Zoe: "top right
+   corner"), at the Frame lock's 7px in, a private take's lock after them and
+   never a circle's trio (Zoe: "no circles icons"); the words keep to the
+   foot, clear of them. */
+.ptile-face--take {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  background: var(--surface);
+}
+.ptile-take-words {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  /* Clear of the stars up top. */
+  padding: 30px 10px 10px;
+}
+.ptile-take-title {
+  margin: 0;
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 1.15rem;
+  line-height: 1.1;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+}
+.ptile-take-sub {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+.ptile-take-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease);
+}
+.ptile-take-art.is-loaded { opacity: 1; }
+.page.enter .ptile-take-art { transition: none; }
+.ptile--take:has(.ptile-take-art) .ptile-take-words { visibility: hidden; }
+/* A place's map fills the tile once it lands (never on the web, where the
+   tile stays words), its name and kind over a shade at the foot. */
+.take-art.ptile-take-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+}
+.ptile-take-map:not(.pin-cover) { display: none; }
+.ptile--place:has(.pin-cover) .ptile-take-words {
+  z-index: 1;
+  inset: auto 0 0;
+  gap: 0.15rem;
+  padding: 2.6rem 9px 9px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.4) 55%, transparent);
+}
+.ptile--place:has(.pin-cover) .ptile-take-title { font-size: 1.02rem; color: #fff; -webkit-line-clamp: 2; line-clamp: 2; }
+.ptile--place:has(.pin-cover) .ptile-take-sub { color: rgba(255, 255, 255, 0.85); -webkit-line-clamp: 1; line-clamp: 1; }
+.ptile-marks {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+.ptile-marks .ptile-private { position: static; }
+.ptile-marks .take-stars { margin: 0; color: var(--heart); }
+/* A quoted take's size: five of them stay a corner mark on a phone's tile. */
+.ptile-marks .take-star { width: 12px; height: 12px; }
+.ptile-marks .take-star--half { width: 6px; }
+/* Over a picture: white, the lock's shadow. On words: the feed's own colour,
+   and the lock in muted ink, since white would vanish on paper. */
+.ptile--take:has(.ptile-take-art, .pin-cover) .ptile-marks .take-stars {
+  color: #fff;
+  /* A tight edge under the lock's soft shadow: twelve pixel stars on a light
+     poster or a light scheme's map need it to hold. */
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.45)) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+.ptile--take:not(:has(.ptile-take-art, .pin-cover)) .ptile-private { color: var(--muted); filter: none; }
+
 .community-closed svg { width: 16px; height: 16px; flex-shrink: 0; }
 /* The handle field wears c/ in front of what you type, inside the same box,
    so the field reads as the link it is making. */

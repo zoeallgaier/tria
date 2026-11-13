@@ -4542,13 +4542,15 @@
   }
   const placeMapKey = (t, size) =>
     `${(+t.lat).toFixed(5)},${(+t.lng).toFixed(5)},${size},${darkScheme() ? 'd' : 'l'},${t.cat ? 'n' : 'w'},${heartHex()}`;
-  // 88px is the feed's tile; the composer's are drawn from the same map.
+  // 88px is the feed's tile; the composer's are drawn from the same map. The
+  // Takes wall's tile asks for its own, as tall as the tile (PLACE_TILE_PX).
   const PLACE_MAP_PX = 88;
-  function placeArtHtml(t, cls = '') {
-    const key = placePoint(t) ? placeMapKey(t, PLACE_MAP_PX) : '';
+  function placeArtHtml(t, cls = '', size = PLACE_MAP_PX) {
+    const key = placePoint(t) ? placeMapKey(t, size) : '';
     const src = key && placeMaps.get(key);
     return `<span class="take-art take-art--place${cls ? ' ' + cls : ''}${src ? ' pin-cover' : ''}"` +
-      (key ? ` data-map="${esc(key)}" data-lat="${+t.lat}" data-lng="${+t.lng}"${t.cat ? '' : ' data-wide'}` : '') +
+      (key ? ` data-map="${esc(key)}" data-lat="${+t.lat}" data-lng="${+t.lng}"${t.cat ? '' : ' data-wide'}` +
+        (size !== PLACE_MAP_PX ? ` data-size="${size}"` : '') : '') +
       (src ? ` style="background-image:url('${src}')"` : '') + ` aria-hidden="true">` +
       (src ? '' : svgIcon('pin', 'take-art-ico')) + `</span>`;
   }
@@ -4562,7 +4564,7 @@
       let job = placeAsks.get(key);
       if (!job) {
         job = window.Capacitor.nativePromise('TriaPlaces', 'snapshot', {
-          lat: +el.dataset.lat, lng: +el.dataset.lng, size: PLACE_MAP_PX,
+          lat: +el.dataset.lat, lng: +el.dataset.lng, size: +el.dataset.size || PLACE_MAP_PX,
           dark: darkScheme(), wide: 'wide' in el.dataset, ink: heartHex(),
         }).then((r) => {
           const src = r && r.path ? window.Capacitor.convertFileSrc(r.path) : '';
@@ -10460,7 +10462,7 @@
      arrives drops out and leaves the tint behind, which is a calmer failure than
      a broken-image glyph in the middle of a grid. */
   function wireFrameFades(root) {
-    root.querySelectorAll('.ptile-face--media img').forEach(img => {
+    root.querySelectorAll('.ptile-face--media img, img.ptile-take-art').forEach(img => {
       if (img.complete && img.naturalWidth) { img.classList.add('is-loaded'); return; }
       img.addEventListener('load', () => img.classList.add('is-loaded'), { once: true });
       img.addEventListener('error', () => img.remove(), { once: true });
@@ -10761,19 +10763,20 @@
      Zoe: "swipable filters in circle feeds the way we do ... on profiles").
      FOUR AT MOST: All, Frames, Takes, Reposts (Zoe, 2026-11-07: "far too
      many options"). A tab earns its place by changing what the page IS:
-     Frames is the wall, Takes the shelf, Reposts another axis. Notes, Finds,
+     Frames is the wall, Takes the shelf (a wall of posters since 2026-11-12,
+     takeWallTileHtml), Reposts another axis. Notes, Finds,
      Polls and Activities only narrowed the same feed, so they live in All.
      Reposts are APPENDED, not slotted into the run of types: a repost is a
      different axis (not what was made, but what was passed on), and it is
      filtered on the ROW's own type, so a quoted photo isn't also a Frame.
-     `show` is false when nothing narrows (one type only, unless it's Frames,
-     the wall): someone with nothing but takes gets no strip. */
+     `show` is false when nothing narrows (one type only, unless it's a wall,
+     Frames or Takes, WALL_TILE): someone with nothing but reposts gets no strip. */
   function typeTabsFor(list) {
     const types = new Set(list.map(p => p.type));
     const filters = [FILTERS[0], ...['photo', 'take'].filter(k => types.has(k))
       .map(k => FILTERS.find(f => f.key === k))];
     if (types.has('repost')) filters.push({ key: 'repost', label: 'Reposts', ico: 'repost' });
-    return { filters, show: filters.length > 1 && (types.size > 1 || types.has('photo')) };
+    return { filters, show: filters.length > 1 && (types.size > 1 || types.has('photo') || types.has('take')) };
   }
   function typeTabsHtml(id, filters, current, label) {
     return `<div class="profile-tabs" id="${id}" role="tablist" ` +
@@ -10822,6 +10825,47 @@
     const ac = new AbortController();
     const signal = ac.signal;
     const line = tabsEl.querySelector('.profile-tabs-line');
+  /* A Takes tab's tile (Zoe, 2026-11-12: "give takes the compacted view like
+     frames with the star rating in the corner"): the Frames wall's tile, 3:4
+     on the same grid, a link to the post's own page. The poster, cover or
+     podcast's art fills it, cropped to the box as a Frame is, with the STARS
+     in its top right corner (Zoe: "top right corner"), white with the lock's
+     soft shadow, and a private take's lock after them, as a card's lock
+     follows its stars; never a circle's trio (Zoe: "no circles icons"). A
+     place wears its own little map, drawn at the
+     tile's height (fillPlaceArt), with its name over a shade at the foot,
+     since a map can't say what it is the way a poster does. A take with no
+     picture, one whose picture won't load, or a place on the web or an older
+     binary, is its words at the foot: the title in the serif and what it is,
+     the stars in the reader's colour. */
+  const PLACE_TILE_PX = 204;
+  function takeWallTileHtml(p) {
+    const t = p.take || {};
+    const title = t.title || p.title || 'Take';
+    const sub = t.title ? takeSub(t) : '';
+    const r = takeRating(t);
+    const locked = isPrivatePost(p);
+    const place = t.kind === 'place' && placePoint(t);
+    const pic = !place && /^https:\/\//.test(t.art || '') ? t.art : '';
+    const label = [title, sub, r ? starWords(r) : ''].filter(Boolean).join(', ');
+    // No circle trio here (Zoe: "no circles icons"), only a private take's lock.
+    const marks = (r ? takeStarsHtml(p) : '') + (locked ? privateMarkHtml(p, 'ptile-private') : '');
+    return `<a class="ptile ptile--frame ptile--take${place ? ' ptile--place' : ''}${locked ? ' ptile--locked' : ''}" ` +
+        `href="${postRoute(p)}" aria-label="${esc(label)}">` +
+        `<div class="ptile-face ptile-face--take">` +
+          `<div class="ptile-take-words" aria-hidden="true">` +
+            `<p class="ptile-take-title">${esc(title)}</p>` +
+            (sub ? `<p class="ptile-take-sub">${esc(sub)}</p>` : '') +
+          `</div>` +
+          (pic ? `<img class="ptile-take-art" src="${esc(pic)}" alt="" loading="lazy" decoding="async">` : '') +
+          (place ? placeArtHtml(t, 'ptile-take-map', PLACE_TILE_PX) : '') +
+        `</div>` +
+        (marks ? `<span class="ptile-marks">${marks}</span>` : '') +
+      `</a>`;
+  }
+  // The two walls a type tab can be, by its key: Frames and Takes.
+  const WALL_TILE = { photo: frameTileHtml, take: takeWallTileHtml };
+
     const tabs = [...tabsEl.querySelectorAll('.profile-tab')];
     const idx = () => Math.max(0, keys.indexOf(current()));
     const width = () => feedEl.clientWidth || window.innerWidth;
@@ -11337,8 +11381,8 @@
        lightbox, and you land on the thing with its caption, likes and comments
        attached. It used to drop back into the profile COLUMN with the card
        spotlighted, which meant teleporting the window down somebody's archive to
-       show you one post. */
-    const frameTile = frameTileHtml;
+       show you one post. Takes have the same wall since 2026-11-12, a poster
+       for a photo and its stars in the corner (takeWallTileHtml). */
 
     /* Paint the posts pane for the current filter, in place. The identity card
        above never rebuilds, so picking a filter doesn't flash the photograph or
@@ -11382,8 +11426,10 @@
             : 'Nothing here yet.') + `</p>`;
         return;
       }
-      if (profileFilter === 'photo') {
-        feedEl.innerHTML = `<div class="pgrid pgrid--frames">${shown.map(frameTile).join('')}</div>`;
+      // Frames and Takes are walls (WALL_TILE): the same grid, their own tile.
+      const wallTile = WALL_TILE[profileFilter];
+      if (wallTile) {
+        feedEl.innerHTML = `<div class="pgrid pgrid--frames pgrid--${profileFilter}">${shown.map(wallTile).join('')}</div>`;
         if (locked) feedEl.insertAdjacentHTML('beforeend', lockedNudge(true));
         dealMasonry(feedEl.querySelector('.pgrid'), stage);
         wireFrameFades(feedEl);
@@ -11393,6 +11439,7 @@
       // Laid down first, so every slice of cards goes in ahead of it.
       if (locked) feedEl.insertAdjacentHTML('beforeend', lockedNudge(true));
       const tail = locked ? feedEl.lastElementChild : null;
+        fillPlaceArt(feedEl);
       // The first screen now and the rest a slice a frame (see buildInSlices).
       let i = 0;
       buildInSlices(feedEl, (limit, late) => {
@@ -20222,14 +20269,17 @@
       const all = Store.communityPosts(c.id).filter(p => !Blocks.has(p.author));
       paintTabs(c, all);
       const list = circleFilter === 'all' ? all : all.filter(p => p.type === circleFilter);
-      // Frames is the wall, as on a profile. Dealt again only when its frames
-      // change, so a like landing elsewhere doesn't reshuffle it.
-      if (circleFilter === 'photo') {
-        const sig = list.map(p => p.id).join(',');
+      // Frames and Takes are walls, as on a profile (WALL_TILE). Dealt again
+      // only when what the tiles show changes (a take's stars included), so a
+      // like landing elsewhere doesn't reshuffle it.
+      const wallTile = WALL_TILE[circleFilter];
+      if (wallTile) {
+        const sig = circleFilter + '|' + list.map(p => p.id +
+          (p.type === 'take' ? ':' + JSON.stringify(p.take || {}) : '')).join(',');
         if (feedEl.dataset.wall === sig && feedEl.querySelector('.pgrid')) return;
         dropCards();
         feedEl.dataset.wall = sig;
-        feedEl.innerHTML = `<div class="pgrid pgrid--frames">${list.map(frameTileHtml).join('')}</div>`;
+        feedEl.innerHTML = `<div class="pgrid pgrid--frames pgrid--${circleFilter}">${list.map(wallTile).join('')}</div>`;
         dealMasonry(feedEl.querySelector('.pgrid'), !still);
         wireFrameFades(feedEl);
         return;
@@ -20238,6 +20288,7 @@
       // An empty public circle, to someone outside it: nothing to read, and
       // the first post is a member's to write.
       if (!list.length && !Store.inCommunity(c.id)) {
+        fillPlaceArt(feedEl);
         dropCards();
         feedEl.innerHTML = `<p class="feed-empty">Nothing posted here yet.</p>`;
         return;
