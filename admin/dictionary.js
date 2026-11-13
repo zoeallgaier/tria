@@ -24,7 +24,7 @@ window.TRIA_DICTIONARY = [
   {
     group: 'Posts',
     items: [
-      { name: 'Note', code: "type 'note'", say: 'Words: a headline and a rich note (bold, italic, bullets, H1, H2). The heart of Tria.' },
+      { name: 'Note', code: "type 'note'", say: 'Words: a headline and a rich note (bold, italic, bullets, H1, H2; a line started with \"- \" becomes a bullet). The heart of Tria.' },
       { name: 'Poem', code: '.is-poem, the quill', say: 'A note with the quill on: Return is a line, a blank line ends a stanza.' },
       { name: 'Frame', code: "type 'photo'", say: 'A photo, a carousel of up to ten, or a clip. Called photo in code.' },
       { name: 'Clip', code: 'clipEditor', say: 'A Frame that moves: up to 30 seconds stitched from up to ten clips.' },

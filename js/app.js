@@ -3463,6 +3463,23 @@
       if (top && top.nodeType === 3 && top.nodeValue.trim() && !e.isComposing) {
         document.execCommand('formatBlock', false, 'div');
       }
+      // "- " at the start of a line makes it a bullet, as Notes does: the dash
+      // and its space go, and the line becomes the list's first item. Both
+      // steps are execCommands, so an undo walks back through them.
+      if (e.inputType === 'insertText' && e.data === ' ' && !e.isComposing && !inList() && !curBlock()) {
+        const sel = window.getSelection();
+        const t = sel.isCollapsed ? sel.anchorNode : null;
+        const lineStart = t && (!t.previousSibling || t.previousSibling.nodeName === 'BR');
+        if (t && t.nodeType === 3 && sel.anchorOffset === 2 && lineStart
+            && /^-[  ]$/.test(t.nodeValue.slice(0, 2))) {
+          const r = document.createRange();
+          r.setStart(t, 0); r.setEnd(t, 2);
+          sel.removeAllRanges(); sel.addRange(r);
+          document.execCommand('delete');
+          document.execCommand('insertUnorderedList');
+          syncActive();
+        }
+      }
       syncEmpty(); syncCount();
     });
     // Track the caret for the toolbar's active state; self-removes once the editor
