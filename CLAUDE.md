@@ -631,9 +631,10 @@ members (a button signed in) and the host's own small face and name. **An
 invite-only circle's lock rides its c/slug** (Zoe: "in the c/ like in the
 header"; on its name for an hour), after the words in their own ink, on the
 bar's title and the head's handle, to everyone (`.title-lock`,
-`mountToolbar`'s `lock`), and in the composer's Who can see this, on its
-row's c/slug and on the field once it is picked (Zoe, 2026-11-12: "private
-circles need lock icon on audience picker"; `roomBtn`, `audienceLockInner`).
+`mountToolbar`'s `lock`), and in the composer's Who can see this, after
+its row's NAME (Zoe, 2026-11-12: "private circles need lock icon on audience
+picker", then "put it in the name not the smaller text"; `roomBtn`) and on
+the field's c/slug once it is picked (`audienceLockInner`).
 Natively the title lays the same markup after its
 text (`titleSpec`'s `lock`, `lockSize`, `lockGap`, TriaSVG in the title's
 `apply`); an older binary shows the words alone. A change to the line alone

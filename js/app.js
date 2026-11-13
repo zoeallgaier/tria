@@ -24908,12 +24908,13 @@
       `<button type="button" class="aud-mode aud-mode--community" data-mode="community" data-room="${esc(c.id)}" ` +
           `aria-pressed="${mode === 'community' && room === c.id}">` +
         communityPicHtml(c, 'aud-mode-lead', 44) +
-        `<span class="aud-mode-t">${esc(c.name)}</span>` +
-        // An invite-only circle's lock rides its c/slug, as on its page
-        // (Zoe, 2026-11-12: "private circles need lock icon on audience picker").
-        `<span class="aud-mode-d">Only the people in ${esc(communityHandle(c))}` +
+        // An invite-only circle's lock follows its name (Zoe, 2026-11-12:
+        // "private circles need lock icon on audience picker", then "put it in
+        // the name not the smaller text").
+        `<span class="aud-mode-t">${esc(c.name)}` +
           (c.inviteOnly ? svgIcon('lock', 'title-lock') + `<span class="visually-hidden">, invite only</span>` : '') +
         `</span>` +
+        `<span class="aud-mode-d">Only the people in ${esc(communityHandle(c))}</span>` +
         `<span class="aud-mode-tick" aria-hidden="true"></span>` +
       `</button>`;
 
