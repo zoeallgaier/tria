@@ -153,7 +153,7 @@ syntax clean for loading"**, then "bit bigger for both, then make charms
 bigger to compensate". `bylineEl`'s face is `.byline-avatar`, 50px (40
 before; `AVATAR_PX` and the warm-up read it), and wears its author's
 `charmsOnFace` in a `.byline-face` box only when they wear some. There a
-charm is **48% of the face** (24px; at a profile's share it was 18px of
+charm is **54% of the face** (27px, Zoe: "27"; 24px for an afternoon; at a profile's share it was 18px of
 specks), on the same rim points, with a smaller halo. **Everywhere else a
 worn charm is 44%** (40% until the same day, Zoe: "scale charms up a touch on
 moments and profile pages too. pfp size as is"), offsets -7.4% and 63.4%.
