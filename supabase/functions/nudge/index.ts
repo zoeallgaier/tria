@@ -22,7 +22,10 @@
 //                    because a "reply stop" that bounces is no way out.
 // SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY are injected.
 //
-// Deploy: supabase functions deploy nudge
+// Deploy: supabase functions deploy nudge --no-verify-jwt
+// (live since 2026-11-12, JWT verification off: the gate is is_admin() below,
+// asked as the caller, so an unsigned POST is a 403 and a GET says only the
+// From and whether it's ready.)
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 

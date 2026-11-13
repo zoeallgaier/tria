@@ -82,9 +82,15 @@ answers its 42501; "Not back" waits until an account is a week old) lists everyo
 stopped at a step (profile, connect, post, return, quiet: 21 days without a
 sign of life) with their email from auth.users, logs sends in `nudges` and
 keeps `nudge_stop`. Sending is the `nudge` Edge Function
-(`supabase/functions/nudge`, **NOT deployed**; Resend's API, needs secrets
-`RESEND_API_KEY` and `NUDGE_REPLY_TO`, `NUDGE_FROM` optional; refuses without
-a reply-to, since "reply stop" is the way out), two taps to send; **Open in
+(`supabase/functions/nudge`, **confirmed deployed** 2026-11-12 from the
+dashboard: a bare GET answers `rev` 2026-11-12, `ready: true`, and an
+unsigned POST its 403 "forbidden"; **JWT verification is OFF**, the function
+gates itself through `is_admin()` as the caller, so redeploy with
+`--no-verify-jwt`; Resend's API, secrets `RESEND_API_KEY` (a sending only key
+for triaonline.com) and `NUDGE_REPLY_TO` set, `NUDGE_FROM` unset; refuses
+without a reply-to, since "reply stop" is the way out; nothing receives mail
+AT triaonline.com, no MX, so the reply-to is not a hello@ address until a
+forwarder exists), two taps to send; **Open in
 Mail** works without it (mailto, Bcc for several) and "Mark as nudged" logs
 it. **What they get** (Zoe, 2026-11-12: "where is the email sent from and what
 does it look like?"): under the letter, the email as it lands, From (`Tria
