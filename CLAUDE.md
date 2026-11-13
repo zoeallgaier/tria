@@ -146,6 +146,41 @@ of the three tables has a select policy. **App Store Connect's privacy label
 needs "Product Interaction, linked to user" before a build with the ping
 ships.**
 
+## Charms: solid, in a heart's colour, on every byline (2026-11-12)
+
+**Zoe: "make pfp in feeds a bit bigger, and add everyone's charms. keep
+syntax clean for loading"**, then "bit bigger for both, then make charms
+bigger to compensate". `bylineEl`'s face is `.byline-avatar`, 50px (40
+before; `AVATAR_PX` and the warm-up read it), and wears its author's
+`charmsOnFace` in a `.byline-face` box only when they wear some. There a
+charm is **48% of the face** (24px; at a profile's share it was 18px of
+specks), on the same rim points, with a smaller halo. **Everywhere else a
+worn charm is 44%** (40% until the same day, Zoe: "scale charms up a touch on
+moments and profile pages too. pfp size as is"), offsets -7.4% and 63.4%.
+**Tria's charms are SOLID** (Zoe: "make our tria charms filled, round the
+star a bit more"): each shape its outline grown solid as a tab's mark is
+(`cb`, fill plus the 1.8 line), the triad interlaced like the Discover tab
+(`tria-charm-weave`, a mask), Sunny a rounder star, the trims' ring a dot;
+the spiral, stems, ground and the note's flag stay lines. **And in a HEART'S
+colour** ("match users color themes the way like buttons filled do"): a
+charm on a face wears the WEARER's heart, the colour their filled like is
+(`heartOf`: a pick's hex or its paper `ink`, a photo's `heartsFrom` off the
+kept sample `keptTone`, `--mono-heart` for None, `--brand-ink` for Tria's
+own); one with no face (picker, unlock, welcome, Edit profile's row) wears
+yours, `--heart`. It was plain `--text` from 2026-10-24. **The colour is not
+in the markup**: a worn charm carries `data-ink="<user id>"` (`charmInk`) and
+ONE stylesheet, `#charm-inks`, holds a rule per person setting
+`--charm-lt`/`--charm-dk`, picked by scheme as tokens.css picks `--heart`;
+a photo still sampling wears Tria's until it lands, and no card rebuilds.
+**A charm is drawn ONCE**: `drawCharmSprite` writes every CHARMS art into a
+hidden `.charm-sprite` at the body's foot (`#tria-charm-<key>`) the first
+time one is drawn, and `charmSvg` emits a `<use>` of it, about 100 bytes a
+charm in a card where the paths were 1.3KB. Rules can't reach into a `<use>`
+copy, so the sprite's paint is attributes in currentColor (`CHARM_INK`) and
+`.charm` sets `color: var(--charm-ink)`; `CHARMS` keeps its art in the
+cl/cb/cf classes as authored. Sticker charms are still an inline `<image>`,
+worn as they are.
+
 ## A Take can be about a place, from Apple Maps (2026-11-12)
 
 **Zoe: "allow for takes on places and stuff, built into maps"**, then picked
@@ -1373,7 +1408,7 @@ word (a post, a cute spiral since 2026-10-25, Zoe: "instead of quotes", then
 Mutuals (Tria shared off the app, a completed share sheet or a copied link,
 `noteShared`; it was a first friend until Zoe: "we need more new users", and
 kept its name and two stars, a touch bigger since 2026-10-25), In the ring (join a circle), Founder (start
-one), Sunny (the daily), On repeat (a song). `CHARMS` in app.js. **Outlined, in the icon set's line** (the circle triad,
+one), Sunny (the daily), On repeat (a song). `CHARMS` in app.js. **Since 2026-11-12 they are SOLID and in a heart's colour, the wearer's on a face (see "Charms: solid, in a heart's colour" above); what follows was true until then.** **Outlined, in the icon set's line** (the circle triad,
 daily and music are ICONS'; the spiral, stars and sprout are drawn to match)
 with the SAME four trims, a sparkle with a dot and a speck with a star, in
 opposite corners and close in (on Sunny's diagonal, top-right and

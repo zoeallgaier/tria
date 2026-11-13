@@ -2741,6 +2741,20 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
   gap: 0.7rem;
   min-width: 0;
 }
+/* THE FACE, 50px (Zoe, 2026-11-12: "a bit bigger", twice; 40 until then),
+   wearing its author's charms on the rim (charmsOnFace). At a profile's
+   share of a face this small a charm's line and trims were specks (18px at
+   40%), so here they are 48%
+   ("make charms bigger to compensate"), 24px, each still centred on the rim
+   at ten thirty and four thirty (the rim's 45 degree point is 14.6% in from
+   the box, less half the charm). The halo is the profile's, scaled down so
+   it parts the line from the photo without eating it. */
+.byline-avatar.avatar { width: 50px; height: 50px; font-size: 1.6rem; }
+.byline-face { position: relative; flex-shrink: 0; width: 50px; height: 50px; }
+.byline-face .charm--worn { width: 48%; height: 48%; }
+.byline-face .charm--worn-a { left: -9.4%; top: -9.4%; }
+.byline-face .charm--worn-b { left: 61.4%; top: 61.4%; }
+.byline-face .charm--worn:not(.charm--sticker) { filter: drop-shadow(0 0 0.5px var(--bg)) drop-shadow(0 0 3px var(--bg)); }
 
 /* ── Type tag — a small glyph (Note / Find / Photo) at the right of the
    byline, marking the entry's type. Replaces the old left type-rule. */
@@ -7413,7 +7427,7 @@ button.card-song-play:active { transform: scale(0.9); }
 .quoted-media--yt img { aspect-ratio: 16 / 9; }
 
 /* 30px is the app's established nested-identity size (.ptile-av wears it too),
-   a clear step down from the feed byline's 40px so the two never read as peers. */
+   a clear step down from the feed byline's 50px so the two never read as peers. */
 .quoted-who { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
 .quoted-av { width: 30px; height: 30px; font-size: 1rem; }
 .quoted-name { font-weight: 700; font-size: 0.85rem; line-height: 1.1; color: var(--text); }
@@ -12448,7 +12462,7 @@ a.guest-join { display: block; text-align: center; text-decoration: none; }
 /* 80px, was 60 (Zoe, 2026-10-23: larger faces on the people cards). The bio
    gives up a line for it (see its clamp), so the card keeps its 4:5. */
 /* The face's box carries the charms (charmsOnFace), the way .charm-face does
-   on a profile; the 40% and the rim offsets are the profile's, read off it. */
+   on a profile; the size and the rim offsets are the profile's (.charm--worn). */
 .person-card-face { position: relative; flex-shrink: 0; align-self: flex-start; width: 80px; height: 80px; margin-bottom: 0.5rem; }
 .person-card-avatar.avatar { width: 80px; height: 80px; font-size: 2.4rem; }
 /* The card is surface, not page paper, so the line charms' halo is too. */
@@ -13068,20 +13082,6 @@ a.daily-answer { text-decoration: none; }
 .ptile--locked .ptile-play { display: none; }
 .view--community .ptile--locked .ptile-play { display: flex; }
 
-/* The circle's page: the profile's identity block, with its photo where a
-   face goes, or the triad when it has none. */
-.community-photo { background: var(--surface); }
-.community-photo-ico {
-  width: 42%;
-  height: 42%;
-  color: color-mix(in srgb, var(--text) 55%, transparent);
-}
-
-/* Starting one, and its host's editor (#/c/new, #/c/<slug>/edit) are Edit
-   profile's page (.pf-form, .pf-photo), the circle's face where yours sits. */
-/* An invite-only circle's page, to someone holding no invite: the pill's place
-   says why, in the quiet weight and the muted ink, and takes no tap. */
-.community-closed { gap: 0.45rem; color: var(--muted); cursor: default; }
 /* THE TAKES WALL (Zoe, 2026-11-12: "give takes the compacted view like frames
    with the star rating in the corner"; takeWallTileHtml). The Frames wall's
    3:4 tile on the same grid. The words are always laid down first and a
@@ -13191,6 +13191,20 @@ a.daily-answer { text-decoration: none; }
 }
 .ptile--take:not(:has(.ptile-take-art, .pin-cover)) .ptile-private { color: var(--muted); filter: none; }
 
+/* The circle's page: the profile's identity block, with its photo where a
+   face goes, or the triad when it has none. */
+.community-photo { background: var(--surface); }
+.community-photo-ico {
+  width: 42%;
+  height: 42%;
+  color: color-mix(in srgb, var(--text) 55%, transparent);
+}
+
+/* Starting one, and its host's editor (#/c/new, #/c/<slug>/edit) are Edit
+   profile's page (.pf-form, .pf-photo), the circle's face where yours sits. */
+/* An invite-only circle's page, to someone holding no invite: the pill's place
+   says why, in the quiet weight and the muted ink, and takes no tap. */
+.community-closed { gap: 0.45rem; color: var(--muted); cursor: default; }
 .community-closed svg { width: 16px; height: 16px; flex-shrink: 0; }
 /* The handle field wears c/ in front of what you type, inside the same box,
    so the field reads as the link it is making. */
@@ -13518,31 +13532,42 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
 
 /* ── Charms (2.0, 2026-10-24) ──────────────────────────────────────────────────
    Six little firsts, worn on the rim of your photo (charmSvg, CHARMS in app.js).
-   One line, the icon set's own 1.8 in its 24 grid, every mark in --heart: the
-   reader's colour, the hearts' contrast work reused, paper and ink alike. */
-.charm { --charm-ink: var(--text); display: block; overflow: visible; }
-.charm .cl { fill: none; stroke: var(--charm-ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.charm .cf { fill: var(--charm-ink); }
-.charm .cs { fill: none; stroke: var(--charm-ink); stroke-width: 1.4; }
+   Solid since 2026-11-12, each shape its outline grown solid like a tab's
+   mark, and in a HEART'S colour (Zoe: "match users color themes the way like
+   buttons filled do"): yours, --heart, where no face holds it (the picker,
+   an unlock), and on a face the wearer's, which app.js writes per person into
+   #charm-inks as --charm-lt and --charm-dk (charmInk); the scheme picks one
+   as tokens.css picks --heart, Tria's own until a photo's sample lands.
+   Each is drawn once, in the sprite (drawCharmSprite), and worn as a <use>
+   of it, painted in currentColor: so the ink is `color`. The sprite itself
+   takes no room. */
+.charm { --charm-ink: var(--heart); color: var(--charm-ink); display: block; overflow: visible; }
+.charm[data-ink] { --charm-ink: var(--charm-lt, var(--brand-ink)); }
+@media (prefers-color-scheme: dark) {
+  .charm[data-ink] { --charm-ink: var(--charm-dk, var(--brand-ink)); }
+}
+.charm-sprite { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
 
-/* Worn: 40% of the face across (Zoe: "a lil bigger", then "a TOUCH smaller"), centred on the rim at
-   ten thirty and four thirty (the rim's 45 degree point is 14.6% in from the
-   box, less half the charm), lifted off the photo by the page's own paper
-   fading out from the line: one tight shadow to separate, one wide one to
-   fade (Zoe: "more fade"). */
+/* Worn: 44% of the face across (Zoe: "a lil bigger", then "a TOUCH smaller",
+   then 2026-11-12 "scale charms up a touch on moments and profile pages";
+   40% until then), centred on the rim at ten thirty and four thirty (the
+   rim's 45 degree point is 14.6% in from the box, less half the charm), lifted
+   off the photo by the page's own paper fading out from the line: one tight
+   shadow to separate, one wide one to fade (Zoe: "more fade"). A byline's
+   small face wears them bigger still (.byline-face). */
 .charm-face { position: relative; flex: 0 0 clamp(120px, 37%, 160px); }
 .charm-face > .account-photo { width: 100%; }
 .charm--worn {
   position: absolute;
-  width: 40%; height: 40%;
+  width: 44%; height: 44%;
   pointer-events: none;
   filter: drop-shadow(0 0 1px var(--bg)) drop-shadow(0 0 6px var(--bg));
 }
-.charm--worn-a { left: -5.4%; top: -5.4%; }
+.charm--worn-a { left: -7.4%; top: -7.4%; }
 /* A sticker charm is worn as it is, with no halo and no edge; the halo is
    for the line charms. */
 .charm--worn.charm--sticker { filter: none; }
-.charm--worn-b { left: 65.4%; top: 65.4%; }
+.charm--worn-b { left: 63.4%; top: 63.4%; }
 
 /* An unlock: the charm big, its name in the serif, what earned it. */
 .charm-unlock {

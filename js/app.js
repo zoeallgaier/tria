@@ -2608,9 +2608,9 @@
   }, true);
 
   // How wide each avatar class is DRAWN, for sizedSrc(). A class not listed is a
-  // byline or thread face at 26 to 40px; Edit profile's big photo (0) keeps the
-  // original, since it is the picture being cropped.
-  const AVATAR_PX = [['pf-photo-avatar', 0], ['np-avatar', 92], ['mv-avatar', 32], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44], ['person-card-avatar', 80], ['discover-person-avatar', 56], ['notif-avatar', 44]];
+  // thread face at 26 to 40px; Edit profile's big photo (0) keeps the original,
+  // since it is the picture being cropped.
+  const AVATAR_PX = [['pf-photo-avatar', 0], ['byline-avatar', 50], ['np-avatar', 92], ['mv-avatar', 32], ['chat-head-avatar', 64], ['chat-avatar', 48], ['aud-avatar', 44], ['person-card-avatar', 80], ['discover-person-avatar', 56], ['notif-avatar', 44]];
   const avatarPx = (cls) => (AVATAR_PX.find(([c]) => cls.includes(c)) || [null, 40])[1];
 
   // The picture a feed card DRAWS for a post, at the size it draws it: a
@@ -2742,13 +2742,19 @@
 
   // Byline (identity) — avatar + profile name, with the date beneath, and the
   // type-tag at the right. Leads every entry. No @usernames; profile names only.
+  // The face is 50px (Zoe, 2026-11-12: "a bit bigger", twice; 40 before) and
+  // wears the author's charms on its rim, as their profile does: everyone's,
+  // yours too, a touch bigger for the size (.byline-face). Only a face wearing
+  // some gets the positioned box they sit in.
   function bylineEl(post) {
     const u = Store.user(post.author);
     const name = esc(u ? u.name : post.author);
     const meta = esc(niceAgo(post._ts, post.date));
+    const face = avatarEl(u || { name: post.author }, { cls: 'byline-avatar' });
+    const worn = charmsOnFace(u);
     return `<header class="byline">` +
         `<a class="byline-link" href="#/u/${esc(encodeURIComponent(post.author))}">` +
-          avatarEl(u || { name: post.author }) +
+          (worn ? `<span class="byline-face">${face}${worn}</span>` : face) +
           `<span class="byline-text">` +
             `<span class="byline-name">${name}</span>` +
             `<span class="byline-meta">${meta}</span>` +
@@ -10819,12 +10825,6 @@
       `<span class="visually-hidden">${label}</span></span>`;
   }
 
-  function wireProfileTabs(tabsEl, feedEl, keys, current, pick) {
-    // Every listener goes with profileTabsOff, so a strip wired again (a
-    // circle's, when what it holds changes) never doubles a drag on the posts.
-    const ac = new AbortController();
-    const signal = ac.signal;
-    const line = tabsEl.querySelector('.profile-tabs-line');
   /* A Takes tab's tile (Zoe, 2026-11-12: "give takes the compacted view like
      frames with the star rating in the corner"): the Frames wall's tile, 3:4
      on the same grid, a link to the post's own page. The poster, cover or
@@ -10866,6 +10866,12 @@
   // The two walls a type tab can be, by its key: Frames and Takes.
   const WALL_TILE = { photo: frameTileHtml, take: takeWallTileHtml };
 
+  function wireProfileTabs(tabsEl, feedEl, keys, current, pick) {
+    // Every listener goes with profileTabsOff, so a strip wired again (a
+    // circle's, when what it holds changes) never doubles a drag on the posts.
+    const ac = new AbortController();
+    const signal = ac.signal;
+    const line = tabsEl.querySelector('.profile-tabs-line');
     const tabs = [...tabsEl.querySelectorAll('.profile-tab')];
     const idx = () => Math.max(0, keys.indexOf(current()));
     const width = () => feedEl.clientWidth || window.innerWidth;
@@ -11433,13 +11439,13 @@
         if (locked) feedEl.insertAdjacentHTML('beforeend', lockedNudge(true));
         dealMasonry(feedEl.querySelector('.pgrid'), stage);
         wireFrameFades(feedEl);
+        fillPlaceArt(feedEl);
         return;
       }
       // Their public posts are shown; tell an outsider the circle holds more.
       // Laid down first, so every slice of cards goes in ahead of it.
       if (locked) feedEl.insertAdjacentHTML('beforeend', lockedNudge(true));
       const tail = locked ? feedEl.lastElementChild : null;
-        fillPlaceArt(feedEl);
       // The first screen now and the rest a slice a frame (see buildInSlices).
       let i = 0;
       buildInSlices(feedEl, (limit, late) => {
@@ -20282,13 +20288,13 @@
         feedEl.innerHTML = `<div class="pgrid pgrid--frames pgrid--${circleFilter}">${list.map(wallTile).join('')}</div>`;
         dealMasonry(feedEl.querySelector('.pgrid'), !still);
         wireFrameFades(feedEl);
+        fillPlaceArt(feedEl);
         return;
       }
       delete feedEl.dataset.wall;
       // An empty public circle, to someone outside it: nothing to read, and
       // the first post is a member's to write.
       if (!list.length && !Store.inCommunity(c.id)) {
-        fillPlaceArt(feedEl);
         dropCards();
         feedEl.innerHTML = `<p class="feed-empty">Nothing posted here yet.</p>`;
         return;
@@ -20589,8 +20595,16 @@
      worn on the rim of your photo, the first at ten thirty and the second at
      four thirty (Zoe's sketch).
 
-     THE ART is outlined, in the icon set's own line: ICONS' circle, daily and
-     music, and a spiral, two stars and a sprout drawn to match. First word's
+     THE ART IS SOLID since 2026-11-12 (Zoe: "make our tria charms filled,
+     round the star a bit more"), each shape its outline grown solid the way
+     a tab's mark is (the fill plus the same 1.8 line, class `cb`): Mutuals'
+     stars, the leaves, the note's head and the bat filled, the triad
+     INTERLACED as the Discover tab's is (a mask cutting each disc's edge where
+     it lies over another, `tria-charm-weave` in the sprite), Sunny a softer
+     star with rounded points and notches, the trims' little ring a dot. What
+     is only a line stays one: the spiral, a stem, the ground, the note's
+     flag. It was outlined before, in the icon set's own line: ICONS' circle,
+     daily and music, and a spiral, two stars and a sprout drawn to match. First word's
      spiral (Zoe, 2026-10-25: "a cute spiral instead of quotes", then
      "deeper tighter") is an even one, r = 0.25 + 0.42t over three turns
      (a curl opening over 1.85 turns came first), its tail falling into the
@@ -20602,9 +20616,12 @@
      grew a touch (Zoe, 2026-10-25) and sit a little closer, and its trims
      sit a unit further out, so each pair clears them by about 2.3 (Sunny's
      nearer pair clears by 2.1; the old sparkle all but touched, 0.4).
-     Everything is --heart, the reader's own colour, which is
-     what makes it read on paper and on ink without a second rule (the hearts'
-     contrast work, reused).
+     THE COLOUR is a heart's (Zoe, 2026-11-12: "have them match users color
+     themes the way like buttons filled do"; plain ink from 2026-10-24): a
+     charm on someone's face wears THEIR heart, the colour their filled like
+     is (charmInk), and one with no face to sit on (the picker, an unlock)
+     wears yours, --heart. Either way the hearts' contrast work is reused, so
+     it reads on paper and on ink without a second rule.
 
      EARNED IS NEVER STORED. It is read off what you have done, which the cache
      already holds, so there is no table to backfill or drift, and no count
@@ -20621,21 +20638,21 @@
      Keys never move (users.charms stores them, add-charms.sql checks them). */
   const CHARMS = [
     { key: 'word', name: 'First word', how: 'Publish your first post.', got: 'You published your first post.',
-      art: '<g transform="translate(8.4 8.4) scale(1.3)"><path class="cl" d="M11.58 12.74C11.67 12.86 11.68 13.1 11.52 13.28C11.36 13.46 11.04 13.58 10.7 13.48C10.36 13.38 10.02 13.06 9.9 12.61C9.79 12.15 9.91 11.57 10.32 11.14C10.72 10.71 11.4 10.45 12.1 10.56C12.81 10.68 13.51 11.18 13.86 11.93C14.22 12.69 14.2 13.69 13.72 14.52C13.24 15.35 12.3 15.98 11.22 16.07C10.14 16.17 8.96 15.71 8.18 14.79C7.4 13.87 7.06 12.51 7.39 11.22C7.72 9.93 8.72 8.76 10.07 8.23C11.43 7.71 13.1 7.85 14.42 8.72C15.74 9.58 16.66 11.15 16.73 12.85C16.81 14.54 16.01 16.33 14.58 17.46C13.15 18.59 11.1 19.01 9.23 18.47C7.35 17.93 5.71 16.42 5.01 14.47C4.32 12.52 4.6 10.17 5.84 8.36C7.09 6.55 9.28 5.34 11.6 5.29C13.92 5.24 16.31 6.36 17.78 8.31C19.26 10.26 19.77 12.99 19.02 15.45"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
+      art: '<g transform="translate(8.4 8.4) scale(1.3)"><path class="cl" d="M11.58 12.74C11.67 12.86 11.68 13.1 11.52 13.28C11.36 13.46 11.04 13.58 10.7 13.48C10.36 13.38 10.02 13.06 9.9 12.61C9.79 12.15 9.91 11.57 10.32 11.14C10.72 10.71 11.4 10.45 12.1 10.56C12.81 10.68 13.51 11.18 13.86 11.93C14.22 12.69 14.2 13.69 13.72 14.52C13.24 15.35 12.3 15.98 11.22 16.07C10.14 16.17 8.96 15.71 8.18 14.79C7.4 13.87 7.06 12.51 7.39 11.22C7.72 9.93 8.72 8.76 10.07 8.23C11.43 7.71 13.1 7.85 14.42 8.72C15.74 9.58 16.66 11.15 16.73 12.85C16.81 14.54 16.01 16.33 14.58 17.46C13.15 18.59 11.1 19.01 9.23 18.47C7.35 17.93 5.71 16.42 5.01 14.47C4.32 12.52 4.6 10.17 5.84 8.36C7.09 6.55 9.28 5.34 11.6 5.29C13.92 5.24 16.31 6.36 17.78 8.31C19.26 10.26 19.77 12.99 19.02 15.45"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cf" cx="9.5" cy="38.5" r="1.9"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
     { key: 'mutual', name: 'Mutuals', how: 'Share Tria with a friend.', got: 'You shared Tria with a friend.',
-      art: '<g transform="translate(8.4 8.4) scale(1.3)"><path class="cl" d="M7.1 10.05Q8.31 14.34 12.6 15.55Q8.31 16.76 7.1 21.05Q5.89 16.76 1.6 15.55Q5.89 14.34 7.1 10.05Z"/><path class="cl" d="M16.9 2.45Q18.11 6.74 22.4 7.95Q18.11 9.16 16.9 13.45Q15.69 9.16 11.4 7.95Q15.69 6.74 16.9 2.45Z"/></g><g transform="translate(-1 1)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(1 -1)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
+      art: '<g transform="translate(8.4 8.4) scale(1.3)"><path class="cb" d="M7.1 10.05Q8.31 14.34 12.6 15.55Q8.31 16.76 7.1 21.05Q5.89 16.76 1.6 15.55Q5.89 14.34 7.1 10.05Z"/><path class="cb" d="M16.9 2.45Q18.11 6.74 22.4 7.95Q18.11 9.16 16.9 13.45Q15.69 9.16 11.4 7.95Q15.69 6.74 16.9 2.45Z"/></g><g transform="translate(-1 1)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(1 -1)"><circle class="cf" cx="9.5" cy="38.5" r="1.9"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
     { key: 'joined', name: 'In the ring', how: 'Join a circle.', got: 'You joined your first circle.',
-      art: '<g transform="translate(8.4 7.88) scale(1.3)"><g class="cl"><circle cx="9" cy="9.8" r="4.4"/><circle cx="15" cy="9.8" r="4.4"/><circle cx="12" cy="15" r="4.4"/></g></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
+      art: '<g transform="translate(8.4 7.88) scale(1.3)"><g class="cb" mask="url(#tria-charm-weave)"><circle cx="9" cy="9.8" r="4.4"/><circle cx="15" cy="9.8" r="4.4"/><circle cx="12" cy="15" r="4.4"/></g></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cf" cx="9.5" cy="38.5" r="1.9"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
     { key: 'founder', name: 'Founder', how: 'Start a circle.', got: 'You started a circle.',
-      art: '<g transform="translate(8.4 7.75) scale(1.3)"><g class="cl"><path d="M12 20.5V12"/><path d="M12 15C7.6 15 5 12.4 5 8.5C9.2 8.5 12 11 12 15Z"/><path d="M12 12C12 7.6 14.6 4.5 19 4.5C19 8.7 16.3 12 12 12Z"/><path d="M7.5 20.5h9"/></g></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
+      art: '<g transform="translate(8.4 7.75) scale(1.3)"><g class="cl"><path d="M12 20.5V12"/><path d="M7.5 20.5h9"/></g><g class="cb"><path d="M12 15C7.6 15 5 12.4 5 8.5C9.2 8.5 12 11 12 15Z"/><path d="M12 12C12 7.6 14.6 4.5 19 4.5C19 8.7 16.3 12 12 12Z"/></g></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cf" cx="9.5" cy="38.5" r="1.9"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
     { key: 'sunny', name: 'Sunny', how: 'Answer the daily.', got: 'You answered the daily.',
-      art: '<g transform="translate(9 9) scale(1.25)"><path class="cl" d="M12.00 3.30L14.41 9.58L21.13 9.93L15.90 14.17L17.64 20.67L12.00 17.00L6.36 20.67L8.10 14.17L2.87 9.93L9.59 9.58Z"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
+      art: '<g transform="translate(9 9) scale(1.25)"><path class="cf" d="M10.7 5.72Q12 2.79 13.3 5.72L14.22 7.78Q14.79 9.05 16.18 9.2L18.42 9.44Q21.61 9.77 19.23 11.92L17.55 13.42Q16.51 14.36 16.81 15.73L17.27 17.94Q17.94 21.07 15.16 19.47L13.21 18.34Q12 17.64 10.79 18.34L8.84 19.47Q6.06 21.07 6.73 17.94L7.19 15.73Q7.49 14.36 6.45 13.42L4.77 11.92Q2.39 9.77 5.58 9.44L7.82 9.2Q9.21 9.05 9.78 7.78Z"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cf" cx="9.5" cy="38.5" r="1.9"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
     { key: 'repeat', name: 'On repeat', how: 'Share a song.', got: 'You shared a song.',
-      art: '<g transform="translate(8.92 8.6) scale(1.3)"><g class="cl"><path d="M13.4 17.2V3.8c.7 2.7 5 3.6 5 7.6"/><circle cx="10.4" cy="17.2" r="3"/></g></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
+      art: '<g transform="translate(8.92 8.6) scale(1.3)"><path class="cl" d="M13.4 17.2V3.8c.7 2.7 5 3.6 5 7.6"/><circle class="cb" cx="10.4" cy="17.2" r="3"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cf" cx="9.5" cy="38.5" r="1.9"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
     // Halloween's bat (Zoe, 2026-10-24; the ghost left for custom charms): no task, held by everyone (`free`),
     // so they never raise an unlock or join the welcome.
     { key: 'bat', name: 'Bat', free: true, how: 'Happy Halloween.', got: 'Happy Halloween.',
-      art: '<g transform="translate(8.4 9.2) scale(1.3)"><path class="cl" d="M12 8.6H11.6L10.6 7L10 10.2C8.5 8.6 5.5 7.8 2.5 9C4 10 4.6 11.6 4.3 13.4C5.8 12.8 7.2 13.2 8 14.4C9 13.6 10.4 13.9 11 15.6L12 17L13 15.6C13.6 13.9 15 13.6 16 14.4C16.8 13.2 18.2 12.8 19.7 13.4C19.4 11.6 20 10 21.5 9C18.5 7.8 15.5 8.6 14 10.2L13.4 7L12.4 8.6Z"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cs" cx="9.5" cy="38.5" r="1.6"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
+      art: '<g transform="translate(8.4 9.2) scale(1.3)"><path class="cb" d="M12 8.6H11.6L10.6 7L10 10.2C8.5 8.6 5.5 7.8 2.5 9C4 10 4.6 11.6 4.3 13.4C5.8 12.8 7.2 13.2 8 14.4C9 13.6 10.4 13.9 11 15.6L12 17L13 15.6C13.6 13.9 15 13.6 16 14.4C16.8 13.2 18.2 12.8 19.7 13.4C19.4 11.6 20 10 21.5 9C18.5 7.8 15.5 8.6 14 10.2L13.4 7L12.4 8.6Z"/></g><g transform="translate(-2 2)"><path class="cf" d="M38.5 5.7C38.64 8.12 39.74 9.36 42.3 9.5C39.74 9.64 38.64 10.88 38.5 13.3C38.36 10.88 37.26 9.64 34.7 9.5C37.26 9.36 38.36 8.12 38.5 5.7Z"/><circle class="cf" cx="32.2" cy="5.6" r="1.1"/></g><g transform="translate(2 -2)"><circle class="cf" cx="9.5" cy="38.5" r="1.9"/><path class="cf" d="M15.4 40L16.03 41.53L17.68 41.66L16.43 42.73L16.81 44.34L15.4 43.48L13.99 44.34L14.37 42.73L13.12 41.66L14.77 41.53Z"/></g>' },
   ];
   /* STICKER CHARMS (Zoe, 2026-10-25): one of your own iOS photo stickers,
      the cut-out you lifted from a photo in Photos or Messages, worn as a
@@ -20653,13 +20670,102 @@
   const charmOf = (key) => isCustomCharm(key)
     ? { key, name: 'Your charm', custom: true, got: 'Your own charm.' }
     : (CHARMS.find(c => c.key === key) || null);
-  function charmSvg(key, cls) {
+  /* ONE DRAWING PER CHARM (2026-11-12). Charms ride every byline in a feed
+     now (Zoe: "add everyone's charms ... keep syntax clean for loading"), so
+     a line charm's paths are written ONCE, in a sprite at the foot of the
+     body, and every face wears a <use> of them: about 100 bytes a charm in a
+     card where its paths were 1.3KB, and less for cardSig to hash. A <use>
+     copy is out of reach of `.charm .cl` (a rule there would match the
+     sprite, not the face), so the sprite carries its paint as attributes in
+     currentColor and `.charm` sets `color` from --charm-ink, which a locked
+     tile still turns muted. CHARMS keeps its art as authored, in classes:
+     `cl` a line, `cb` a solid (fill and line), `cf` a fill. */
+  const CHARM_INK = {
+    cl: 'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"',
+    cb: 'fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"',
+    cf: 'fill="currentColor"',
+  };
+  // In the Ring's interlace, ICONS.circleOn's: each disc's outer edge cut
+  // where it lies over another, in the triad's own 24 grid.
+  const CHARM_WEAVE = [[9, 9.8], [15, 9.8], [12, 15]];
+  const charmWeave = () => CHARM_WEAVE.map((_, i) =>
+      `<clipPath id="tria-charm-w${i}">` + CHARM_WEAVE.filter((_, j) => j !== i)
+        .map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5.3"/>`).join('') + `</clipPath>`).join('') +
+    `<mask id="tria-charm-weave" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">` +
+      `<rect width="24" height="24" fill="#fff"/>` +
+      CHARM_WEAVE.map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="5.3" fill="none" stroke="#000" ` +
+        `stroke-width="1.2" clip-path="url(#tria-charm-w${i})"/>`).join('') +
+    `</mask>`;
+  let charmSprite = false;
+  function drawCharmSprite() {
+    if (charmSprite || !document.body) return;
+    charmSprite = true;
+    document.body.insertAdjacentHTML('beforeend',
+      `<svg class="charm-sprite" width="0" height="0" aria-hidden="true" focusable="false"><defs>` + charmWeave() +
+        CHARMS.map(c => `<g id="tria-charm-${c.key}">` +
+          c.art.replace(/class="(cl|cb|cf)"/g, (_, k) => CHARM_INK[k]) + `</g>`).join('') +
+      `</defs></svg>`);
+  }
+  // `who` is the face it sits on (charmsOnFace): the charm then wears their
+  // heart (charmInk), else yours.
+  function charmSvg(key, cls, who) {
     const c = charmOf(key);
     if (!c) return '';
+    if (!c.custom) drawCharmSprite();
     const art = c.custom
       ? `<image href="${esc(sizedSrc(Store.stickerUrl(key), 120))}" x="2" y="2" width="44" height="44" preserveAspectRatio="xMidYMid meet"/>`
-      : c.art;
-    return `<svg class="charm${c.custom ? ' charm--sticker' : ''}${cls ? ' ' + cls : ''}" viewBox="0 0 48 48" aria-hidden="true">${art}</svg>`;
+      : `<use href="#tria-charm-${c.key}"/>`;
+    const ink = !c.custom && who ? charmInk(who) : '';
+    return `<svg class="charm${c.custom ? ' charm--sticker' : ''}${cls ? ' ' + cls : ''}" viewBox="0 0 48 48"` +
+      `${ink ? ` data-ink="${ink}"` : ''} aria-hidden="true">${art}</svg>`;
+  }
+
+  /* A FACE'S CHARMS WEAR ITS HEART: the colour that person's filled like is
+     (starInks' rule, paintBrandBand's numbers), a pick's hex (its `ink` twin
+     on paper), a photo's sample through heartsFrom, the mono heart for None,
+     Tria's own (--brand-ink) for someone who never picked. The colour is not
+     written into the card: the charm carries `data-ink="<their id>"`, and ONE
+     small stylesheet holds a rule per person giving --charm-lt and
+     --charm-dk, which tokens' scheme picks between as it does --heart. So a
+     card's markup never changes as a colour arrives (cardSig holds still), a
+     photo still sampling just wears Tria's until it lands, and every face of
+     that person changes together. */
+  const TRIA_HEART = { lt: 'var(--brand-ink)', dk: 'var(--brand-ink)' };
+  const charmInks = new Map();   // user id -> { sig, rule }
+  let charmInkSheet = null, charmInkOwed = false;
+  function heartOf(u) {
+    if (u.accent === 'none') return { lt: 'var(--mono-heart)', dk: 'var(--mono-heart)' };
+    const picked = u.accent !== 'default' && accentOf(u.accent);
+    if (picked) return { lt: picked.ink || picked.hex, dk: picked.hex };
+    if (u.accent === 'default' || !u.avatar) return TRIA_HEART;
+    const rgb = keptTone(u);
+    return rgb ? heartsFrom(rgb) : null;
+  }
+  function paintCharmInks() {
+    charmInkOwed = false;
+    if (!charmInkSheet) {
+      charmInkSheet = document.createElement('style');
+      charmInkSheet.id = 'charm-inks';
+      document.head.appendChild(charmInkSheet);
+    }
+    charmInkSheet.textContent = [...charmInks.values()].map(v => v.rule).filter(Boolean).join('\n');
+  }
+  function charmInk(u) {
+    if (!u || !/^[\w-]+$/.test(u.id || '')) return '';
+    const sig = `${u.accent || ''}|${u.avatar || ''}`;
+    const had = charmInks.get(u.id);
+    if (had && had.sig === sig) return u.id;
+    const put = (h) => {
+      const now = charmInks.get(u.id);
+      if (!now || now.sig !== sig) return;
+      now.rule = `.charm[data-ink="${u.id}"]{--charm-lt:${h.lt};--charm-dk:${h.dk}}`;
+      if (!charmInkOwed) { charmInkOwed = true; queueMicrotask(paintCharmInks); }
+    };
+    charmInks.set(u.id, { sig, rule: '' });
+    const h = heartOf(u);
+    if (h) put(h);
+    else photoTone(u).then(rgb => put(rgb ? heartsFrom(rgb) : TRIA_HEART), () => {});
+    return u.id;
   }
   // A sticker as a transparent PNG no bigger than `max` a side.
   async function stickerPng(source, max = 360) {
@@ -20692,7 +20798,7 @@
   // The two on someone's photo, inside the face's own positioned box.
   function charmsOnFace(u) {
     if (!Store.charmsReady() || !u || !u.charms || !u.charms.length) return '';
-    return u.charms.map((k, i) => charmSvg(k, `charm--worn charm--worn-${i ? 'b' : 'a'}`)).join('');
+    return u.charms.map((k, i) => charmSvg(k, `charm--worn charm--worn-${i ? 'b' : 'a'}`, u)).join('');
   }
 
   // What you have done, read off the cache. A repost is passing something on,
@@ -29635,18 +29741,25 @@
     faceCache.set(src, job);
     return job;
   }
-  function photoTone(u) {
-    healPin();
-    if (!u || !u.avatar) return Promise.resolve(null);
+  // The pinned sample alone, with no sampling: what this device has kept for
+  // the face, or null. Sync, so a charm's colour can be in the first paint.
+  function keptTone(u) {
+    if (!u || !u.avatar) return null;
     const h = faceHash(u.avatar);
-    const KEY = 'tria:tone:' + h;
     let kept = null;
-    try { kept = localStorage.getItem(KEY); } catch {}
+    try { kept = localStorage.getItem('tria:tone:' + h); } catch {}
     if (!kept) {
       const m = PHOTO_PIN.exec(u.accent || '');
       if (m && m[2] === h) kept = m[1];
     }
-    if (kept && /^[0-9a-f]{6}$/i.test(kept)) return Promise.resolve(cssToRgb('#' + kept));
+    return kept && /^[0-9a-f]{6}$/i.test(kept) ? cssToRgb('#' + kept) : null;
+  }
+  function photoTone(u) {
+    healPin();
+    if (!u || !u.avatar) return Promise.resolve(null);
+    const KEY = 'tria:tone:' + faceHash(u.avatar);
+    const kept = keptTone(u);
+    if (kept) return Promise.resolve(kept);
     // The original first; a refusal (CORS, a gone file) falls back to the old
     // sized sample so the colour never goes missing.
     return sampleFace(u.avatar)
@@ -31677,7 +31790,7 @@
     const run = () => {
       // The sizes the byline and the feed card will ask for, or the warm copy
       // is a different picture from the one the page draws.
-      Store.users().forEach(u => warm(sizedSrc(u.avatar, 40), true));
+      Store.users().forEach(u => warm(sizedSrc(u.avatar, avatarPx('byline-avatar')), true));
       // Sticker charms ride on those faces, at charmSvg's own size, so a
       // charm lands with its face instead of popping in after it.
       if (Store.charmsReady()) Store.users().forEach(u => (u.charms || []).filter(isCustomCharm)
