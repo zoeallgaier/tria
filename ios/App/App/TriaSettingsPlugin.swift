@@ -625,6 +625,15 @@ final class TriaFeel {
         case "unfold":
             // And opens again: a touch brighter.
             events = [Self.tap(0, 0.3, 0.5)]
+        case "ping":
+            // A lively circle sends its ripple out: a round drop and the
+            // faintest echo as the ring spreads. The quietest thing here,
+            // since nobody did anything.
+            events = [Self.tap(0, 0.24, 0.06), Self.tap(0.12, 0.08, 0.04)]
+        case "pass":
+            // A drag brings a new circle into the band's middle: a soft
+            // detent, as a crown's, so swiping round has a grain.
+            events = [Self.tap(0, 0.2, 0.3)]
         default:
             return
         }

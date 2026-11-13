@@ -18979,6 +18979,8 @@
   // between, over FOLD_MS.
   const FOLD_AT = 0.6, UNFOLD_AT = 0.66, FOLD_MS = 340;
   const PATTER_MS = 60;      // the least time between two folds' ticks under a pinch
+  const PASS_MS = 90;        // the least time between two of a drag's detents
+  const PING_GAP = 1200;     // the least time between two ripples' taps
   const ICON_OF_R = 1.2;     // a folded face's width, to its circle's radius
   function renderExploreCircles() {
     const list = exploreList();
@@ -19831,6 +19833,8 @@
     // anything that moves wakes it.
     let raf = 0, last = 0, acc = 0;
     let patterAt = 0;            // the last fold's tick
+    let passAt = 0, midAt = null; // a drag's last detent, and the circle in the middle then
+    let pingAt = 0;              // the last ripple's tap
     const born = performance.now();
     let waveEnd = fresh && !reduce ? -1 : 0;     // -1: not yet timed
     const STEP = 1000 / 60;
@@ -19955,6 +19959,41 @@
             || Math.abs(aimS - nd.scale) > 0.002 || Math.abs(nd.sv) > 0.001) moving = true;
       });
       if (turned && now - patterAt >= PATTER_MS) { patterAt = now; hapticNav(turned); }
+      // A DRAG'S DETENTS (Zoe, 2026-11-13: "maybe when swiping to navigate
+      // around too"): as a finger or its coast brings a new circle into the
+      // band's middle, a soft tick, like a crown's. Nothing lifted, no
+      // pinch (that has its patter), never on a glide the app is steering.
+      const roaming = focus < 0 && !pinch && !gesture && !camAim && !rising
+        && ((hand && hand.moved) || (!hand && Math.abs(cam.vx) + Math.abs(cam.vy) > 0.6));
+      if (!roaming) midAt = null;
+      else {
+        let mid = -1, best = Infinity;
+        nodes.forEach((nd, i) => {
+          const d = Math.hypot(nd.sx - lens.x, nd.sy - lens.y);
+          if (d < nd.sr && d < best) { best = d; mid = i; }
+        });
+        if (mid >= 0) {
+          if (midAt !== null && mid !== midAt && now - passAt >= PASS_MS) { passAt = now; hapticNav('pass'); }
+          midAt = mid;
+        } else if (midAt === null) midAt = -1;
+      }
+      // A RIPPLE'S TAP (Zoe: "when the circles ping and have that animation
+      // add a soft tap"): as a lively circle's ripple leaves its ring (the
+      // phase drawLines reads wrapping round), on screen, not dimmed under a
+      // lifted one, with the fingers off the field. PING_GAP apart, so a
+      // lively field is a slow heartbeat and never a buzz.
+      const still = !hand && !pinch && !gesture && !camAim && !rising;
+      nodes.forEach((nd) => {
+        if (!nd.alive || !nd.inks || reduce) return;
+        const ph = (now + nd.seed * RIPPLE_MS) % RIPPLE_MS;
+        const began = nd.ph != null && ph < nd.ph;
+        nd.ph = ph;
+        if (began && still && now - pingAt >= PING_GAP && nd.alpha * nd.glow > 0.6
+            && nd.sx > 0 && nd.sx < W && nd.sy > top && nd.sy < H && !document.hidden) {
+          pingAt = now;
+          hapticNav('ping');
+        }
+      });
       drawLines(now);
       if (!reduce || moving) wake();
     };

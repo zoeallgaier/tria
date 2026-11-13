@@ -240,7 +240,12 @@ landing), **catch** (the sheet's pull up arms Open), **stop** (a pinch past
 either end of the zoom, once until it comes back in), **fold** / **unfold**
 (a quiet tick as a circle folds to its face under a pinch, at most one a
 frame, `PATTER_MS` 60 apart), and **wake** (the engine up as a finger lands).
-A drag has none. **`navFeel` never resolves** (`CAPPluginReturnNone`), so no
+**pass** (a drag or its coast brings a new circle into the band's middle: a
+soft detent, `PASS_MS` 90 apart; Zoe, the same day: "maybe when swiping to
+navigate around too") and **ping** (a lively circle's ripple leaves its ring:
+a round drop, on screen, undimmed, fingers off, `PING_GAP` 1.2s apart; Zoe:
+"when the circles ping and have that animation add a soft tap").
+**`navFeel` never resolves** (`CAPPluginReturnNone`), so no
 `evaluateJavaScript` comes back on the main thread mid gesture. A put-away's
 settle waits a `setTimeout` 0 so tapping another circle round the sheet is one
 rise; Join, Invite and the roster close the sheet quietly (`hush`); leaving the
