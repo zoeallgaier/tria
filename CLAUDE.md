@@ -103,7 +103,11 @@ and the page says to redeploy. **Nudged is its own section** (Zoe,
 week, under What they get, with when, where they stopped and their stop
 button (a reply saying stop lands there); the list to nudge never shows
 them and the "Show N nudged this week" toggle is gone. A week on they are
-back in the list. **What they get** (Zoe, 2026-11-12: "where is the email sent from and what
+back in the list. **The email leads the page** (Zoe, 2026-11-12: "put send
+form n all at the top"): the step chips, then Email with Select all in its
+head (so a whole step is a pick and a send with no scrolling), the form,
+What they get, then the people (titled People or the chip's step), Nudged
+and Asked us to stop. **What they get** (Zoe, 2026-11-12: "where is the email sent from and what
 does it look like?"): under the letter, the email as it lands, From (`Tria
 <hello@triaonline.com>`, the function's GET says its `from`, never the reply
 address), To, Subject and the card itself, redrawn as you type, with whether

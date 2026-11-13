@@ -961,10 +961,11 @@
         [['all', 'Everyone'], ...Object.entries(STEP).map(([k, v]) => [k, v.chip])].map(([k, l]) =>
           `<button class="pill-quiet${k === nstate.step ? ' is-on' : ''}" type="button" data-step="${k}" aria-pressed="${k === nstate.step}">${esc(l)} <span class="chip-n">${fmt(count(k))}</span></button>`).join('') +
       '</div>' +
-      '<div class="section-tight">' + list(shown.length
-        ? [`<div class="row row--head"><button class="linkish" type="button" id="n-all"${pickable.length ? '' : ' disabled'}>${allOn ? 'Select none' : `Select all ${fmt(pickable.length)}`}</button></div>`, ...shown.map(personRow)]
-        : [row({ title: nstate.step === 'all' ? 'Everyone has settled in.' : 'Nobody here.' })]) + '</div>' +
-      `<div class="section">${sectionHead('Email', n ? `To ${fmt(n)} ${n === 1 ? 'person' : 'people'}` : 'Pick people above')}` +
+      // The email leads, Select all in its head, so sending to a whole step
+      // is a pick and a send with no scrolling (Zoe, 2026-11-12: "put send
+      // form n all at the top"); the people follow the preview.
+      `<div class="section-tight">${sectionHead('Email', (n ? `To ${fmt(n)} ${n === 1 ? 'person' : 'people'}` : 'Pick people below') +
+          (pickable.length ? ` · <button class="linkish" type="button" id="n-all">${allOn ? 'Select none' : `Select all ${fmt(pickable.length)}`}</button>` : ''))}` +
         '<div class="card letter">' +
           `<input class="field field--plain" id="n-subject" type="text" maxlength="140" placeholder="Subject" aria-label="Subject" value="${esc(nstate.subject)}" />` +
           `<textarea class="field field--plain field--area" id="n-message" rows="9" maxlength="4000" aria-label="Message">${esc(nstate.message)}</textarea>` +
@@ -980,6 +981,9 @@
           : snd.live ? 'Not sending yet: set <b>RESEND_API_KEY</b> and <b>NUDGE_REPLY_TO</b> on the nudge function.'
           : 'Not sending yet: the nudge function isn\'t deployed. Open in Mail sends it from your own address, as plain words.')}` +
         '<div class="mail-preview" id="n-preview"></div></div>' +
+      `<div class="section">${sectionHead(nstate.step === 'all' ? 'People' : STEP[nstate.step].say)}` + list(shown.length
+        ? shown.map(personRow)
+        : [row({ title: nstate.step === 'all' ? 'Everyone has settled in.' : 'Nobody here.' })]) + '</div>' +
       (lately.length ? `<div class="section">${sectionHead('Nudged', 'This week. Back in the list after seven days.')}` + list(lately.map((p) =>
         `<div class="row nudged-row" data-tip="${esc(stepTip(p))}">` +
           `<div class="row-main"><div class="row-title">${who(p)}</div><div class="row-sub">${[p.email ? esc(p.email) : '', esc(STEP[p.step]?.say || '')].filter(Boolean).join(' · ')}</div></div>` +
@@ -1016,7 +1020,7 @@
     const paintPreview = () => {
       const { ps, eg, name } = example();
       const fill = (s) => s.replace(/\{name\}/g, name);
-      const to = !eg ? 'Pick people above'
+      const to = !eg ? 'Pick people below'
         : ps.length > 1 ? `${esc(eg.email)} <span class="mail-k">and ${fmt(ps.length - 1)} more, one email each</span>`
         : esc(eg.email) + (ps.length ? '' : ' <span class="mail-k">for example</span>');
       $('n-preview').innerHTML =
