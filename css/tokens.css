@@ -241,6 +241,28 @@
      be six, one per post type. */
   --heart: var(--user-heart-lt, var(--brand-ink));
 
+  /* THE HEART'S GRADIENT (Zoe, 2026-11-13: "since we have a gradient for all
+     the color styles can we use that on the filled like icon and stuff?").
+     A filled mark in the reader's colour wears their colour's spectrum, the
+     way a button wears its band: three stops, the heart itself in the middle
+     and its hue turned HEART_ARC either way at the heart's own weight
+     (stopsAround in app.js), so it reads exactly as the flat heart did.
+     Stamped per scheme beside --user-heart-lt/-dk by paintBrandBand. Tria's
+     own is the ramp, deepened on paper to --brand-ink's weight (the cyan at
+     #007578 measures 4.75 on paper, the ink 5.02). None stamps --mono-heart
+     three times, so it stays flat ink.
+     An svg PATH can't take a CSS gradient, so the marks read
+     url(#tria-heart-ink), one <linearGradient> laid once in the body whose
+     stops wear these (heartInkDefs); --heart-ramp is the same thing for a
+     box's background (an ink overlay, an Updates mark). */
+  --heart-a: var(--user-heart-a-lt, #007578);
+  --heart-b: var(--user-heart-b-lt, color-mix(in oklab, #007578, var(--brand-ink)));
+  --heart-c: var(--user-heart-c-lt, var(--brand-ink));
+  --heart-ramp: linear-gradient(115deg, var(--heart-a), var(--heart-b), var(--heart-c));
+  /* What a filled mark's fill and stroke say: the gradient, else the flat
+     heart (an older engine, or a page without the defs). */
+  --heart-ink: url(#tria-heart-ink) var(--heart);
+
   /* GOING — the "Going" tag beside a name on a host's guest list. It is the one
      place a WORD (rather than a glyph) says somebody is coming, so it wants the
      same colour rule the heart already has: the reader's own accent where they
@@ -614,6 +636,9 @@ html.nav-snap .ambient, html.nav-snap .topbar::before { transition: none !import
        Tria's own heart is the green itself here (on paper it is the deepened
        --brand-ink: the raw green measures 1.8 there, too faint for a mark). */
     --heart: var(--user-heart-dk, var(--brand-end));
+    --heart-a: var(--user-heart-a-dk, var(--brand-start));
+    --heart-b: var(--user-heart-b-dk, var(--brand-mid));
+    --heart-c: var(--user-heart-c-dk, var(--brand-end));
 
     /* Dark takes the dark heart for the same reason the hearts do, and needs
        no contrast caveat: a palette hex on ink paper measures 4.14 (ruby) or

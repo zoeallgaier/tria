@@ -2215,7 +2215,8 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
 
 /* The pin (your own profile): the repost's inks, solid in --heart once pinned. */
 .card-pin.is-pinned { color: var(--heart); }
-.card-pin.is-pinned svg path { fill: currentColor; }
+.card-pin.is-pinned svg { stroke: var(--heart-ink); }
+.card-pin.is-pinned svg path { fill: var(--heart-ink); }
 .card-pin:active { color: var(--text); }
 @media (hover: hover) { .card-pin:hover { color: var(--text); } }
 
@@ -2325,7 +2326,7 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
    rose) and sits still — no perpetual drift (that kept the compositor awake
    on every liked card). The flourish is all in the tap, where the heart TAKES
    INK (see below). */
-.card-like.liked svg { fill: currentColor; }
+.card-like.liked svg { fill: var(--heart-ink); stroke: var(--heart-ink); }
 .card-like.liked {
   color: var(--burst, var(--heart));
 }
@@ -2400,7 +2401,9 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
   width: var(--heart-size); height: var(--heart-size);
   margin: calc(var(--heart-size) / -2) 0 0 calc(var(--heart-size) / -2);
   transform: translateY(var(--like-nudge));
-  background: var(--burst);
+  /* The heart's gradient, the resting fill's own (--heart-ramp, the same
+     stops on the same 24 unit box), so the hand over is seamless. */
+  background: var(--heart-ramp);
   -webkit-mask: var(--heart-mask) center / 100% 100% no-repeat;
           mask: var(--heart-mask) center / 100% 100% no-repeat;
   clip-path: inset(100% 0 0 0);
@@ -2536,7 +2539,7 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
 @media (prefers-reduced-motion: reduce) {
   /* No motion: the heart just arrives filled — no rise, no sparkle. (JS already
      skips injecting the layer here; this hides it if one ever slips through.) */
-  .card-like.is-liking .like-heart   { fill: currentColor; animation: none; }
+  .card-like.is-liking .like-heart   { fill: var(--heart-ink); animation: none; }
   .card-like.is-unliking .like-heart { animation: none; }
   .card-like.is-liking::after { display: none; }
   .like-sparkles { display: none; }
@@ -6686,7 +6689,7 @@ button.poll-option:disabled { cursor: default; }
 }
 .mv-rail button:active svg { transform: scale(0.88); }
 .mv-like { --burst: var(--heart); }
-.mv-like.liked svg { fill: var(--heart); stroke: var(--heart); }
+.mv-like.liked svg { fill: var(--heart-ink); stroke: var(--heart-ink); }
 
 /* THE REPLY FOOT (Zoe, 2026-11-06: "put replies at the bottom of moments,
    cleanly ... more clear about the swipe up gesture"): a soft chevron over
@@ -6793,7 +6796,7 @@ button.poll-option:disabled { cursor: default; }
 .heart-pop svg {
   width: 96px;
   height: 96px;
-  fill: currentColor;
+  fill: var(--heart-ink);
   stroke: none;
   filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.18));
   animation: heart-pop 0.95s both;
@@ -9052,7 +9055,7 @@ button.card-song-play:active { transform: scale(0.9); }
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--heart);
+  background: var(--heart-ramp);
   color: var(--bg);
   box-shadow: 0 0 0 2px var(--notif-paper);
 }
@@ -12760,6 +12763,12 @@ body.circles-live .topbar--bare::before { opacity: 1; }
    an empty one leaves no gap. The bookmark wears the reader's heart. */
 .cx-sub-mark { display: contents; }
 .cx-sub-fav { color: var(--heart); }
+/* A favourite's bookmark wears the heart's gradient (--heart-ink), every
+   place it is drawn solid. */
+.cx-sub-fav svg, .toolbar-fav.is-fav svg, .feed-side-fav.is-fav svg,
+.community-card-fav.is-fav svg { stroke: var(--heart-ink); }
+.cx-sub-fav svg path, .toolbar-fav.is-fav svg path, .feed-side-fav.is-fav svg path,
+.community-card-fav.is-fav svg path { fill: var(--heart-ink); }
 /* A friend of yours in the circle: a small face leading its size, ringed in
    the paper so it reads as cut out of the disc, the daily's stack in little. */
 .cx-pals { display: inline-flex; margin-right: 0.1rem; }
@@ -13535,7 +13544,7 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
 @media (prefers-color-scheme: dark) {
   .charm[data-ink] { --charm-ink: var(--charm-dk, var(--brand-ink)); }
 }
-.charm-sprite { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+.charm-sprite, .heart-ink-defs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
 
 /* Worn: 44% of the face across (Zoe: "a lil bigger", then "a TOUCH smaller",
    then 2026-11-12 "scale charms up a touch on moments and profile pages";
@@ -13705,7 +13714,12 @@ html[data-shell="installed"] *::-webkit-scrollbar { display: none; }
   margin-inline-end: 6px;
   color: var(--heart);
 }
-.take-star { display: block; width: 15px; height: 15px; fill: currentColor; }
+.take-star { display: block; width: 15px; height: 15px; fill: var(--star-ink, currentColor); }
+/* A Take's stars wear the heart's gradient wherever they are in the
+   reader's colour; white over a picture stays white (--star-ink unset). */
+.take-stars { --star-ink: var(--heart-ink); }
+.pin--pic:not(.pin--wide) .pin-foot .take-stars,
+.ptile--take:has(.ptile-take-art, .pin-cover) .ptile-marks .take-stars { --star-ink: currentColor; }
 .take-star--half { width: 7.5px; }
 .card-solometa .take-stars { margin-inline-start: auto; }
 .quoted-who .take-stars { margin-inline-start: auto; }
@@ -13859,8 +13873,8 @@ a.card-take:active { transform: scale(0.985); }
   opacity: 0.5;
 }
 .take-rate-on {
-  fill: var(--heart);
-  stroke: var(--heart);
+  fill: var(--heart-ink);
+  stroke: var(--heart-ink);
   stroke-width: 1.3;
   stroke-linejoin: round;
   -webkit-clip-path: inset(0 var(--take-fill) 0 0);

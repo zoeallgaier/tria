@@ -70,6 +70,7 @@ window.TRIA_DICTIONARY = [
       { name: 'THE BUTTON', code: '.publish-fill, .pill-quiet', say: 'Every button in a page: a commit (glass, hairline, your band washed under) or quiet (no band).' },
       { name: 'Tria\'s colours', code: '--brand-start, --brand-end', say: 'One ramp, cyan #00c9ce to green #00cc9e. Post types carry no colour.' },
       { name: 'The band', code: '--user-band, --pill-band', say: 'Your colour pick as a gradient: worn by commits, rings and the refresh glow.' },
+      { name: 'The heart\'s gradient', code: '--heart-ink, --heart-ramp, HEART_ARC', say: 'Your colour\'s spectrum on every filled mark in it: a liked heart (feeds, comments, Moments, the double tap), a Take\'s stars, a favourite\'s bookmark, a pinned pin, an Updates mark. None stays flat ink (since 2026-11-13).' },
       { name: 'The paper', code: '--bg, --surface, js/paper.js', say: 'The page\'s ground, a light or dark version of a colour. Others\' pages wear theirs.' },
       { name: 'The wash', code: 'paintWash', say: 'A profile\'s colour blooming from the top right corner.' },
       { name: 'THE LIGHT', code: '--wash-* in tokens.css', say: 'One set of numbers for every colour that falls on the page, so all of it is equally bright.' },

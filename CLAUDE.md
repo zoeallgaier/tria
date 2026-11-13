@@ -185,6 +185,27 @@ once. **The words do it on touch only** (`nativeShell() || !finePointer()`): a
 mouse's double click there is picking a word, and a desktop's click on them is
 a link. A Frame's double click likes on a desktop too, as Instagram's does.
 
+## A filled mark wears your colour's gradient (2026-11-13)
+
+**Zoe: "since we have a gradient for all the color styles can we use that on
+the filled like icon and stuff?"** Every filled mark in `--heart` paints
+`--heart-ink` (`url(#tria-heart-ink) var(--heart)`): a liked heart (card,
+comment, Moment's rail, the double tap's `.heart-pop`, the like's ink
+overlay as `--heart-ramp`), a Take's stars (`--star-ink`, unset where they
+are white over a picture) and the composer's rating, a favourite's bookmark,
+a pinned post's pin, and an Updates mark's disc (`--heart-ramp`). Three stops
+per scheme, `--user-heart-{a,b,c}-{lt,dk}`, stamped by paintBrandBand beside
+the hearts: `stopsAround` of each heart at `HEART_ARC` (the wash's 18
+degrees; the band's 11 was one colour at 28px), so each weight and contrast
+is the flat heart's. Tria's own is the ramp, deepened on paper to
+`--brand-ink`'s weight (#007578 to #00735c); None is three of `--mono-heart`,
+flat. The gradient is ONE `<linearGradient>` laid at the body's foot
+(`heartInkDefs`), in ICONS' 24 unit box at 115 degrees, where CSS lays the
+ramp on that box, so the overlay hands over to the fill without a shift.
+**Not on it:** the native tab bar's lit tab (UIKit tints one colour; the web
+nav's lit tab is left to match), charms (the wearer's heart, `#charm-inks`),
+words in the colour (mentions, Going), the dot.
+
 ## Charms: solid, in a heart's colour, on every byline (2026-11-12)
 
 **Zoe: "make pfp in feeds a bit bigger, and add everyone's charms. keep

@@ -30003,6 +30003,11 @@
      A palette pick doesn't come through here; its hearts are its hex, or its
      `ink` twin on paper (see ACCENTS). Both answers are stamped, so tokens.css
      picks one per scheme and no JS has to know which scheme is on. */
+  /* THE HEART'S GRADIENT is the colour's spectrum at the heart's weight, the
+     wash's 18 degrees either way rather than the band's 11: a heart is 28px,
+     and at 11 its ends were the same colour to the eye. */
+  const HEART_ARC = WASH_ARC;
+  const HEART_STOP_PROPS = ['a', 'b', 'c'].flatMap(k => [`--user-heart-${k}-lt`, `--user-heart-${k}-dk`]);
   const HEART_LSTAR_LT = 53;
   const HEART_LSTAR_DK = BAND_LSTAR;
   function heartsFrom(rgb) {
@@ -30022,7 +30027,27 @@
   let bandKey = null;
   let bandSeq = 0;
   const SPLASH_KEY = 'tria:splash';   // read by the inline script under #splash in index.html
+  /* The gradient every filled mark in your colour paints with (--heart-ink in
+     tokens.css), laid ONCE at the body's foot as the charm sprite is. Its
+     stops read --heart-a/b/c where they sit, which is under <html>, where
+     paintBrandBand stamps them, so a colour change repaints every heart with
+     no markup touched. Drawn across ICONS' 24 unit box at 115 degrees, exactly
+     where CSS lays linear-gradient(115deg) on that box, so the like's ink
+     overlay (--heart-ramp on a masked block) hands over to the resting fill
+     without a shift, and a half star continues its whole neighbour. */
+  function heartInkDefs() {
+    if (document.getElementById('tria-heart-ink')) return;
+    document.body.insertAdjacentHTML('beforeend',
+      '<svg class="heart-ink-defs" width="0" height="0" aria-hidden="true" focusable="false"><defs>' +
+      '<linearGradient id="tria-heart-ink" gradientUnits="userSpaceOnUse" x1="-2.45" y1="5.25" x2="26.45" y2="18.75">' +
+      '<stop offset="0" style="stop-color: var(--heart-a)"/>' +
+      '<stop offset="0.5" style="stop-color: var(--heart-b)"/>' +
+      '<stop offset="1" style="stop-color: var(--heart-c)"/>' +
+      '</linearGradient></defs></svg>');
+  }
+
   function paintBrandBand() {
+    heartInkDefs();
     paintPaper();   // the same reader's colour on the paper, memoised on its own key
     const me = Store.isAuthed() ? Store.currentUser() : null;
     // A pin of this same photo is the same answer as 'auto', so pinning never
@@ -30055,7 +30080,7 @@
         else localStorage.removeItem(SPLASH_KEY);
       } catch {}
       if (!band) {
-        ['--user-band', '--user-heart-lt', '--user-heart-dk', '--user-ink-lt', '--user-ink-dk']
+        ['--user-band', '--user-heart-lt', '--user-heart-dk', '--user-ink-lt', '--user-ink-dk', ...HEART_STOP_PROPS]
           .forEach(p => el.style.removeProperty(p));
         /* AND TRIA'S OWN RAMP IS A REPAINT TOO, which this branch used to
            return past. Removing the properties is how the default expresses
@@ -30075,6 +30100,13 @@
       el.style.setProperty('--user-band', band);
       el.style.setProperty('--user-heart-lt', heartLt);
       el.style.setProperty('--user-heart-dk', heartDk);
+      // The heart's gradient, its stops either side of each weight
+      // (--heart-ramp in tokens.css). None's var() has no hue: flat.
+      [['lt', heartLt], ['dk', heartDk]].forEach(([s, h]) => {
+        const rgb = cssToRgb(h);
+        const stops = rgb ? stopsAround(rgb, HEART_ARC) : [h, h, h];
+        ['a', 'b', 'c'].forEach((k, i) => el.style.setProperty(`--user-heart-${k}-${s}`, stops[i]));
+      });
       /* The glyph riding the fill, and it is stamped on EVERY branch that
          stamps a band — including the chromatic ones, where the value is the
          same near-black --pill-ink would have fallen back to anyway.
