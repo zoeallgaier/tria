@@ -185,6 +185,34 @@ once. **The words do it on touch only** (`nativeShell() || !finePointer()`): a
 mouse's double click there is picking a word, and a desktop's click on them is
 a link. A Frame's double click likes on a desktop too, as Instagram's does.
 
+## A double tap's heart falls into place; likes have their own feel (2026-11-13)
+
+**Zoe: "the bigger double tap falls into place where the normal like icon
+is ... keep our sparkles", and "a new softer haptic almost like the refresh
+pull along with a soft sparkle haptic like from posting".** No write up of
+Instagram's own motion exists (searched; only recreations), so it is built to
+her description. `flyHeart`: the heart pops where the finger was, tilted a
+few degrees, with the like's stars left behind there (`.heart-fly-spark`),
+holds `FLY_LIFT` (320ms), then falls `FLY_FALL` (400ms) to the card's heart:
+three boxes on three curves (`.heart-fly` across on an ease, `.heart-fly-down`
+down with a breath of lift then gravity, the svg shrinking and righting), so
+it draws an arc, landing at `FLY_LAND` (1.16) of the glyph. Then the button's
+own click with `_landing`: no ink rising, `landHeart`'s squash (`like-land`)
+and its stars, the write still wireHeart's. A heart not on screen to land on
+(`heartLandable`: off screen, under a bar, under native's tab bar) or Reduce
+Motion gets the old pop and the like at once. A double tap mid flight lands
+without a second write. **The tags row and the air between a card's blocks
+are the words** (`wireComments`): one tap the thread, two a like.
+**The feel** (`hapticFeel`, `feel` in TriaSettingsPlugin.swift, `TriaFeel`,
+Core Haptics): `sparkle` on every like (a card's or comment's heart, a
+Moment's double tap), a round soft landing then four taps fading and
+brightening, the posting twinkle at about half; `fly` one call for the whole
+flight, a breath at the pop, the refresh pull's hum (sharpness 0.1) rising
+under the fall, then the sparkle on landing. An unlike stays a LIGHT tap.
+**Needs a new binary**; an older one (no `feel` in PluginHeaders) and the
+web get the LIGHT tap a like always had. The Swift and the first JS half
+landed inside 2951cc8 (a parallel session's commit).
+
 ## A filled mark wears your colour's gradient (2026-11-13)
 
 **Zoe: "since we have a gradient for all the color styles can we use that on

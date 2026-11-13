@@ -2380,6 +2380,16 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
   48%  { transform: translateY(var(--like-nudge)) scale(0.9); }
   100% { transform: translateY(var(--like-nudge)) scale(1); }
 }
+/* THE LANDING: a heart flown in by a double tap (flyHeart) arrives filled
+   and a touch big (FLY_LAND), squashes under its own weight, overshoots a
+   hair and settles: no ink rising, it brought its colour with it. */
+.card-like.is-landing .like-heart { animation: like-land 0.52s both; }
+@keyframes like-land {
+  0%   { transform: translateY(var(--like-nudge)) scale(1.16); animation-timing-function: cubic-bezier(0.3, 0, 0.4, 1); }
+  28%  { transform: translateY(var(--like-nudge)) scale(0.84, 0.8); animation-timing-function: cubic-bezier(0.3, 0, 0.3, 1); }
+  60%  { transform: translateY(var(--like-nudge)) scale(1.06, 1.08); animation-timing-function: cubic-bezier(0.4, 0, 0.3, 1); }
+  100% { transform: translateY(var(--like-nudge)) scale(1); }
+}
 @keyframes like-unpop {
   0%   { transform: translateY(var(--like-nudge)) scale(1); }
   45%  { transform: translateY(var(--like-nudge)) scale(0.8); }
@@ -2541,6 +2551,7 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
      skips injecting the layer here; this hides it if one ever slips through.) */
   .card-like.is-liking .like-heart   { fill: var(--heart-ink); animation: none; }
   .card-like.is-unliking .like-heart { animation: none; }
+  .card-like.is-landing .like-heart { animation: none; }
   .card-like.is-liking::after { display: none; }
   .like-sparkles { display: none; }
 }
@@ -6803,6 +6814,34 @@ button.poll-option:disabled { cursor: default; }
 }
 .heart-pop .like-sparkles { transform: scale(2.8); }
 body > .heart-pop { z-index: 90; }
+/* THE HEART FALLS INTO PLACE (flyHeart in app.js): the double tap's heart
+   on a card, popped where the finger was and falling to the card's own heart.
+   Three boxes, three curves: .heart-fly goes across, .heart-fly-down goes
+   down, the svg scales and rights itself; every frame is the script's
+   (element.animate), so nothing here moves on its own. Over the page and
+   under the bars' sheets, as the pop. Its stars stay where it popped, on
+   their own anchor, so they don't ride the fall. */
+.heart-fly, .heart-fly-spark {
+  position: fixed;
+  z-index: 90;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  --burst: var(--heart);
+}
+.heart-fly-down { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.heart-fly svg {
+  position: absolute;
+  left: -48px;
+  top: -48px;
+  width: 96px;
+  height: 96px;
+  fill: var(--heart-ink);
+  stroke: none;
+  opacity: 0;
+  will-change: transform;
+}
+.heart-fly-spark .like-sparkles { inset: -48px; transform: scale(2.8); }
 @keyframes heart-pop {
   0%   { scale: 0.3; opacity: 0; animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1); }
   18%  { scale: 1.08; opacity: 1; }

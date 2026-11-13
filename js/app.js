@@ -6145,6 +6145,104 @@
     setTimeout(() => { if (pop.isConnected) burstSparkles(pop); }, 90);
     setTimeout(() => pop.remove(), 1000);
   }
+  /* THE HEART FALLS INTO PLACE (2026-11-13, Zoe, of Instagram's double tap:
+     "the bigger double tap falls into place where the normal like icon is").
+     It pops where the finger was, a little tilted, with the like's stars, then
+     falls to the card's own heart: across on a gentle ease, down with a breath
+     of lift and then gravity, so the two together draw an arc rather than a
+     line, shrinking and righting itself to land a touch over the glyph's size.
+     The card's heart takes it from there (landHeart): filled at once, a squash
+     into place, its own stars. The write goes through the heart's button as
+     it lands, so wireHeart still owns it. One haptic call covers the whole
+     flight (the 'fly' feel). Three transforms on three boxes (across, down,
+     the heart's own scale and tilt), so each runs on its own curve.
+     A heart that isn't on screen to land on (scrolled off, under a bar), or a
+     reader who asked for less motion, gets the pop where the finger was. */
+  const FLY_LIFT = 320;    // ms: the pop and its settle, where the finger was
+  const FLY_FALL = 400;    // ms: the fall to the like button
+  const FLY_LAND = 1.16;   // its size on landing against the glyph, the squash's start
+  function heartLandable(btn) {
+    const glyph = btn.querySelector('svg');
+    const r = glyph && glyph.getBoundingClientRect();
+    if (!r || !r.width) return null;
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    // Native's tab bar is over the page and not in it; the page's own bars are.
+    const floor = innerHeight - (nativeShell() && !document.body.classList.contains('nav-off') ? 96 : 0);
+    if (cy < 0 || cy > floor || cx < 0 || cx > innerWidth) return null;
+    return btn.contains(document.elementFromPoint(cx, cy)) ? r : null;
+  }
+  function landHeart(btn) {
+    clearTimeout(btn._pop);
+    btn.classList.remove('is-liking', 'is-unliking', 'is-landing');
+    void btn.offsetWidth;
+    btn.classList.add('is-landing');
+    burstSparkles(btn);
+    btn._pop = setTimeout(() => btn.classList.remove('is-landing'), 700);
+  }
+  function flyHeart(el, btn, x, y) {
+    // A second double tap mid flight is already a like on its way.
+    const add = !shownReaction(btn) && !btn._flying;
+    const r = heartLandable(btn);
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (!r || still || typeof document.body.animate !== 'function') {
+      popHeart(document.body, x, y);
+      if (add) btn.click();
+      else hapticFeel('sparkle');
+      return;
+    }
+    const T = FLY_LIFT + FLY_FALL, k = FLY_LIFT / T;
+    const dx = r.left + r.width / 2 - x, dy = r.top + r.height / 2 - y;
+    const end = (r.width / 96) * FLY_LAND;
+    const tilt = (Math.random() < 0.5 ? -1 : 1) * (7 + Math.random() * 7);
+    const fly = document.createElement('span');
+    fly.className = 'heart-fly';
+    fly.setAttribute('aria-hidden', 'true');
+    fly.style.left = x + 'px';
+    fly.style.top = y + 'px';
+    fly.innerHTML = `<span class="heart-fly-down">${svgIcon('heart')}</span>`;
+    const spark = document.createElement('span');
+    spark.className = 'heart-fly-spark';
+    spark.setAttribute('aria-hidden', 'true');
+    spark.style.left = x + 'px';
+    spark.style.top = y + 'px';
+    document.body.append(spark, fly);
+    const down = fly.firstChild, heart = down.firstChild;
+    const timing = { duration: T, fill: 'forwards' };
+    // Across: leaves softly, eases in over the button.
+    fly.animate([
+      { transform: 'translateX(0)' },
+      { transform: 'translateX(0)', offset: k, easing: 'cubic-bezier(0.3, 0, 0.3, 1)' },
+      { transform: `translateX(${dx}px)` },
+    ], timing);
+    // Down: a breath against the way it's going, then gravity.
+    down.animate([
+      { transform: 'translateY(0)' },
+      { transform: 'translateY(0)', offset: k, easing: 'cubic-bezier(0.5, -0.28, 0.76, 0.6)' },
+      { transform: `translateY(${dy}px)` },
+    ], timing);
+    // The heart itself: springs up a touch past full, holds, then shrinks and
+    // rights itself on the way down, its shadow going as it lands.
+    const lift = 'drop-shadow(0 4px 14px rgba(0, 0, 0, 0.18))';
+    heart.animate([
+      { transform: `rotate(${tilt}deg) scale(0.2)`, opacity: 0, filter: lift, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.3)' },
+      { transform: `rotate(${tilt}deg) scale(1)`, opacity: 1, filter: lift, offset: k * 0.6 },
+      { transform: `rotate(${tilt}deg) scale(1)`, opacity: 1, filter: lift, offset: k, easing: 'cubic-bezier(0.45, 0, 0.55, 1)' },
+      { transform: `rotate(0deg) scale(${end})`, opacity: 1, filter: 'drop-shadow(0 0 0 rgba(0, 0, 0, 0))' },
+    ], timing);
+    setTimeout(() => { if (spark.isConnected) burstSparkles(spark); }, 90);
+    setTimeout(() => spark.remove(), 900);
+    hapticFeel('fly', { at: FLY_LIFT / 1000, ms: FLY_FALL });
+    btn._flying = true;
+    setTimeout(() => {
+      // The card may have been rebuilt under it; land on the live heart.
+      const live = btn.isConnected ? btn : (likeableHeart(el) || btn);
+      btn._flying = false;
+      if (add && !shownReaction(live)) { live._landing = true; live.click(); }
+      else landHeart(live);
+      requestAnimationFrame(() => fly.remove());
+    }, T);
+  }
+
   // `single` is what one tap does, or null where one tap does nothing.
   function tapOrLike(el, e, single) {
     const btn = likeableHeart(el);
@@ -6154,9 +6252,7 @@
     const now = Date.now();
     if (was && now - was.at < MOMENT_TAP_MS) {
       el._tap = null;
-      popHeart(document.body, e.clientX, e.clientY);
-      if (shownReaction(btn)) hapticTap('LIGHT');
-      else btn.click();
+      flyHeart(el, btn, e.clientX, e.clientY);
       return;
     }
     el._tap = { at: now, timer: single ? setTimeout(() => {
@@ -6415,8 +6511,12 @@
     // picking one out, and a desktop's click on them is a link, at once.
     const open = glyph ? () => glyph.click() : null;
     const twice = nativeShell() || !finePointer();
+    // The tags' row and the air between a post's blocks are the words too
+    // (Zoe, 2026-11-13: "hitting the dead space where tags are"): a tag
+    // itself is a button and keeps its own tap.
     if (post && (open || twice)) el.querySelector('.card-main')?.addEventListener('click', (e) => {
-      if (!e.target.closest('.card-title, .card-note, .card-list, .card-h1, .card-h2, .readmore-clip')) return;
+      if (e.target !== e.currentTarget &&
+          !e.target.closest('.card-title, .card-note, .card-list, .card-h1, .card-h2, .readmore-clip, .tags, .card-foot')) return;
       if (e.target.closest('a, button, .card-quoted')) return;
       if (String(window.getSelection?.() || '')) return;
       if (twice) tapOrLike(el, e, open);
@@ -9354,7 +9454,7 @@
       if (own()) return;
       spendTip('moments');
       popHeart(root, x, y);
-      hapticTap('LIGHT');
+      hapticFeel('sparkle');   // the like's own feel, as a card's
       if (Store.reactionOf(p.id)) return;   // a double tap only ever adds
       setLike(p, 'heart');
     };
