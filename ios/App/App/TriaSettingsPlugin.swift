@@ -513,12 +513,17 @@ final class TriaFeel {
     /// The like's twinkle: a round landing, then taps that get quieter and
     /// brighter, the way the stars wink out. The posting twinkle's shape
     /// (TWINKLE in app.js) at about half its strength and in half the time.
-    private static func sparkle(from t: Double) -> [CHHapticEvent] {
-        [tap(t, 0.52, 0.22),
-         tap(t + 0.085, 0.30, 0.55),
-         tap(t + 0.155, 0.22, 0.68),
-         tap(t + 0.245, 0.15, 0.80),
-         tap(t + 0.355, 0.10, 0.90)]
+    /// `settle` is a flown heart going into place (Zoe, 2026-11-13: "softer
+    /// when it goes into place, but I like the rhythm"): the same beats, the
+    /// landing at 60% and the stars at 70%, so the double tap's pop stays the
+    /// loudest thing in the flight.
+    private static func sparkle(from t: Double, settle: Bool = false) -> [CHHapticEvent] {
+        let land: Float = settle ? 0.6 : 1, stars: Float = settle ? 0.7 : 1
+        return [tap(t, 0.52 * land, 0.22),
+                tap(t + 0.085, 0.30 * stars, 0.55),
+                tap(t + 0.155, 0.22 * stars, 0.68),
+                tap(t + 0.245, 0.15 * stars, 0.80),
+                tap(t + 0.355, 0.10 * stars, 0.90)]
     }
 
     func play(_ kind: String, at: Double, flight: Double) {
@@ -530,24 +535,26 @@ final class TriaFeel {
             events = Self.sparkle(from: 0)
         case "fly":
             let lift = max(0, at), fall = max(0.12, flight)
-            // The pop: barely there, round.
-            events.append(Self.tap(0, 0.28, 0.12))
+            // The pop: the like itself, and the flight's strongest beat (Zoe:
+            // "stronger on the initial like"). Full and still round.
+            events.append(Self.tap(0, 0.8, 0.3))
             // The fall: the refresh pull's hum (sharpness 0.1), rising from
-            // a whisper into the landing, a touch brighter as it comes.
+            // a whisper and cresting gently, at the landing's own weight, so
+            // the heart arrives soft rather than with a thud.
             events.append(CHHapticEvent(eventType: .hapticContinuous, parameters: [
-                CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.5),
+                CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.3),
                 CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.1)
             ], relativeTime: lift, duration: fall))
             curves.append(CHHapticParameterCurve(parameterID: .hapticIntensityControl, controlPoints: [
-                .init(relativeTime: lift, value: 0.18),
-                .init(relativeTime: lift + fall * 0.55, value: 0.5),
+                .init(relativeTime: lift, value: 0.25),
+                .init(relativeTime: lift + fall * 0.55, value: 0.6),
                 .init(relativeTime: lift + fall, value: 1)
             ], relativeTime: 0))
             curves.append(CHHapticParameterCurve(parameterID: .hapticSharpnessControl, controlPoints: [
                 .init(relativeTime: lift, value: 0),
                 .init(relativeTime: lift + fall, value: 0.15)
             ], relativeTime: 0))
-            events += Self.sparkle(from: lift + fall)
+            events += Self.sparkle(from: lift + fall, settle: true)
         default:
             return
         }

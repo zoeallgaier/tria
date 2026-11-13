@@ -199,16 +199,30 @@ down with a breath of lift then gravity, the svg shrinking and righting), so
 it draws an arc, landing at `FLY_LAND` (1.16) of the glyph. Then the button's
 own click with `_landing`: no ink rising, `landHeart`'s squash (`like-land`)
 and its stars, the write still wireHeart's. A heart not on screen to land on
-(`heartLandable`: off screen, under a bar, under native's tab bar) or Reduce
-Motion gets the old pop and the like at once. A double tap mid flight lands
-without a second write. **The tags row and the air between a card's blocks
+(`heartLandable`: off screen, under a bar, under native's tab bar or a post
+page's native comment bar, `heartFloor`) or Reduce Motion gets the old pop
+and the like at once. A double tap mid flight lands without a second write.
+**The flight rides the page** (audited the same day): its layer
+(`.heart-fly-layer`) is the screen at the tap laid IN the document, absolute,
+so a scroll mid fall carries the heart with its card and it still lands on
+the button; it ends inside the document and clips at the screen's sides, so
+a tap at the edge never widens the page. It lands on the animation's own
+last frame (`finished`, a timer behind it), on the live card's heart if a
+repaint rebuilt it (`liveHeart`), and moves only transform and opacity: its
+shadow is still, in the stylesheet, and it is stroked as a liked heart is,
+so it lands with the button's own silhouette. **The tags row and the air between a card's blocks
 are the words** (`wireComments`): one tap the thread, two a like.
 **The feel** (`hapticFeel`, `feel` in TriaSettingsPlugin.swift, `TriaFeel`,
 Core Haptics): `sparkle` on every like (a card's or comment's heart, a
 Moment's double tap), a round soft landing then four taps fading and
 brightening, the posting twinkle at about half; `fly` one call for the whole
-flight, a breath at the pop, the refresh pull's hum (sharpness 0.1) rising
-under the fall, then the sparkle on landing. An unlike stays a LIGHT tap.
+flight, the refresh pull's hum (sharpness 0.1) rising under the fall, then
+the sparkle on landing. **The pop is the flight's loudest beat and the
+landing settles softly** (Zoe, the same day: "stronger on the initial like
+and softer when it goes into place, but I like the rhythm"): the pop 0.8
+(was 0.28), the hum cresting at 0.3 (was 0.5), the landing's sparkle at
+`settle` (its landing 60%, its stars 70%); every beat's time unchanged. A
+single tap's sparkle is as it was. An unlike stays a LIGHT tap.
 **Needs a new binary**; an older one (no `feel` in PluginHeaders) and the
 web get the LIGHT tap a like always had. The Swift and the first JS half
 landed inside 2951cc8 (a parallel session's commit).

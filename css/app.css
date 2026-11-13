@@ -2983,8 +2983,9 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
    a single card taller than the screen it sits in, and the reader who wants the
    whole note wants the comments under it too. So the teaser stays a teaser. */
 /* A feed card's headline and words open its thread, as its comment glyph does
-   (wireComments), so they point like it. The post's own page has no glyph link. */
-.card:has(.card-actions a.card-comment) > .card-main :is(.card-title, .card-note, .card-list, .card-h1, .card-h2) {
+   (wireComments), so they point like it, the tags' row and a Frame's words
+   too. The post's own page has no glyph link. */
+.card:has(.card-actions a.card-comment) > .card-main :is(.card-title, .card-note, .card-list, .card-h1, .card-h2, .tags, .card-foot) {
   cursor: pointer;
 }
 .readmore-clip {
@@ -6818,18 +6819,26 @@ body > .heart-pop { z-index: 90; }
    on a card, popped where the finger was and falling to the card's own heart.
    Three boxes, three curves: .heart-fly goes across, .heart-fly-down goes
    down, the svg scales and rights itself; every frame is the script's
-   (element.animate), so nothing here moves on its own. Over the page and
-   under the bars' sheets, as the pop. Its stars stay where it popped, on
-   their own anchor, so they don't ride the fall. */
-.heart-fly, .heart-fly-spark {
-  position: fixed;
+   (element.animate), so nothing here moves on its own. Its layer is the
+   screen at the tap, laid IN the document (absolute, not fixed), so a scroll
+   mid flight carries it with its card; over the page and under the bars, as
+   the pop, and clipped to the screen's sides so it never widens the page.
+   Its stars stay where it popped, on their own anchor, so they don't ride
+   the fall. */
+.heart-fly-layer {
+  position: absolute;
+  left: 0;
+  width: 100%;
   z-index: 90;
-  width: 0;
-  height: 0;
+  overflow: hidden;
   pointer-events: none;
   --burst: var(--heart);
 }
+.heart-fly, .heart-fly-spark { position: absolute; width: 0; height: 0; }
 .heart-fly-down { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+/* Filled AND stroked, as a liked heart is, so the silhouette it lands with
+   is the button's own; the shadow is the pop's, held still (an animated
+   filter would take the flight off the compositor). */
 .heart-fly svg {
   position: absolute;
   left: -48px;
@@ -6837,7 +6846,8 @@ body > .heart-pop { z-index: 90; }
   width: 96px;
   height: 96px;
   fill: var(--heart-ink);
-  stroke: none;
+  stroke: var(--heart-ink);
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.18));
   opacity: 0;
   will-change: transform;
 }

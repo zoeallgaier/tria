@@ -5880,10 +5880,11 @@
      pull along with a soft sparkle haptic like from posting"): Tria's own
      Core Haptics patterns, `feel` in TriaSettingsPlugin.swift. 'sparkle' is a
      like, a soft landing and four taps fading out with its stars; 'fly' is a
-     double tap's, a breath as the heart pops, the refresh pull's hum rising
-     while it falls to the like button (`at` seconds in, for `ms`), and the
-     sparkle as it lands. One call each, timed natively. A binary without it
-     (or the web) gets the LIGHT tap a like always had. */
+     double tap's, a strong round pop as the heart pops (the like itself), the
+     refresh pull's hum rising while it falls to the like button (`at`
+     seconds in, for `ms`), and a softer sparkle as it settles into place.
+     One call each, timed natively. A binary without it (or the web) gets the
+     LIGHT tap a like always had. */
   let feelReady = null;
   function hapticFeel(kind, opts) {
     if (nativeShell()) {
@@ -6161,15 +6162,32 @@
   const FLY_LIFT = 320;    // ms: the pop and its settle, where the finger was
   const FLY_FALL = 400;    // ms: the fall to the like button
   const FLY_LAND = 1.16;   // its size on landing against the glyph, the squash's start
+  // How far down a heart can be seen. The page's own bars are in the page,
+  // so elementFromPoint finds them; native's are over it and not in it: the
+  // tab bar (its measured reserve) or a post page's comment bar (its top).
+  function heartFloor() {
+    if (document.documentElement.dataset.chrome !== 'native') return innerHeight;
+    const on = document.body.classList;
+    if (on.contains('postbar-live')) return innerHeight - (barLift || 96);
+    if (on.contains('nav-off')) return innerHeight;
+    const px = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--native-chrome-bottom'));
+    return innerHeight - (px > 0 ? px : 96);
+  }
   function heartLandable(btn) {
     const glyph = btn.querySelector('svg');
     const r = glyph && glyph.getBoundingClientRect();
     if (!r || !r.width) return null;
     const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    // Native's tab bar is over the page and not in it; the page's own bars are.
-    const floor = innerHeight - (nativeShell() && !document.body.classList.contains('nav-off') ? 96 : 0);
-    if (cy < 0 || cy > floor || cx < 0 || cx > innerWidth) return null;
+    if (cy < 0 || cy > heartFloor() || cx < 0 || cx > innerWidth) return null;
     return btn.contains(document.elementFromPoint(cx, cy)) ? r : null;
+  }
+  // The heart to land on: the one it set out for, or, if a repaint rebuilt
+  // the card mid flight, the same post's heart in the live card.
+  function liveHeart(el, btn) {
+    if (btn.isConnected) return btn;
+    const card = el.isConnected ? el
+      : document.querySelector(`article.card[data-id="${CSS.escape(el.dataset.id || '')}"]`);
+    return (card && likeableHeart(card)) || btn;
   }
   function landHeart(btn) {
     clearTimeout(btn._pop);
@@ -6194,18 +6212,25 @@
     const dx = r.left + r.width / 2 - x, dy = r.top + r.height / 2 - y;
     const end = (r.width / 96) * FLY_LAND;
     const tilt = (Math.random() < 0.5 ? -1 : 1) * (7 + Math.random() * 7);
-    const fly = document.createElement('span');
-    fly.className = 'heart-fly';
-    fly.setAttribute('aria-hidden', 'true');
-    fly.style.left = x + 'px';
-    fly.style.top = y + 'px';
-    fly.innerHTML = `<span class="heart-fly-down">${svgIcon('heart')}</span>`;
-    const spark = document.createElement('span');
-    spark.className = 'heart-fly-spark';
-    spark.setAttribute('aria-hidden', 'true');
-    spark.style.left = x + 'px';
-    spark.style.top = y + 'px';
-    document.body.append(spark, fly);
+    // The flight rides the page. Its layer is the screen as it was, laid in
+    // the document rather than fixed over it, so a scroll mid flight carries
+    // the heart with its card and it still lands on the button; it ends
+    // inside the document and clips at the screen's sides, so nothing in it
+    // can make the page scroll.
+    const top = Math.max(0, Math.min(scrollY, document.documentElement.scrollHeight - innerHeight));
+    const layer = document.createElement('div');
+    layer.className = 'heart-fly-layer';
+    layer.setAttribute('aria-hidden', 'true');
+    layer.style.top = top + 'px';
+    layer.style.height = innerHeight + 'px';
+    layer.innerHTML = '<span class="heart-fly-spark"></span>' +
+      `<span class="heart-fly"><span class="heart-fly-down">${svgIcon('heart')}</span></span>`;
+    const [spark, fly] = layer.children;
+    for (const n of [spark, fly]) {
+      n.style.left = x + 'px';
+      n.style.top = (y + scrollY - top) + 'px';
+    }
+    document.body.append(layer);
     const down = fly.firstChild, heart = down.firstChild;
     const timing = { duration: T, fill: 'forwards' };
     // Across: leaves softly, eases in over the button.
@@ -6221,26 +6246,33 @@
       { transform: `translateY(${dy}px)` },
     ], timing);
     // The heart itself: springs up a touch past full, holds, then shrinks and
-    // rights itself on the way down, its shadow going as it lands.
-    const lift = 'drop-shadow(0 4px 14px rgba(0, 0, 0, 0.18))';
-    heart.animate([
-      { transform: `rotate(${tilt}deg) scale(0.2)`, opacity: 0, filter: lift, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.3)' },
-      { transform: `rotate(${tilt}deg) scale(1)`, opacity: 1, filter: lift, offset: k * 0.6 },
-      { transform: `rotate(${tilt}deg) scale(1)`, opacity: 1, filter: lift, offset: k, easing: 'cubic-bezier(0.45, 0, 0.55, 1)' },
-      { transform: `rotate(0deg) scale(${end})`, opacity: 1, filter: 'drop-shadow(0 0 0 rgba(0, 0, 0, 0))' },
+    // rights itself on the way down. Transform and opacity only, so the whole
+    // flight runs on the compositor; its shadow is the stylesheet's, still,
+    // and shrinks with it.
+    const fall = heart.animate([
+      { transform: `rotate(${tilt}deg) scale(0.2)`, opacity: 0, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.3)' },
+      { transform: `rotate(${tilt}deg) scale(1)`, opacity: 1, offset: k * 0.6 },
+      { transform: `rotate(${tilt}deg) scale(1)`, opacity: 1, offset: k, easing: 'cubic-bezier(0.45, 0, 0.55, 1)' },
+      { transform: `rotate(0deg) scale(${end})`, opacity: 1 },
     ], timing);
     setTimeout(() => { if (spark.isConnected) burstSparkles(spark); }, 90);
-    setTimeout(() => spark.remove(), 900);
     hapticFeel('fly', { at: FLY_LIFT / 1000, ms: FLY_FALL });
     btn._flying = true;
-    setTimeout(() => {
-      // The card may have been rebuilt under it; land on the live heart.
-      const live = btn.isConnected ? btn : (likeableHeart(el) || btn);
+    // It lands on the frame it arrives (the animation's own end), with a
+    // timer behind it in case the timeline never gets there.
+    let landed = false;
+    const land = () => {
+      if (landed) return;
+      landed = true;
       btn._flying = false;
+      const live = liveHeart(el, btn);
       if (add && !shownReaction(live)) { live._landing = true; live.click(); }
       else landHeart(live);
       requestAnimationFrame(() => fly.remove());
-    }, T);
+      setTimeout(() => layer.remove(), 400);   // the stars it left, winked out
+    };
+    fall.finished?.then(land, land);
+    setTimeout(land, T + 250);
   }
 
   // `single` is what one tap does, or null where one tap does nothing.
