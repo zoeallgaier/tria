@@ -35,6 +35,7 @@ window.TRIA_DICTIONARY = [
       { name: 'Plan', code: "type 'activity'", say: 'Something happening on a date, with RSVPs (Going, Maybe) and Who\'s going. Activity in code.' },
       { name: 'Music post', code: "type 'song'", say: 'A song you have on repeat. In no feed: read only on the On repeat rail.' },
       { name: 'On repeat', code: 'paintOnRepeat, songPostsOnRepeat', where: 'My Circle', say: 'Your people\'s songs this week. Double tap to like, hold to reply.' },
+      { name: 'This week', code: 'paintWeekCards, .week-card', where: 'My Circle, over the feed', say: 'A reminder card for each plan you\'re going to or hosting in the next seven days: the host, the plan\'s name in the serif, then when. The x hides it for the day.' },
       { name: 'Moment', code: 'posts.moment', where: 'The rail over My Circle', say: 'An ordinary post that lasts a day, shown on the rail as stories, never in a feed.' },
       { name: 'Daily', code: 'DAILIES, daily-<slug> tag', where: 'Discover, #/daily/<slug>', say: 'One prompt a day for everyone. An answer is a post with the day\'s tag.' },
       { name: 'Repost', code: 'bareRepostPlace', say: 'A post shared as is, wearing its original\'s audience (a circle\'s post goes out to your friends).' },

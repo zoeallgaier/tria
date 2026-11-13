@@ -9734,19 +9734,30 @@ body.chat-answering .msg-list { padding-bottom: calc(1rem + 44px + 1.4rem + 2px)
   color: var(--muted);
 }
 .week-card-kicker svg { width: 14px; height: 14px; flex-shrink: 0; }
-/* The kicker and the title stop short of the X in the corner; the host's line
-   under them can run the card's width. */
-.week-card-kicker,
+/* Host, then title, then when (Zoe, 2026-11-13). The host's line and the title
+   stop short of the X in the corner; when, under them, can run the card's
+   width. */
+.week-card-who,
 .week-card-title { margin-right: 1.75rem; }
+/* The plan's name in the daily prompt's serif (.daily-prompt), two lines at
+   most. */
 .week-card-title {
-  font-size: 1.05rem;
-  font-weight: 700;
+  margin-top: 0.35rem;
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: clamp(1.5rem, 4.4vw, 1.95rem);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
-/* The host, in the daily card's foot (.daily-answered, .daily-face). */
-.week-card-who { margin-top: 0.45rem; }
+.week-card-kicker { margin-top: 0.3rem; }
+/* The host, as the daily card wears who has answered (.daily-answered,
+   .daily-face), leading the card. */
+.week-card-who { min-height: 28px; }
 .week-card-who .daily-count { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .week-card-x {
   position: absolute;

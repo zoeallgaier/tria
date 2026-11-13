@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import Capacitor
 import AVFoundation
+import CoreHaptics
 
 /// One method: open this app's own page in iOS Settings.
 ///
@@ -40,8 +41,29 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "playClip", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "prepareClip", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopClip", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "goTo", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "goTo", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "feel", returnType: CAPPluginReturnPromise)
     ]
+
+    /// THE FEEL, Tria's own soft haptics (Zoe, 2026-11-13: "a new softer
+    /// haptic almost like the refresh pull along with a soft sparkle haptic
+    /// like from posting"). UIKit's impact styles are one knock each; these
+    /// are Core Haptics patterns, the refresh swell's low sharpness hum and
+    /// the posting twinkle's thinning taps, made quieter. `kind`:
+    ///   sparkle: a like. A soft landing, then four taps fading out and
+    ///            brightening, in step with the like's stars.
+    ///   fly:     a double tap's like. A breath of a tap as the heart pops,
+    ///            a hum rising under it while it falls to the like button
+    ///            (`at` seconds in, for `ms`), and the sparkle as it lands.
+    /// Fire and forget: it resolves at once, and silence is a correct answer
+    /// (no haptics hardware, or System Haptics off).
+    @objc func feel(_ call: CAPPluginCall) {
+        let kind = call.getString("kind") ?? ""
+        let at = call.getDouble("at") ?? 0
+        let ms = call.getDouble("ms") ?? 360
+        DispatchQueue.main.async { TriaFeel.shared.play(kind, at: at, flight: ms / 1000) }
+        call.resolve()
+    }
 
     /// A route opened BY THE APP, so the back swipe never skips the page
     /// under it (Zoe, 2026-11-08: back from a circle opened off the field went
@@ -458,5 +480,87 @@ private final class TriaPageReader: NSObject, URLSessionTaskDelegate {
             }
         }
         return String(decoding: data, as: UTF8.self)
+    }
+}
+
+
+/// The patterns behind `feel`. One engine, kept, auto shutdown on, so it
+/// sleeps between likes; a fresh player per feel (a pattern this short costs
+/// nothing to build). Lost on a reset or a stop, and remade on the next feel.
+final class TriaFeel {
+    static let shared = TriaFeel()
+    private var engine: CHHapticEngine?
+
+    private func ready() -> CHHapticEngine? {
+        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return nil }
+        if engine == nil, let made = try? CHHapticEngine() {
+            made.playsHapticsOnly = true
+            made.isAutoShutdownEnabled = true
+            made.resetHandler = { [weak self] in DispatchQueue.main.async { self?.engine = nil } }
+            made.stoppedHandler = { [weak self] _ in DispatchQueue.main.async { self?.engine = nil } }
+            engine = made
+        }
+        return engine
+    }
+
+    private static func tap(_ t: Double, _ intensity: Float, _ sharpness: Float) -> CHHapticEvent {
+        CHHapticEvent(eventType: .hapticTransient, parameters: [
+            CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity),
+            CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness)
+        ], relativeTime: t)
+    }
+
+    /// The like's twinkle: a round landing, then taps that get quieter and
+    /// brighter, the way the stars wink out. The posting twinkle's shape
+    /// (TWINKLE in app.js) at about half its strength and in half the time.
+    private static func sparkle(from t: Double) -> [CHHapticEvent] {
+        [tap(t, 0.52, 0.22),
+         tap(t + 0.085, 0.30, 0.55),
+         tap(t + 0.155, 0.22, 0.68),
+         tap(t + 0.245, 0.15, 0.80),
+         tap(t + 0.355, 0.10, 0.90)]
+    }
+
+    func play(_ kind: String, at: Double, flight: Double) {
+        guard let engine = ready() else { return }
+        var events: [CHHapticEvent] = []
+        var curves: [CHHapticParameterCurve] = []
+        switch kind {
+        case "sparkle":
+            events = Self.sparkle(from: 0)
+        case "fly":
+            let lift = max(0, at), fall = max(0.12, flight)
+            // The pop: barely there, round.
+            events.append(Self.tap(0, 0.28, 0.12))
+            // The fall: the refresh pull's hum (sharpness 0.1), rising from
+            // a whisper into the landing, a touch brighter as it comes.
+            events.append(CHHapticEvent(eventType: .hapticContinuous, parameters: [
+                CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.5),
+                CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.1)
+            ], relativeTime: lift, duration: fall))
+            curves.append(CHHapticParameterCurve(parameterID: .hapticIntensityControl, controlPoints: [
+                .init(relativeTime: lift, value: 0.18),
+                .init(relativeTime: lift + fall * 0.55, value: 0.5),
+                .init(relativeTime: lift + fall, value: 1)
+            ], relativeTime: 0))
+            curves.append(CHHapticParameterCurve(parameterID: .hapticSharpnessControl, controlPoints: [
+                .init(relativeTime: lift, value: 0),
+                .init(relativeTime: lift + fall, value: 0.15)
+            ], relativeTime: 0))
+            events += Self.sparkle(from: lift + fall)
+        default:
+            return
+        }
+        do {
+            let player = try engine.makePlayer(with: CHHapticPattern(events: events, parameterCurves: curves))
+            engine.start { error in
+                if let error { print("TriaFeel: engine start failed: \(error)"); return }
+                do { try player.start(atTime: CHHapticTimeImmediate) }
+                catch { print("TriaFeel: couldn't play: \(error)") }
+            }
+        } catch {
+            print("TriaFeel: no pattern: \(error)")
+            self.engine = nil
+        }
     }
 }

@@ -5876,6 +5876,32 @@
     setTimeout(() => haptic('selectionEnd'), 760);
   }
 
+  /* THE FEEL (2026-11-13, Zoe: "a new softer haptic almost like the refresh
+     pull along with a soft sparkle haptic like from posting"): Tria's own
+     Core Haptics patterns, `feel` in TriaSettingsPlugin.swift. 'sparkle' is a
+     like, a soft landing and four taps fading out with its stars; 'fly' is a
+     double tap's, a breath as the heart pops, the refresh pull's hum rising
+     while it falls to the like button (`at` seconds in, for `ms`), and the
+     sparkle as it lands. One call each, timed natively. A binary without it
+     (or the web) gets the LIGHT tap a like always had. */
+  let feelReady = null;
+  function hapticFeel(kind, opts) {
+    if (nativeShell()) {
+      if (feelReady === null) {
+        try {
+          feelReady = !!window.Capacitor?.PluginHeaders?.find((p) => p.name === 'TriaSettings')
+            ?.methods?.some((m) => m.name === 'feel');
+        } catch { feelReady = false; }
+      }
+      if (feelReady) {
+        try { window.Capacitor.toNative('TriaSettings', 'feel', Object.assign({ kind }, opts)); }
+        catch { /* a garnish, never a failure */ }
+        return;
+      }
+    }
+    hapticTap('LIGHT');
+  }
+
   /* ── Outbound links in the native shell ──────────────────────────────────────
      A WKWebView will not open a second window: `window.open` returns null and a
      `target="_blank"` anchor does nothing at all — not navigate, not hand off to
@@ -6046,7 +6072,14 @@
       busy = true;
       const liked = !!next;
       paint(next);
-      hapticTap('LIGHT');
+      // A heart flown in by a double tap LANDS (flyHeart): no ink rising, a
+      // squash into place, and its haptic already playing (the 'fly' feel).
+      const landing = btn._landing && liked;
+      btn._landing = false;
+      if (!landing) {
+        if (liked) hapticFeel('sparkle');
+        else hapticTap('LIGHT');
+      }
       // One-shot ink stamp on LIKE: the heart snaps, the type colour floods up
       // through it, and a little cluster of y2k sparkle stars twinkles out — all
       // transform/clip/mask, so it stays smooth on iOS. Re-add after a reflow so
@@ -6054,12 +6087,15 @@
       // window (700ms) outlasts the longest .is-liking animation (~0.42s) with
       // margin — the ink overlay holds its final frame until then, when the
       // resting .liked fill takes over. Sparkles fire on LIKE only (see below).
-      clearTimeout(btn._pop);
-      btn.classList.remove('is-liking', 'is-unliking');
-      void btn.offsetWidth;
-      btn.classList.add(liked ? 'is-liking' : 'is-unliking');
-      if (liked) burstSparkles(btn);
-      btn._pop = setTimeout(() => btn.classList.remove('is-liking', 'is-unliking'), 700);
+      if (landing) landHeart(btn);
+      else {
+        clearTimeout(btn._pop);
+        btn.classList.remove('is-liking', 'is-unliking', 'is-landing');
+        void btn.offsetWidth;
+        btn.classList.add(liked ? 'is-liking' : 'is-unliking');
+        if (liked) burstSparkles(btn);
+        btn._pop = setTimeout(() => btn.classList.remove('is-liking', 'is-unliking'), 700);
+      }
       // The answer, whenever it comes. `.catch` rather than try/finally because a
       // rejected write and a refused one mean the same thing here: put it back.
       const res = await write().catch(() => null);
@@ -7614,19 +7650,20 @@
         && (p.author === me || Store.myRsvp(p.id) === 'going'))
       .sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0));
     box.hidden = !plans.length;
-    // Who is hosting, worn the way the daily card wears who has answered (Zoe):
-    // the face and the name in its foot, where the address used to be. The chat
-    // is a tap away on the post's own page, so the card no longer carries it.
+    // Who is hosting LEADS (Zoe, 2026-11-13: "put host first and info after
+    // title"), worn the way the daily card wears who has answered, then the
+    // plan's name in the daily's serif, then when. The chat is a tap away on
+    // the post's own page, so the card doesn't carry it.
     box.innerHTML = plans.map(p => {
       const u = Store.user(p.author);
       return `<div class="week-card" data-id="${esc(String(p.id))}">` +
           `<a class="week-card-link" href="${postRoute(p)}">` +
-            `<span class="week-card-kicker">${svgIcon('cal')}${esc(eventWhenLabel(p.eventDate, p.eventTime))}</span>` +
-            `<span class="week-card-title">${esc(p.title || 'Activity')}</span>` +
             `<span class="daily-answered week-card-who">` +
               avatarEl(u || { name: p.author }, { cls: 'daily-face' }) +
               `<span class="daily-count">${esc(u ? u.name : p.author)}</span>` +
             `</span>` +
+            `<span class="week-card-title">${esc(p.title || 'Activity')}</span>` +
+            `<span class="week-card-kicker">${svgIcon('cal')}${esc(eventWhenLabel(p.eventDate, p.eventTime))}</span>` +
           `</a>` +
           `<button class="week-card-x" type="button" aria-label="Dismiss">${svgIcon('close')}</button>` +
         `</div>`;
