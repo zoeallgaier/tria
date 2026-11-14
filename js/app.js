@@ -22042,6 +22042,11 @@
         `<input type="search" id="discover-search" class="discover-search-field" enterkeyhint="search" ` +
           `autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" ` +
           `placeholder="${esc(placeholderFor(discoverType))}" aria-label="Search people, posts and circles">` +
+        // THE CLEAR (Zoe, 2026-11-13: "an x in the search bar ... to clear
+        // search quickly in a filled search"): only while the field holds words.
+        `<button type="button" class="discover-search-x" id="discover-search-x" aria-label="Clear search">` +
+          svgIcon('close') +
+        `</button>` +
       `</div>`;
 
     /* THE FILTER LEADS THE BAR (Zoe, 2026-11-06: "swap the filter and the menu
@@ -22096,10 +22101,27 @@
        wearing it, no people and no circles. Typing anything makes it a search
        again. */
     let tagQuery = null;
+    // The x shows while the field holds words (a class on the box, so no
+    // display rule can beat a `hidden`).
+    const searchBox = searchEl.closest('.discover-search');
+    const syncClear = () => searchBox?.classList.toggle('is-filled', !!searchEl.value);
     const setQuery = (text, tag = null) => {
       tagQuery = tag;
       discoverQuery = searchEl.value = text;
+      syncClear();
     };
+    /* A tap on the x empties the words and nothing else: a picked type stays
+       (the filter is its own way out), and the caret stays where it was, so a
+       reader mid search types again and one reading results keeps the keys
+       down. The mousedown is swallowed so the field never loses focus. */
+    const clearBtn = document.getElementById('discover-search-x');
+    clearBtn?.addEventListener('mousedown', (e) => e.preventDefault());
+    clearBtn?.addEventListener('click', () => {
+      if (!searchEl.value) return;
+      setQuery('');
+      paintNow();
+      syncOpen();
+    });
     const setType = (key) => {
       discoverType = key;
       searchEl.placeholder = placeholderFor(key);
@@ -22560,10 +22582,10 @@
       });
     }
 
-    // Escape empties the search, the one way out a keyboard reader has without an X.
+    // Escape empties the search and the type together (the x takes the words only).
     searchEl.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && (searchEl.value || discoverType !== 'all')) {
-        discoverQuery = searchEl.value = '';
+        setQuery('');
         setType('all');
         paintNow();
         syncOpen();
@@ -22582,6 +22604,7 @@
     searchEl.addEventListener('input', () => {
       tagQuery = null;
       discoverQuery = searchEl.value;
+      syncClear();
       paintSoon();
       syncOpen();
     });
@@ -22617,6 +22640,7 @@
 
     // Restore an in-flight query if a background refresh re-rendered the page.
     searchEl.value = discoverQuery;
+    syncClear();
     paint();
     syncOpen();
   }

@@ -1695,6 +1695,29 @@ body.toolbar-field .toolbar-actions { margin-left: var(--toolbar-gap); }
 /* No X in the field either: WebKit draws its own on type=search. */
 .discover-search-field::-webkit-search-cancel-button,
 .discover-search-field::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
+/* Our own x instead (Zoe, 2026-11-13): a muted glyph at the field's end,
+   only while it holds words, its 44px target the field's own height. */
+.discover-search-x {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  -webkit-tap-highlight-color: transparent;
+}
+.discover-search-x svg { width: 16px; height: 16px; }
+.discover-search.is-filled .discover-search-x { display: grid; }
+.discover-search.is-filled .discover-search-field { padding-right: 2.6rem; }
+.discover-search-x:active { opacity: 0.55; }
 
 /* ── Discover's chips: the filter, then the trending tags (2026-11-06) ───────
    The page's first row, under the header (Zoe: "filters below the

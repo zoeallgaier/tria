@@ -9,7 +9,7 @@ window.TRIA_DICTIONARY = [
     group: 'Places',
     items: [
       { name: 'My Circle', code: '#/ · Store.feed', where: 'Tab 1', say: 'Your friends\' posts, newest first, and nothing else. The home feed. Its bar wears the italic tria wordmark.' },
-      { name: 'Discover', code: 'renderDiscover', where: 'Tab 2', say: 'The town square: search in the bar, trending tags as chips, the Explore circles card, today\'s daily, then this week\'s public posts.' },
+      { name: 'Discover', code: 'renderDiscover', where: 'Tab 2', say: 'The town square: search in the bar (an x clears the words), trending tags as chips, the Explore circles card, today\'s daily, then this week\'s public posts.' },
       { name: 'The square', code: 'Store.square, paintSquare', where: 'Discover', say: 'This week\'s public posts and public circles\' posts, at most two a person, never ranked. It ends.' },
       { name: 'People rails', code: 'peopleForRail, .person-card', where: 'Discover', say: 'Two sideways rails of strangers set between the square\'s posts, most friends in common first. The only little algorithm.' },
       { name: 'Explore circles', code: '#/circles, renderExploreCircles', where: 'Discover card, sidebar', say: 'Every circle as a floating disc, its area its members. Drag to move, pinch to zoom, tap to peek.' },
