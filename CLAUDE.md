@@ -193,7 +193,7 @@ pull along with a soft sparkle haptic like from posting".** No write up of
 Instagram's own motion exists (searched; only recreations), so it is built to
 her description. `flyHeart`: the heart pops where the finger was, tilted a
 few degrees, with the like's stars left behind there (`.heart-fly-spark`),
-holds `FLY_LIFT` (320ms), then falls `FLY_FALL` (400ms) to the card's heart:
+holds `FLY_LIFT` (210ms), then falls `FLY_FALL` (290ms) to the card's heart:
 three boxes on three curves (`.heart-fly` across on an ease, `.heart-fly-down`
 down with a breath of lift then gravity, the svg shrinking and righting), so
 it draws an arc, landing at `FLY_LAND` (1.16) of the glyph. Then the button's
@@ -223,6 +223,16 @@ and softer when it goes into place, but I like the rhythm"): the pop 0.8
 (was 0.28), the hum cresting at 0.3 (was 0.5), the landing's sparkle at
 `settle` (its landing 60%, its stars 70%); every beat's time unchanged. A
 single tap's sparkle is as it was. An unlike stays a LIGHT tap.
+**Faster, stronger, smoother** (Zoe, 2026-11-17: "make the swoop after
+double tap on like faster, make haptics a bit stronger and smoother"): the
+flight is `FLY_LIFT` 210 and `FLY_FALL` 290 (was 320 and 400). The pop is 1.0
+with a 70ms low hum under it for body; the swoop's hum crests at 0.5 under an
+intensity dial that reads 1 at both taps (**the old dial held 0.25 from the
+start and was quietly turning the pop down**); the sparkle is about 20% up
+on every like, its landing with a 50ms body hum, and `settle` is 80% and
+88%. The first tap of a possible double tap wakes the engine (`feelWake`,
+`feel` with `wake`, nothing on a binary without `feel`), Apple's touch-down
+prewarm, so the pop isn't late.
 **Needs a new binary**; an older one (no `feel` in PluginHeaders) and the
 web get the LIGHT tap a like always had. The Swift and the first JS half
 landed inside 2951cc8 (a parallel session's commit).

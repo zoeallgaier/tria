@@ -549,13 +549,17 @@ final class TriaFeel {
     /// when it goes into place, but I like the rhythm"): the same beats, the
     /// landing at 60% and the stars at 70%, so the double tap's pop stays the
     /// loudest thing in the flight.
+    /// 2026-11-17 (Zoe: "a bit stronger and smoother"): every beat about 20%
+    /// up, the settle eased toward full (0.8 and 0.88), and the landing given
+    /// a short round body under its knock, so it lands as a press, not a click.
     private static func sparkle(from t: Double, settle: Bool = false) -> [CHHapticEvent] {
-        let land: Float = settle ? 0.6 : 1, stars: Float = settle ? 0.7 : 1
-        return [tap(t, 0.52 * land, 0.22),
-                tap(t + 0.085, 0.30 * stars, 0.55),
-                tap(t + 0.155, 0.22 * stars, 0.68),
-                tap(t + 0.245, 0.15 * stars, 0.80),
-                tap(t + 0.355, 0.10 * stars, 0.90)]
+        let land: Float = settle ? 0.8 : 1, stars: Float = settle ? 0.88 : 1
+        return [tap(t, 0.64 * land, 0.2),
+                hum(t, 0.05, 0.4 * land, 0.05),
+                tap(t + 0.085, 0.37 * stars, 0.5),
+                tap(t + 0.155, 0.27 * stars, 0.62),
+                tap(t + 0.245, 0.19 * stars, 0.74),
+                tap(t + 0.355, 0.12 * stars, 0.84)]
     }
 
     func play(_ kind: String, at: Double, flight: Double) {
@@ -568,23 +572,32 @@ final class TriaFeel {
         case "fly":
             let lift = max(0, at), fall = max(0.12, flight)
             // The pop: the like itself, and the flight's strongest beat (Zoe:
-            // "stronger on the initial like"). Full and still round.
-            events.append(Self.tap(0, 0.8, 0.3))
-            // The fall: the refresh pull's hum (sharpness 0.1), rising from
-            // a whisper and cresting gently, at the landing's own weight, so
-            // the heart arrives soft rather than with a thud.
-            events.append(CHHapticEvent(eventType: .hapticContinuous, parameters: [
-                CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.3),
-                CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.1)
-            ], relativeTime: lift, duration: fall))
-            curves.append(CHHapticParameterCurve(parameterID: .hapticIntensityControl, controlPoints: [
-                .init(relativeTime: lift, value: 0.25),
-                .init(relativeTime: lift + fall * 0.55, value: 0.6),
-                .init(relativeTime: lift + fall, value: 1)
-            ], relativeTime: 0))
+            // "stronger on the initial like"). Full, round, and with a body:
+            // a knock alone at full strength reads as a click, so a short
+            // low hum sits under it and gives it weight (2026-11-17, "a bit
+            // stronger and smoother"; it was 0.8 alone).
+            events.append(Self.tap(0, 1, 0.3))
+            events.append(Self.hum(0, 0.07, 0.55, 0.08))
+            // The swoop: the refresh pull's hum (sharpness 0.1), a breath at
+            // the top of the fall swelling into the landing, so the heart's
+            // motion is felt as one gesture rather than a gap between beats
+            // (Apple's harmony: a continuous motion wants a continuous haptic).
+            events.append(Self.hum(lift, fall, 0.5, 0.1))
+            // The dial reads 1 wherever a tap sits (the pop and the landing),
+            // and shapes only the swoop between them. Without the first two
+            // points the curve held its first value, 0.25, from the start, and
+            // turned the pop down with it.
+            curves.append(Self.dial([
+                (0, 1), (max(0, lift - 0.005), 1),
+                (lift, 0.15),
+                (lift + fall * 0.5, 0.5),
+                (lift + fall * 0.9, 0.9),
+                (lift + fall, 1)
+            ]))
             curves.append(CHHapticParameterCurve(parameterID: .hapticSharpnessControl, controlPoints: [
+                .init(relativeTime: 0, value: 0),
                 .init(relativeTime: lift, value: 0),
-                .init(relativeTime: lift + fall, value: 0.15)
+                .init(relativeTime: lift + fall, value: 0.12)
             ], relativeTime: 0))
             events += Self.sparkle(from: lift + fall, settle: true)
 

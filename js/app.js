@@ -5922,6 +5922,19 @@
     }
     hapticTap('LIGHT');
   }
+  // The engine up ahead of a feel that may follow (Apple's own advice: start
+  // it on touch-down for a touch-up beat). Silent, and nothing at all on a
+  // binary without `feel`, where hapticFeel would fall back to a tap.
+  function feelWake() {
+    if (!nativeShell()) return;
+    try {
+      if (feelReady === null) {
+        feelReady = !!window.Capacitor?.PluginHeaders?.find((p) => p.name === 'TriaSettings')
+          ?.methods?.some((m) => m.name === 'feel');
+      }
+      if (feelReady) window.Capacitor.toNative('TriaSettings', 'feel', { kind: 'wake' });
+    } catch { /* a garnish */ }
+  }
 
   /* THE FIELD'S FEEL (2026-11-13, Zoe: "add soft tria-esque haptics for
      navigating the circles page"): the one place a buzz says only that what
@@ -6214,8 +6227,10 @@
      the heart's own scale and tilt), so each runs on its own curve.
      A heart that isn't on screen to land on (scrolled off, under a bar), or a
      reader who asked for less motion, gets the pop where the finger was. */
-  const FLY_LIFT = 320;    // ms: the pop and its settle, where the finger was
-  const FLY_FALL = 400;    // ms: the fall to the like button
+  // Zoe, 2026-11-17: "make the swoop after double tap on like faster" (it was
+  // 320 and 400). The pop keeps its overshoot; the fall is a swoop now.
+  const FLY_LIFT = 210;    // ms: the pop and its settle, where the finger was
+  const FLY_FALL = 290;    // ms: the fall to the like button
   const FLY_LAND = 1.16;   // its size on landing against the glyph, the squash's start
   // How far down a heart can be seen. The page's own bars are in the page,
   // so elementFromPoint finds them; native's are over it and not in it: the
@@ -6310,7 +6325,7 @@
       { transform: `rotate(${tilt}deg) scale(1)`, opacity: 1, offset: k, easing: 'cubic-bezier(0.45, 0, 0.55, 1)' },
       { transform: `rotate(0deg) scale(${end})`, opacity: 1 },
     ], timing);
-    setTimeout(() => { if (spark.isConnected) burstSparkles(spark); }, 90);
+    setTimeout(() => { if (spark.isConnected) burstSparkles(spark); }, 60);
     hapticFeel('fly', { at: FLY_LIFT / 1000, ms: FLY_FALL });
     btn._flying = true;
     // It lands on the frame it arrives (the animation's own end), with a
@@ -6342,6 +6357,9 @@
       flyHeart(el, btn, e.clientX, e.clientY);
       return;
     }
+    // The first tap might be half a double tap: wake the haptic engine now,
+    // so the pop lands on the frame the heart does, not a beat behind it.
+    feelWake();
     el._tap = { at: now, timer: single ? setTimeout(() => {
       el._tap = null;
       if (el.isConnected) single();
