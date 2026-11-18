@@ -13402,7 +13402,13 @@ a.daily-answer { text-decoration: none; }
 }
 .new-posts-faces .avatar + .avatar { margin-left: -9px; }
 .new-posts-arrow { width: 15px; height: 15px; }
-body:has(.topbar--reading) .new-posts { --new-posts-top: calc(env(safe-area-inset-top) + 0.625rem); }
+/* Tucked, the pill rises INTO the bar's strip, and the phone bar's box (z 100,
+   the width of the screen) stays there to hit test even with its slots gone, so
+   at z 99 every tap on the pill landed on the empty bar. Over it while tucked. */
+body:has(.topbar--reading) .new-posts {
+  --new-posts-top: calc(env(safe-area-inset-top) + 0.625rem);
+  z-index: 102;
+}
 .new-posts--out {
   animation: new-posts-out 0.24s var(--ease-soft) both;
   pointer-events: none;
