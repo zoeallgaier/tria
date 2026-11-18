@@ -233,6 +233,24 @@ on every like, its landing with a 50ms body hum, and `settle` is 80% and
 88%. The first tap of a possible double tap wakes the engine (`feelWake`,
 `feel` with `wake`, nothing on a binary without `feel`), Apple's touch-down
 prewarm, so the pop isn't late.
+
+## Every tap is Tria's own, prepared (2026-11-17)
+
+**An audit of every haptic against Apple's guidance** (Zoe: "fix 1, polish 2,
+fix 3, remove 4"). **A pick is the selection tick** (`hapticPick`): five
+settings picks called `hapticEvent('SELECT')`, a type Capacitor doesn't know,
+which falls to SUCCESS, so choosing a paper or wearing a charm played the
+three beat "task completed" buzz. **The twinkle is one native pattern**
+(`twinkle` in TriaFeel, on TWINKLE's same beats, a body under the first),
+not six UIKit taps on page timers. **Plain taps go through kept, prepared
+generators** (`TriaSettings.tap`, `TriaTaps`: LIGHT, MEDIUM, HEAVY, PICK, each
+prepared again after it fires) and **every touch-down prepares them**
+(`primeTaps`, `prime`, at most once a second), Apple's advice so a tap isn't
+a beat late; both are `CAPPluginReturnNone`, so a tap no longer pays the
+bridge's evaluateJavaScript toll either (`nativeHas` checks the binary). The
+ripple's `ping` is gone (see Explore circles' feel). **Needs a new binary**;
+an older one keeps Capacitor's taps, the six beat twinkle, and the selection
+trio for a pick.
 **Needs a new binary**; an older one (no `feel` in PluginHeaders) and the
 web get the LIGHT tap a like always had. The Swift and the first JS half
 landed inside 2951cc8 (a parallel session's commit).
@@ -252,9 +270,10 @@ either end of the zoom, once until it comes back in), **fold** / **unfold**
 frame, `PATTER_MS` 60 apart), and **wake** (the engine up as a finger lands).
 **pass** (a drag or its coast brings a new circle into the band's middle: a
 soft detent, `PASS_MS` 90 apart; Zoe, the same day: "maybe when swiping to
-navigate around too") and **ping** (a lively circle's ripple leaves its ring:
-a round drop, on screen, undimmed, fingers off, `PING_GAP` 1.2s apart; Zoe:
-"when the circles ping and have that animation add a soft tap").
+navigate around too"). **A ripple has no tap**: `ping` (a round drop as a
+lively circle's ripple left its ring) was built the same day and removed on
+2026-11-17 (Zoe: "remove"), since a buzz nobody caused breaks Apple's
+causality rule and teaches the hand to ignore the ones that matter.
 **`navFeel` never resolves** (`CAPPluginReturnNone`), so no
 `evaluateJavaScript` comes back on the main thread mid gesture. A put-away's
 settle waits a `setTimeout` 0 so tapping another circle round the sheet is one

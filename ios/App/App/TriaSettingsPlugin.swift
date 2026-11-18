@@ -43,8 +43,26 @@ public class TriaSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "stopClip", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "goTo", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "feel", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "navFeel", returnType: CAPPluginReturnNone)
+        CAPPluginMethod(name: "navFeel", returnType: CAPPluginReturnNone),
+        CAPPluginMethod(name: "tap", returnType: CAPPluginReturnNone),
+        CAPPluginMethod(name: "prime", returnType: CAPPluginReturnNone)
     ]
+
+    /// A plain tap, on KEPT generators (Zoe, 2026-11-17). Capacitor's
+    /// Haptics makes a generator per call and fires it cold; Apple's advice
+    /// is to `prepare()` ahead, or the Taptic Engine can answer a beat late.
+    /// `style`: LIGHT, MEDIUM, HEAVY, or PICK (the selection tick). Like
+    /// navFeel it never answers, so no evaluateJavaScript comes back.
+    @objc func tap(_ call: CAPPluginCall) {
+        let style = call.getString("style") ?? "LIGHT"
+        DispatchQueue.main.async { TriaTaps.shared.fire(style) }
+    }
+
+    /// A finger landed somewhere: ready the generators for the tap that may
+    /// follow its lift. The page sends it at most once a second.
+    @objc func prime(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { TriaTaps.shared.prime() }
+    }
 
     /// THE FEEL, Tria's own soft haptics (Zoe, 2026-11-13: "a new softer
     /// haptic almost like the refresh pull along with a soft sparkle haptic
@@ -499,6 +517,37 @@ private final class TriaPageReader: NSObject, URLSessionTaskDelegate {
 }
 
 
+/// UIKit's generators, kept and prepared (`tap`, `prime`). A prepared
+/// generator holds the Taptic Engine ready for a few seconds; each is
+/// prepared again after it fires, so a run of taps is never cold.
+final class TriaTaps {
+    static let shared = TriaTaps()
+    private lazy var light = UIImpactFeedbackGenerator(style: .light)
+    private lazy var medium = UIImpactFeedbackGenerator(style: .medium)
+    private lazy var heavy = UIImpactFeedbackGenerator(style: .heavy)
+    private lazy var pick = UISelectionFeedbackGenerator()
+
+    func prime() {
+        light.prepare()
+        medium.prepare()
+        pick.prepare()
+    }
+
+    func fire(_ style: String) {
+        switch style {
+        case "PICK":
+            pick.selectionChanged(); pick.prepare()
+        case "MEDIUM":
+            medium.impactOccurred(); medium.prepare()
+        case "HEAVY":
+            heavy.impactOccurred(); heavy.prepare()
+        default:
+            light.impactOccurred(); light.prepare()
+        }
+    }
+}
+
+
 /// The patterns behind `feel`. One engine, kept, auto shutdown on, so it
 /// sleeps between likes; a fresh player per feel (a pattern this short costs
 /// nothing to build). Lost on a reset or a stop, and remade on the next feel.
@@ -569,6 +618,21 @@ final class TriaFeel {
         switch kind {
         case "sparkle":
             events = Self.sparkle(from: 0)
+        case "twinkle":
+            // THE TWINKLE (hapticTwinkle in app.js): a circle started, a face
+            // changed, a post shared. The beats of TWINKLE (0, 120, 210, 330,
+            // 470, 640ms, timed to celebrateFace's stars), the first a full
+            // round knock with a body under it, then taps thinning and
+            // brightening as the stars wink out. Twice the like's sparkle at
+            // the start, and the same family all the way down (2026-11-17,
+            // "polish 2": it was six UIKit taps on page timers).
+            events = [Self.tap(0, 0.85, 0.28),
+                      Self.hum(0, 0.07, 0.5, 0.06),
+                      Self.tap(0.12, 0.5, 0.42),
+                      Self.tap(0.21, 0.42, 0.52),
+                      Self.tap(0.33, 0.33, 0.62),
+                      Self.tap(0.47, 0.22, 0.76),
+                      Self.tap(0.64, 0.14, 0.88)]
         case "fly":
             let lift = max(0, at), fall = max(0.12, flight)
             // The pop: the like itself, and the flight's strongest beat (Zoe:
@@ -638,11 +702,6 @@ final class TriaFeel {
         case "unfold":
             // And opens again: a touch brighter.
             events = [Self.tap(0, 0.3, 0.5)]
-        case "ping":
-            // A lively circle sends its ripple out: a round drop and the
-            // faintest echo as the ring spreads. The quietest thing here,
-            // since nobody did anything.
-            events = [Self.tap(0, 0.24, 0.06), Self.tap(0.12, 0.08, 0.04)]
         case "pass":
             // A drag brings a new circle into the band's middle: a soft
             // detent, as a crown's, so swiping round has a grain.

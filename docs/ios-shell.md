@@ -98,10 +98,10 @@ the zoom, and a quiet fold or unfold tick per circle under a pinch, at most one
 a frame and 60ms apart (`PATTER_MS`). A drag (and its coast) ticks a soft
 `pass` detent each time a new circle comes into the band's middle, `PASS_MS`
 apart, like a crown's (Zoe, the same day: "maybe when swiping to navigate around
-too"; it had none at first, a pan being a scroll). And a lively circle's ripple
-taps a round `ping` as it leaves the ring, on screen, undimmed, fingers off,
-`PING_GAP` (1.2s) apart so a lively field is a slow heartbeat (Zoe: "when the
-circles ping and have that animation add a soft tap"). **It
+too"; it had none at first, a pan being a scroll). A ripple taps nothing: a
+`ping` did from 2026-11-13 to 2026-11-17, and went (Zoe: "remove") because a
+buzz no one caused breaks causality. Plain taps since 2026-11-17 are
+`TriaSettings.tap` on kept, prepared generators, primed on touch-down. **It
 pays no bridge toll because `navFeel` never resolves** (`CAPPluginReturnNone`):
 the bridge saves no call that isn't `keepAlive`, so an unanswered call is just
 let go, and with no `toJs` there is no `evaluateJavaScript` on the main thread.

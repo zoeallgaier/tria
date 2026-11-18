@@ -5875,8 +5875,55 @@
 
      Explore circles is the exception (2026-11-13, Zoe): moving round the field
      has a feel of its own, `hapticNav` below, which pays no bridge toll. */
-  const hapticTap = (style) => haptic('impact', { style: style || 'LIGHT' });
+  /* TRIA'S OWN TAPS (2026-11-17, Zoe: "fix 3"). Capacitor's impact makes a
+     fresh generator per call and fires it cold, and Apple's own advice is to
+     prepare one as the finger lands, or the tap can come a beat late. So in a
+     binary that has them, `TriaSettings.tap` fires KEPT generators (one per
+     style, and the selection one), re-prepared after each, and `prime`
+     prepares them on touch-down (`primeTaps`, at most once a second). Both
+     are CAPPluginReturnNone: no resolve, so no evaluateJavaScript back on the
+     main thread, which also takes the bridge toll above off every tap. An
+     older binary keeps Capacitor's. */
+  const nativeHasCache = {};
+  function nativeHas(method) {
+    if (!nativeShell()) return false;
+    if (!(method in nativeHasCache)) {
+      try {
+        nativeHasCache[method] = !!window.Capacitor?.PluginHeaders?.find((p) => p.name === 'TriaSettings')
+          ?.methods?.some((m) => m.name === method);
+      } catch { nativeHasCache[method] = false; }
+    }
+    return nativeHasCache[method];
+  }
+  function hapticTap(style) {
+    if (nativeHas('tap')) {
+      try { window.Capacitor.toNative('TriaSettings', 'tap', { style: style || 'LIGHT' }); return; }
+      catch { /* fall through to Capacitor's */ }
+    }
+    haptic('impact', { style: style || 'LIGHT' });
+  }
   const hapticEvent = (type) => haptic('notification', { type: type || 'SUCCESS' });
+  /* A PICK: a setting chosen (which app opens songs, a paper, a charm worn).
+     iOS's selection tick, the lightest there is. These called
+     hapticEvent('SELECT') until 2026-11-17, a type Capacitor doesn't know, so
+     every pick played SUCCESS, the three beat "task completed" buzz. */
+  function hapticPick() {
+    if (nativeHas('tap')) {
+      try { window.Capacitor.toNative('TriaSettings', 'tap', { style: 'PICK' }); return; }
+      catch { /* fall through */ }
+    }
+    haptic('selectionStart');
+    haptic('selectionChanged');
+    haptic('selectionEnd');
+  }
+  let primedAt = 0;
+  function primeTaps() {
+    const now = Date.now();
+    if (now - primedAt < 1000 || !nativeHas('prime')) return;
+    primedAt = now;
+    try { window.Capacitor.toNative('TriaSettings', 'prime', {}); } catch { /* a garnish */ }
+  }
+  document.addEventListener('pointerdown', primeTaps, { capture: true, passive: true });
 
   /* THE TWINKLE: a circle just started (Zoe: "a sparkly haptic to celebrate"),
      or a face just changed (yours, or a circle's you host).
@@ -5889,6 +5936,10 @@
   const TWINKLE = [[0, 'MEDIUM'], [120, 'LIGHT'], [210, 'LIGHT'], [330, 'LIGHT'], [470, null], [640, null]];
   function hapticTwinkle() {
     if (!nativeShell()) { haptic('notification'); return; }
+    // In a binary with TriaFeel, ONE native pattern on these same beats (Zoe,
+    // 2026-11-17, "polish 2"), timed by Core Haptics rather than six timers
+    // and six bridge trips, with the like's round body under its first beat.
+    if (nativeHas('feel')) { hapticFeel('twinkle'); return; }
     haptic('selectionStart');
     for (const [t, style] of TWINKLE) {
       setTimeout(() => (style ? hapticTap(style) : haptic('selectionChanged')), t);
@@ -12452,7 +12503,7 @@
     const pickMusic = (key) => {
       setMusicPref(key);
       musicValEl.textContent = musicLabel();
-      hapticEvent('SELECT');
+      hapticPick();
     };
     musicBtn.addEventListener('click', () => {
       const current = musicPref();
@@ -12484,7 +12535,7 @@
           setPaperPick(k);
           paintPaper();
           paperValEl.textContent = colourLabel(k);
-          hapticEvent('SELECT');
+          hapticPick();
         },
       });
     });
@@ -12511,7 +12562,7 @@
           .then(k => (k === iconNow ? Promise.resolve() : setAppIcon(k)).then(() => {
             iconNow = k;
             iconValEl.textContent = colourLabel(iconKey());
-            hapticEvent('SELECT');
+            hapticPick();
           }, () => { setIconFollows(was); toast('Couldn’t change the icon.'); }));
       };
       // A colour's disc is the light icon's own ground: the palette hex
@@ -19015,7 +19066,6 @@
   const FOLD_AT = 0.6, UNFOLD_AT = 0.66, FOLD_MS = 340;
   const PATTER_MS = 60;      // the least time between two folds' ticks under a pinch
   const PASS_MS = 90;        // the least time between two of a drag's detents
-  const PING_GAP = 1200;     // the least time between two ripples' taps
   const ICON_OF_R = 1.2;     // a folded face's width, to its circle's radius
   function renderExploreCircles() {
     const list = exploreList();
@@ -19869,7 +19919,6 @@
     let raf = 0, last = 0, acc = 0;
     let patterAt = 0;            // the last fold's tick
     let passAt = 0, midAt = null; // a drag's last detent, and the circle in the middle then
-    let pingAt = 0;              // the last ripple's tap
     const born = performance.now();
     let waveEnd = fresh && !reduce ? -1 : 0;     // -1: not yet timed
     const STEP = 1000 / 60;
@@ -20012,23 +20061,9 @@
           midAt = mid;
         } else if (midAt === null) midAt = -1;
       }
-      // A RIPPLE'S TAP (Zoe: "when the circles ping and have that animation
-      // add a soft tap"): as a lively circle's ripple leaves its ring (the
-      // phase drawLines reads wrapping round), on screen, not dimmed under a
-      // lifted one, with the fingers off the field. PING_GAP apart, so a
-      // lively field is a slow heartbeat and never a buzz.
-      const still = !hand && !pinch && !gesture && !camAim && !rising;
-      nodes.forEach((nd) => {
-        if (!nd.alive || !nd.inks || reduce) return;
-        const ph = (now + nd.seed * RIPPLE_MS) % RIPPLE_MS;
-        const began = nd.ph != null && ph < nd.ph;
-        nd.ph = ph;
-        if (began && still && now - pingAt >= PING_GAP && nd.alpha * nd.glow > 0.6
-            && nd.sx > 0 && nd.sx < W && nd.sy > top && nd.sy < H && !document.hidden) {
-          pingAt = now;
-          hapticNav('ping');
-        }
-      });
+      // A ripple has no tap (Zoe, 2026-11-17, "remove": it had one from
+      // 2026-11-13). Nobody did anything, and a buzz with no cause is how a
+      // hand learns to ignore the ones that have one.
       drawLines(now);
       if (!reduce || moving) wake();
     };
@@ -21412,7 +21447,7 @@
           const prev = worn;
           worn = next;
           paint();
-          hapticEvent('SELECT');
+          hapticPick();
           if (!(await wearCharms(worn))) { worn = prev; paint(); }
           if (onChange) onChange(); else repaintOwnCharms();
         };
@@ -21532,7 +21567,7 @@
         if (stickerSheet) {
           add.addEventListener('click', async () => {
             if (busy || full()) return;
-            hapticEvent('SELECT');
+            hapticPick();
             let res = null;
             try { res = await window.Capacitor.nativePromise('TriaSticker', 'pick', {}); } catch {}
             if (res && res.image) take('data:image/png;base64,' + res.image);
